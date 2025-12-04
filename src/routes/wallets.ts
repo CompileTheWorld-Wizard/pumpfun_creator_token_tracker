@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PublicKey, Connection } from '@solana/web3.js';
-import { requireAuth } from '../middleware/auth';
-import { pool } from '../db';
+import { requireAuth } from '../middleware/auth.js';
+import { pool } from '../db.js';
 
 const router = Router();
 

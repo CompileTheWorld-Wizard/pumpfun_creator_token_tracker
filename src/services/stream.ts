@@ -1,4 +1,4 @@
-import { startStreaming, stopStreaming, getStreamingStatus } from '../streams/pumpfun';
+import { startStreaming, stopStreaming, getStreamingStatus } from '../streams/pumpfun.js';
 
 /**
  * Start the pump.fun transaction stream

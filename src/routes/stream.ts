@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth';
-import { startStream, stopStream, getStatus } from '../services/stream';
+import { requireAuth } from '../middleware/auth.js';
+import { startStream, stopStream, getStatus } from '../services/stream.js';
 
 const router = Router();
 

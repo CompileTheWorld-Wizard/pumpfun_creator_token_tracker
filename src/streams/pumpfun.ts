@@ -5,8 +5,8 @@ import { Idl } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
 import pumpIdl from '../IdlFiles/pump_0.1.0.json';
 import pumpAmmIdl from '../IdlFiles/pump_amm_0.1.0.json';
-import { pool } from '../db';
-import { getCreatedTokens } from '../utils/solscan';
+import { pool } from '../db.js';
+import { getCreatedTokens } from '../utils/solscan.js';
 
 dotenv.config();
 

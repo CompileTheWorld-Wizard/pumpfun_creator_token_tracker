@@ -4,10 +4,10 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { pool } from './db';
-import authRoutes from './routes/auth';
-import walletRoutes from './routes/wallets';
-import streamRoutes from './routes/stream';
+import { pool } from './db.js';
+import authRoutes from './routes/auth.js';
+import walletRoutes from './routes/wallets.js';
+import streamRoutes from './routes/stream.js';
 
 dotenv.config();
 
@@ -15,7 +15,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5005;
+const PORT = parseInt(process.env.PORT || '5005', 10);
 
 // Middleware
 app.use(cors({
@@ -114,8 +114,10 @@ async function startServer() {
     
     client.release();
 
-    app.listen(PORT, () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    // Bind to 0.0.0.0 to allow external connections (required for remote server access)
+    const HOST = process.env.HOST || '0.0.0.0';
+    app.listen(PORT, HOST, () => {
+      console.log(`Server running on http://${HOST}:${PORT}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
