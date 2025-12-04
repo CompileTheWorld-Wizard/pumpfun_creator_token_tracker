@@ -18,7 +18,10 @@ module.exports = {
       autorestart: true,
       watch: false,
       max_memory_restart: '1G',
-      node_args: '--max-old-space-size=2048'
+      node_args: '--max-old-space-size=2048',
+      kill_timeout: 5000,
+      listen_timeout: 3000,
+      shutdown_with_message: true
     }
   ]
 };
