@@ -1,0 +1,51 @@
+{
+  "name": "soltrack",
+  "version": "1.0.0",
+  "description": "Solana transaction tracking application",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "tsx watch src/server.ts",
+    "dev:frontend": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit",
+    "build:ladysbug": "echo 'Note: Build ladysbug separately, then copy dist/ to src/streams/ladysbug/'"
+  },
+  "keywords": [
+    "solana",
+    "blockchain",
+    "tracking"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.2",
+    "bs58": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "ladysbug": "file:./ladysbug",
+    "pg": "^8.13.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5"
+  }
+}
+
