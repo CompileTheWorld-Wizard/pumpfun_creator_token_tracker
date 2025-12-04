@@ -19,19 +19,19 @@ async function request(endpoint: string, options: RequestInit = {}) {
 }
 
 export async function startStream() {
-  return request('/api/stream/start', {
+  return request('/start', {
     method: 'POST',
   });
 }
 
 export async function stopStream() {
-  return request('/api/stream/stop', {
+  return request('/stop', {
     method: 'POST',
   });
 }
 
 export async function getStreamStatus() {
-  return request('/api/stream/status', {
+  return request('/status', {
     method: 'GET',
   });
 }
