@@ -16,33 +16,39 @@ const PORT = process.env.PORT || 5005;
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allow localhost on any port for development (both http and https)
-    if (origin.match(/^https?:\/\/localhost:\d+$/)) {
+    if (!origin) {
       return callback(null, true);
     }
     
-    // Allow 127.0.0.1 on any port for development
-    if (origin.match(/^https?:\/\/127\.0\.0\.1:\d+$/)) {
+    // In development mode, allow all origins
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    if (isDevelopment) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost on any port (both http and https)
+    if (origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
+      return callback(null, true);
+    }
+    
+    // Allow 127.0.0.1 on any port
+    if (origin.match(/^https?:\/\/127\.0\.0\.1(:\d+)?$/)) {
       return callback(null, true);
     }
     
     // Allow specific origins from environment variable (comma-separated)
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    // In development, allow all origins (remove this in production)
-    if (process.env.NODE_ENV !== 'production') {
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(o => o) || [];
+    if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
       return callback(null, true);
     }
     
     // In production, reject unknown origins
+    console.warn(`CORS: Blocked origin: ${origin}`);
     callback(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
