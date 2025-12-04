@@ -171,7 +171,10 @@ async function processData(processed: any) {
       return;
     }
 
-    console.log("Got tx:", processed.transaction.signatures[0]);
+    const txSignature = Array.isArray(processed.transaction.signatures) 
+      ? processed.transaction.signatures[0] 
+      : String(processed.transaction.signatures[0] || 'unknown');
+    console.log("Got tx:", txSignature);
 
     // Handle the transaction data from ladysbug
     // Ladysbug provides parsed transaction data in a readable format:
@@ -188,18 +191,32 @@ async function processData(processed: any) {
       // Example: Save to database, emit events, etc.
 
       const events = processed.transaction.message?.events;
-      events.forEach((event: any) => {
-        console.log(event?.name)
-        if (event?.name === 'CreateEvent') {
-          // Token created
-          createEventCount++;
-          console.log(`Token created: ${event?.data?.name}`)
-        }
-      });
+      if (events && Array.isArray(events)) {
+        events.forEach((event: any) => {
+          const eventName = event?.name ? String(event.name) : 'unknown';
+          console.log(`Event: ${eventName}`);
+          if (event?.name === 'CreateEvent') {
+            // Token created
+            createEventCount++;
+            const tokenName = event?.data?.name ? String(event.data.name) : 'unknown';
+            console.log(`Token created: ${tokenName}`);
+          }
+        });
+      }
       processed.transaction.message?.compiledInstructions?.forEach((instruction: any) => {
         if (instruction?.data?.name?.includes('migrate')) {
           console.log(`Token migrated`)
-          console.log(JSON.stringify(processed.transaction.message))
+          // Only log essential data to avoid binary data in logs
+          try {
+            const safeData = {
+              signatures: processed.transaction.signatures,
+              slot: processed.slot,
+              instructionName: instruction?.data?.name
+            };
+            console.log(JSON.stringify(safeData))
+          } catch (err) {
+            console.log('Token migrated (unable to serialize transaction data)')
+          }
         }
       });
     }
