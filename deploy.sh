@@ -53,7 +53,7 @@ pm2 delete soltrack || true
 
 # Start the application with PM2
 echo -e "${GREEN}Starting application with PM2...${NC}"
-pm2 start ecosystem.config.js
+pm2 start ecosystem.config.cjs
 
 # Save PM2 configuration
 pm2 save
@@ -64,7 +64,15 @@ pm2 startup | grep -v PM2 || true
 
 echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
 echo ""
-echo "Useful commands:"
+echo "Useful commands (using npm scripts):"
+echo "  npm run pm2:status   - Check application status"
+echo "  npm run pm2:logs     - View application logs"
+echo "  npm run pm2:restart  - Restart the application"
+echo "  npm run pm2:stop     - Stop the application"
+echo "  npm run pm2:monit    - Monitor application resources"
+echo "  npm run pm2:deploy   - Full deployment"
+echo ""
+echo "Or use PM2 directly:"
 echo "  pm2 status          - Check application status"
 echo "  pm2 logs soltrack   - View application logs"
 echo "  pm2 restart soltrack - Restart the application"

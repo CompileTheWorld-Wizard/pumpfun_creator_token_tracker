@@ -95,7 +95,7 @@ router.post('/validate', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Get all creator wallets for the authenticated user
-router.get('/', requireAuth, async (req: Request, res: Response) => {
+router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req.session as any)?.userId || 'admin';
     
@@ -108,22 +108,23 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     res.json({ wallets });
   } catch (error: any) {
     console.error('Error fetching creator wallets:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: 'Error fetching creator wallets' 
     });
   }
 });
 
 // Add a creator wallet
-router.post('/', requireAuth, async (req: Request, res: Response) => {
+router.post('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.body;
     const userId = (req.session as any)?.userId || 'admin';
 
     if (!address || typeof address !== 'string') {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Wallet address is required' 
       });
+      return;
     }
 
     const trimmed = address.trim();
@@ -136,14 +137,16 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       // Check if it's on curve (valid public key format)
       const isOnCurve = PublicKey.isOnCurve(publicKey.toBytes());
       if (!isOnCurve) {
-        return res.status(400).json({ 
+        res.status(400).json({ 
           error: 'Invalid wallet address format' 
         });
+        return;
       }
     } catch (error) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Invalid Solana address format' 
       });
+      return;
     }
 
     // Check account type via RPC to ensure it's a wallet (not a program or token account)
@@ -154,25 +157,28 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
       if (accountInfo) {
         // Check if it's an executable program
         if (accountInfo.executable) {
-          return res.status(400).json({ 
+          res.status(400).json({ 
             error: 'This is a program address, not a wallet address' 
           });
+          return;
         }
 
         // Check if it's a token account
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
         if (accountInfo.owner.equals(TOKEN_PROGRAM_ID)) {
-          return res.status(400).json({ 
+          res.status(400).json({ 
             error: 'This is a token account address, not a wallet address' 
           });
+          return;
         }
 
         // Check if it's an associated token account
         const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
         if (accountInfo.owner.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
-          return res.status(400).json({ 
+          res.status(400).json({ 
             error: 'This is an associated token account, not a wallet address' 
           });
+          return;
         }
       }
     } catch (error: any) {
@@ -194,30 +200,32 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
     } catch (dbError: any) {
       // Check if it's a unique constraint violation
       if (dbError.code === '23505') {
-        return res.status(400).json({ 
+        res.status(400).json({ 
           error: 'This wallet address is already added' 
         });
+        return;
       }
       throw dbError;
     }
   } catch (error: any) {
     console.error('Error adding creator wallet:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: 'Error adding creator wallet. Please try again.' 
     });
   }
 });
 
 // Delete a creator wallet
-router.delete('/:address', requireAuth, async (req: Request, res: Response) => {
+router.delete('/:address', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
     const userId = (req.session as any)?.userId || 'admin';
 
     if (!address) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         error: 'Wallet address is required' 
       });
+      return;
     }
 
     const result = await pool.query(
@@ -226,9 +234,10 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response) => {
     );
 
     if (result.rowCount === 0) {
-      return res.status(404).json({ 
+      res.status(404).json({ 
         error: 'Wallet address not found' 
       });
+      return;
     }
 
     res.json({ 
@@ -237,7 +246,7 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('Error deleting creator wallet:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: 'Error deleting creator wallet. Please try again.' 
     });
   }

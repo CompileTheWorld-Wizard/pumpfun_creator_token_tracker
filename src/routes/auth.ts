@@ -30,10 +30,11 @@ router.post('/login', (req: Request, res: Response) => {
 });
 
 // Logout endpoint
-router.post('/logout', (req: Request, res: Response) => {
+router.post('/logout', (req: Request, res: Response): void => {
   req.session.destroy((err) => {
     if (err) {
-      return res.status(500).json({ error: 'Failed to logout' });
+      res.status(500).json({ error: 'Failed to logout' });
+      return;
     }
     res.json({ success: true, message: 'Logged out successfully' });
   });

@@ -96,9 +96,13 @@ X_TOKEN=your_x_token
 chmod +x deploy.sh
 ```
 
-### 8. Run deployment script
+### 8. Deploy the application
 
 ```bash
+# Full deployment (builds and starts with PM2)
+npm run pm2:deploy
+
+# Or use the deployment script
 ./deploy.sh
 ```
 
@@ -115,57 +119,86 @@ cd ladysbug && npm install && npm run build && cd ..
 npm run build
 
 # Start with PM2
-pm2 start ecosystem.config.js
-pm2 save
-pm2 startup
+npm run pm2:start
+npm run pm2:save
+npm run pm2:startup
 ```
 
-## PM2 Management Commands
+## PM2 Management Commands (npm scripts)
+
+All PM2 commands are available as npm scripts:
 
 ### View Status
 ```bash
+npm run pm2:status
+# or
 pm2 status
 ```
 
 ### View Logs
 ```bash
-# All logs
-pm2 logs soltrack
-
-# Only error logs
-pm2 logs soltrack --err
-
-# Only output logs
-pm2 logs soltrack --out
-
-# Follow logs in real-time
+npm run pm2:logs
+# or with options
 pm2 logs soltrack --lines 100
+pm2 logs soltrack --err  # Only error logs
+pm2 logs soltrack --out  # Only output logs
+```
+
+### Start Application
+```bash
+npm run pm2:start
 ```
 
 ### Restart Application
 ```bash
-pm2 restart soltrack
+npm run pm2:restart
 ```
 
 ### Stop Application
 ```bash
-pm2 stop soltrack
+npm run pm2:stop
 ```
 
 ### Delete Application from PM2
 ```bash
-pm2 delete soltrack
+npm run pm2:delete
 ```
 
 ### Monitor Resources
 ```bash
-pm2 monit
+npm run pm2:monit
 ```
 
 ### Save Current PM2 Configuration
 ```bash
-pm2 save
+npm run pm2:save
 ```
+
+### Setup PM2 Startup Script
+```bash
+npm run pm2:startup
+# Follow the instructions it provides
+```
+
+### Full Deployment
+```bash
+npm run pm2:deploy
+```
+
+## Available npm PM2 Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run pm2:start` | Start the application with PM2 |
+| `npm run pm2:stop` | Stop the application |
+| `npm run pm2:restart` | Restart the application |
+| `npm run pm2:delete` | Remove application from PM2 |
+| `npm run pm2:logs` | View application logs |
+| `npm run pm2:status` | Check PM2 status |
+| `npm run pm2:monit` | Monitor application resources |
+| `npm run pm2:save` | Save PM2 configuration |
+| `npm run pm2:startup` | Setup PM2 to start on boot |
+| `npm run pm2:deploy` | Full deployment (build + start) |
 
 ## Setting up Reverse Proxy (Nginx)
 
@@ -261,16 +294,16 @@ pm2 save
 git pull
 ```
 
-2. Run deployment script:
+2. Run deployment:
 ```bash
-./deploy.sh
+npm run pm2:deploy
 ```
 
 Or manually:
 ```bash
 npm ci
 npm run build
-pm2 restart soltrack
+npm run pm2:restart
 ```
 
 ## Environment Variables Reference

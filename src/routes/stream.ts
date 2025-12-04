@@ -5,13 +5,14 @@ import { startStream, stopStream, getStatus } from '../services/stream';
 const router = Router();
 
 // Start streaming endpoint
-router.post('/start', requireAuth, async (req: Request, res: Response) => {
+router.post('/start', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     if (getStatus()) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         error: 'Stream is already running' 
       });
+      return;
     }
 
     await startStream();
@@ -30,13 +31,14 @@ router.post('/start', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Stop streaming endpoint
-router.post('/stop', requireAuth, async (req: Request, res: Response) => {
+router.post('/stop', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     if (!getStatus()) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         error: 'Stream is not running' 
       });
+      return;
     }
 
     await stopStream();
@@ -55,7 +57,7 @@ router.post('/stop', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Get streaming status endpoint
-router.get('/status', requireAuth, async (req: Request, res: Response) => {
+router.get('/status', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     res.json({ 
       success: true, 
