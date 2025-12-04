@@ -5,6 +5,10 @@ import path from 'path'
 export default defineConfig({
   plugins: [vue()],
   root: './',
+  build: {
+    outDir: 'dist-frontend',
+    emptyOutDir: true
+  },
   server: {
     port: 5175,
     host: true,

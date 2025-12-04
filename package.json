@@ -12,7 +12,17 @@
     "preview": "vite preview",
     "start": "node dist/server.js",
     "type-check": "tsc --noEmit",
-    "build:ladysbug": "echo 'Note: Build ladysbug separately, then copy dist/ to src/streams/ladysbug/'"
+    "build:ladysbug": "echo 'Note: Build ladysbug separately, then copy dist/ to src/streams/ladysbug/'",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop soltrack",
+    "pm2:restart": "pm2 restart soltrack",
+    "pm2:delete": "pm2 delete soltrack",
+    "pm2:logs": "pm2 logs soltrack",
+    "pm2:status": "pm2 status",
+    "pm2:monit": "pm2 monit",
+    "pm2:save": "pm2 save",
+    "pm2:startup": "pm2 startup",
+    "pm2:deploy": "npm ci && npm run build:ladysbug && npm run build && mkdir -p logs && pm2 stop soltrack || true && pm2 delete soltrack || true && pm2 start ecosystem.config.js && pm2 save"
   },
   "keywords": [
     "solana",
