@@ -41,6 +41,11 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Allow IP addresses (for server access via IP)
+    if (origin.match(/^https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
+      return callback(null, true);
+    }
+    
     // Allow specific origins from environment variable (comma-separated)
     const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(o => o) || [];
     if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {

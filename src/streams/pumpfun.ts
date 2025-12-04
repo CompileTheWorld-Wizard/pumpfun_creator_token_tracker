@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 import { Parser, TransactionStreamer } from 'ladysbug';
 import { Idl } from '@coral-xyz/anchor';
 import { PublicKey } from '@solana/web3.js';
-import pumpIdl from '../IdlFiles/pump_0.1.0.json' with { type: 'json' };
-import pumpAmmIdl from '../IdlFiles/pump_amm_0.1.0.json' with { type: 'json' };
+import pumpIdl from '../IdlFiles/pump_0.1.0.json' assert { type: 'json' };
+import pumpAmmIdl from '../IdlFiles/pump_amm_0.1.0.json' assert { type: 'json' };
 import { pool } from '../db.js';
 import { getCreatedTokens } from '../utils/solscan.js';
 
