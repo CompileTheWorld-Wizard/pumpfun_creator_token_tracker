@@ -18,12 +18,28 @@ app.use(cors({
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Allow localhost on any port for development
-    if (origin.match(/^http:\/\/localhost:\d+$/)) {
+    // Allow localhost on any port for development (both http and https)
+    if (origin.match(/^https?:\/\/localhost:\d+$/)) {
       return callback(null, true);
     }
     
-    // In production, you can add specific allowed origins here
+    // Allow 127.0.0.1 on any port for development
+    if (origin.match(/^https?:\/\/127\.0\.0\.1:\d+$/)) {
+      return callback(null, true);
+    }
+    
+    // Allow specific origins from environment variable (comma-separated)
+    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // In development, allow all origins (remove this in production)
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    // In production, reject unknown origins
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true
