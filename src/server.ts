@@ -4,10 +4,12 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcrypt';
 import { pool } from './db.js';
 import authRoutes from './routes/auth.js';
 import walletRoutes from './routes/wallets.js';
 import streamRoutes from './routes/stream.js';
+import tokenRoutes from './routes/tokens.js';
 
 dotenv.config();
 
@@ -79,6 +81,7 @@ app.use(session({
 app.use('/api/auth', authRoutes);
 app.use('/api/wallets', walletRoutes);
 app.use('/api/stream', streamRoutes);
+app.use('/api/tokens', tokenRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -116,6 +119,34 @@ async function startServer() {
       )
     `);
     console.log('Database table creator_wallets initialized');
+    
+    // Create passwords table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS passwords (
+        id SERIAL PRIMARY KEY,
+        password_hash VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    console.log('Database table passwords initialized');
+    
+    // Initialize default password if no password exists
+    const passwordCheck = await client.query(
+      'SELECT COUNT(*) as count FROM passwords'
+    );
+    
+    if (parseInt(passwordCheck.rows[0].count) === 0) {
+      const defaultPassword = process.env.DEFAULT_PASSWORD || 'admin123';
+      const saltRounds = 10;
+      const passwordHash = await bcrypt.hash(defaultPassword, saltRounds);
+      
+      await client.query(
+        'INSERT INTO passwords (password_hash) VALUES ($1)',
+        [passwordHash]
+      );
+      console.log('Default password initialized (use DEFAULT_PASSWORD env var to customize)');
+    }
     
     client.release();
 

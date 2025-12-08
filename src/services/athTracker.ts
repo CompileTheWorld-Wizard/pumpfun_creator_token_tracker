@@ -1,0 +1,702 @@
+/**
+ * ATH (All-Time High) Market Cap Tracker Service
+ * 
+ * Tracks ATH market cap for tokens created by target creator wallets.
+ * Handles real-time trade events and periodic Bitquery updates.
+ */
+
+import { pool } from '../db.js';
+import { redis } from '../redis.js';
+import { fetchAthMarketCapBatched, type TokenAthData } from '../utils/bitquery.js';
+import { getCreatedTokens } from '../utils/solscan.js';
+import type { TradeEventData, AmmBuyEventData, AmmSellEventData } from '../types.js';
+
+// Constants
+const SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
+const SOL_PRICE_KEY = 'price:timeseries:So11111111111111111111111111111111111111112';
+const EVENTS_SORTED_SET = 'pumpfun:events:1min'; // Use same cache as tokenTracker
+const TOKEN_SUPPLY = 1_000_000_000; // 1 billion tokens (human readable)
+
+// In-memory token ATH data
+interface TokenAthInfo {
+  mint: string;
+  name: string;
+  symbol: string;
+  creator: string;
+  bonded: boolean;
+  athMarketCapUsd: number;
+  currentMarketCapUsd: number;
+  lastUpdated: number;
+  createdAt: number;
+  dirty: boolean; // Flag to track if needs saving
+}
+
+const tokenAthMap: Map<string, TokenAthInfo> = new Map();
+let saveInterval: NodeJS.Timeout | null = null;
+let isInitialized = false;
+
+/**
+ * Initialize the ATH tracker
+ */
+export async function initializeAthTracker(): Promise<void> {
+  if (isInitialized) {
+    console.log('[AthTracker] Already initialized');
+    return;
+  }
+
+  console.log('[AthTracker] Initializing...');
+
+  // Load existing tracked tokens from database
+  await loadTrackedTokensFromDb();
+
+  // Fetch tokens from creator wallets via Solscan and load to tracker
+  await fetchTokensFromCreatorWallets();
+
+  // Start periodic save
+  startPeriodicSave();
+
+  isInitialized = true;
+  console.log(`[AthTracker] Initialized with ${tokenAthMap.size} tokens`);
+
+  // Fetch ATH from Bitquery in background (async - don't block stream start)
+  fetchAthFromBitqueryAsync();
+}
+
+/**
+ * Load tracked tokens from database
+ */
+async function loadTrackedTokensFromDb(): Promise<void> {
+  try {
+    // Use a query that works with or without ATH columns (for backward compatibility)
+    // Filtering logic: Only load tokens where the creator wallet is registered in creator_wallets table.
+    // This ensures we only track ATH data for tokens from registered creator wallets.
+    // COMMENTED OUT: Filtering disabled - now loading all tokens regardless of creator wallet
+    const result = await pool.query(
+      `SELECT mint, name, symbol, creator, created_at,
+              COALESCE(bonded, false) as bonded,
+              COALESCE(ath_market_cap_usd, 0) as ath_market_cap_usd
+       FROM created_tokens`
+      // WHERE creator IN (SELECT wallet_address FROM creator_wallets)
+    );
+
+    for (const row of result.rows) {
+      tokenAthMap.set(row.mint, {
+        mint: row.mint,
+        name: row.name || '',
+        symbol: row.symbol || '',
+        creator: row.creator,
+        bonded: row.bonded || false,
+        athMarketCapUsd: parseFloat(row.ath_market_cap_usd) || 0,
+        currentMarketCapUsd: 0,
+        lastUpdated: Date.now(),
+        createdAt: new Date(row.created_at).getTime(),
+        dirty: false,
+      });
+    }
+
+    console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens from database`);
+  } catch (error: any) {
+    // Handle case where columns don't exist yet (migration not run)
+    if (error?.code === '42703') {
+      console.warn('[AthTracker] ATH columns not found in database. Run migration first.');
+      console.warn('[AthTracker] Falling back to basic query...');
+      
+      try {
+        // Filtering logic: Fallback query also filters by registered creator wallets
+        // COMMENTED OUT: Filtering disabled - now loading all tokens regardless of creator wallet
+        const fallbackResult = await pool.query(
+          `SELECT mint, name, symbol, creator, created_at
+           FROM created_tokens`
+          // WHERE creator IN (SELECT wallet_address FROM creator_wallets)
+        );
+
+        for (const row of fallbackResult.rows) {
+          tokenAthMap.set(row.mint, {
+            mint: row.mint,
+            name: row.name || '',
+            symbol: row.symbol || '',
+            creator: row.creator,
+            bonded: false,
+            athMarketCapUsd: 0,
+            currentMarketCapUsd: 0,
+            lastUpdated: Date.now(),
+            createdAt: new Date(row.created_at).getTime(),
+            dirty: false,
+          });
+        }
+        console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens (without ATH data)`);
+      } catch (fallbackError) {
+        console.error('[AthTracker] Fallback query also failed:', fallbackError);
+      }
+    } else {
+      console.error('[AthTracker] Error loading tokens from database:', error);
+    }
+  }
+}
+
+// Store token data for Bitquery fetch
+let pendingTokenData: Map<string, { mint: string; name: string; symbol: string; creator: string; blockTime: number }> = new Map();
+
+/**
+ * Fetch tokens from creator wallets via Solscan and load to tracker
+ */
+async function fetchTokensFromCreatorWallets(): Promise<void> {
+  try {
+    // Filtering logic: Get all registered creator wallet addresses from the database.
+    // Only tokens created by these wallets will be fetched and tracked for ATH data.
+    const walletsResult = await pool.query(
+      'SELECT DISTINCT wallet_address FROM creator_wallets'
+    );
+    const wallets = walletsResult.rows.map(row => row.wallet_address);
+
+    if (wallets.length === 0) {
+      console.log('[AthTracker] No creator wallets found');
+      return;
+    }
+
+    console.log(`[AthTracker] Fetching tokens for ${wallets.length} creator wallets...`);
+
+    for (const wallet of wallets) {
+      try {
+        const response = await getCreatedTokens(wallet) as any;
+        
+        if (response?.data && Array.isArray(response.data)) {
+          for (const activity of response.data) {
+            // Extract token from routers
+            const token1 = activity.routers?.token1;
+            if (token1 && token1 !== 'So11111111111111111111111111111111111111111') {
+              const tokenMeta = response.metadata?.tokens?.[token1];
+              const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
+              
+              // Store token data with earliest block time
+              const existing = pendingTokenData.get(token1);
+              if (!existing || blockTime < existing.blockTime) {
+                pendingTokenData.set(token1, {
+                  mint: token1,
+                  name: tokenMeta?.token_name || '',
+                  symbol: tokenMeta?.token_symbol || '',
+                  creator: wallet,
+                  blockTime,
+                });
+              }
+              
+              // Add to tracker immediately (without ATH data)
+              if (!tokenAthMap.has(token1)) {
+                tokenAthMap.set(token1, {
+                  mint: token1,
+                  name: tokenMeta?.token_name || '',
+                  symbol: tokenMeta?.token_symbol || '',
+                  creator: wallet,
+                  bonded: false,
+                  athMarketCapUsd: 0,
+                  currentMarketCapUsd: 0,
+                  lastUpdated: Date.now(),
+                  createdAt: blockTime * 1000,
+                  dirty: true,
+                });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[AthTracker] Error fetching tokens for wallet ${wallet}:`, error);
+      }
+    }
+
+    console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens from creator wallets`);
+  } catch (error) {
+    console.error('[AthTracker] Error fetching tokens from creator wallets:', error);
+  }
+}
+
+/**
+ * Fetch ATH from Bitquery in background (async, non-blocking)
+ */
+function fetchAthFromBitqueryAsync(): void {
+  // Run in background without blocking
+  (async () => {
+    try {
+      if (pendingTokenData.size === 0) {
+        console.log('[AthTracker] No tokens to fetch ATH for');
+        return;
+      }
+
+      // Find earliest block time for Bitquery query
+      let earliestBlockTime = Math.floor(Date.now() / 1000);
+      for (const data of pendingTokenData.values()) {
+        if (data.blockTime < earliestBlockTime) {
+          earliestBlockTime = data.blockTime;
+        }
+      }
+
+      // Convert to ISO string
+      const sinceTime = new Date(earliestBlockTime * 1000).toISOString();
+      console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${pendingTokenData.size} tokens...`);
+
+      // Fetch ATH from Bitquery
+      const tokenAddresses = Array.from(pendingTokenData.keys());
+      const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
+
+      console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
+
+      // Update token map with ATH data (only if higher than current)
+      for (const athData of athDataList) {
+        const existing = tokenAthMap.get(athData.mintAddress);
+        if (existing) {
+          // Only update if Bitquery ATH is higher than current
+          if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
+            existing.athMarketCapUsd = athData.athMarketCapUsd;
+            existing.dirty = true;
+            console.log(`[AthTracker] Updated ATH from Bitquery for ${existing.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
+          }
+          // Update name/symbol if missing
+          if (!existing.name && athData.name) existing.name = athData.name;
+          if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
+        }
+      }
+
+      // Clear pending data
+      pendingTokenData.clear();
+      
+      console.log('[AthTracker] Bitquery ATH update completed');
+    } catch (error) {
+      console.error('[AthTracker] Error fetching ATH from Bitquery:', error);
+    }
+  })();
+}
+
+/**
+ * Register a new token (from CreateEvent)
+ * Caches in Redis for edge case where trade comes before registration
+ */
+export async function registerToken(
+  mint: string,
+  name: string,
+  symbol: string,
+  creator: string,
+  createdAt: number
+): Promise<void> {
+  // Filtering logic: Only register tokens if the creator wallet is registered in creator_wallets.
+  // This ensures we only track ATH data for tokens from registered creator wallets.
+  // COMMENTED OUT: Filtering disabled - now registering all tokens regardless of creator wallet
+  // const isTarget = await isTargetCreatorWallet(creator);
+  // if (!isTarget) {
+  //   return;
+  // }
+
+  console.log(`[AthTracker] Registering new token: ${mint} (${symbol})`);
+
+  // Add to in-memory map
+  tokenAthMap.set(mint, {
+    mint,
+    name,
+    symbol,
+    creator,
+    bonded: false,
+    athMarketCapUsd: 0,
+    currentMarketCapUsd: 0,
+    lastUpdated: Date.now(),
+    createdAt,
+    dirty: true,
+  });
+  // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:1min)
+}
+
+/**
+ * Check if a wallet is a target creator wallet
+ * 
+ * Filtering logic: Queries the creator_wallets table to determine if the given wallet
+ * address is registered as a creator wallet. Returns true only if the wallet exists
+ * in the registered creator wallets list.
+ */
+async function isTargetCreatorWallet(walletAddress: string): Promise<boolean> {
+  try {
+    const result = await pool.query(
+      'SELECT 1 FROM creator_wallets WHERE wallet_address = $1 LIMIT 1',
+      [walletAddress]
+    );
+    return result.rows.length > 0;
+  } catch (error) {
+    console.error('[AthTracker] Error checking target wallet:', error);
+    return false;
+  }
+}
+
+/**
+ * Get SOL USD price at a specific timestamp
+ */
+async function getSolPriceUsd(): Promise<number> {
+  try {
+    const result = await redis.zrevrange(SOL_PRICE_KEY, 0, 0);
+    if (result.length > 0) {
+      const priceData = JSON.parse(result[0]);
+      return priceData.price_usd || 0;
+    }
+    return 0;
+  } catch (error) {
+    console.error('[AthTracker] Error getting SOL price:', error);
+    return 0;
+  }
+}
+
+/**
+ * Calculate market cap from trade data
+ */
+function calculateMarketCapUsd(
+  solAmount: number,
+  tokenAmount: number,
+  solPriceUsd: number
+): number {
+  // Convert from base units
+  const solAmountConverted = solAmount / 1e9;
+  const tokenAmountConverted = tokenAmount / 1e6;
+  
+  if (tokenAmountConverted === 0) return 0;
+  
+  const executionPriceSol = solAmountConverted / tokenAmountConverted;
+  const marketCapSol = executionPriceSol * TOKEN_SUPPLY;
+  return marketCapSol * solPriceUsd;
+}
+
+/**
+ * Handle TradeEvent (pump.fun bonding curve buy/sell)
+ */
+export async function handleTradeEvent(
+  tradeData: TradeEventData,
+  _txSignature: string
+): Promise<void> {
+  const mint = tradeData.mint;
+  
+  // Check if token is tracked or pending
+  let tokenInfo: TokenAthInfo | undefined = tokenAthMap.get(mint);
+  
+  if (!tokenInfo) {
+    // Check Redis cache for pending token
+    tokenInfo = await checkPendingToken(mint);
+    if (!tokenInfo) {
+      return; // Not a tracked token
+    }
+  }
+
+  // Calculate current market cap
+  const solPriceUsd = await getSolPriceUsd();
+  if (solPriceUsd === 0) return;
+
+  const currentMarketCapUsd = calculateMarketCapUsd(
+    tradeData.sol_amount,
+    tradeData.token_amount,
+    solPriceUsd
+  );
+
+  // Update ATH if new high
+  if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    tokenInfo.athMarketCapUsd = currentMarketCapUsd;
+    tokenInfo.dirty = true;
+    console.log(`[AthTracker] New ATH for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
+  }
+
+  tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
+  tokenInfo.lastUpdated = Date.now();
+  tokenAthMap.set(mint, tokenInfo);
+}
+
+/**
+ * Handle AMM BuyEvent (pump.fun AMM)
+ */
+export async function handleAmmBuyEvent(
+  buyData: AmmBuyEventData,
+  mint: string,
+  _txSignature: string
+): Promise<void> {
+  let tokenInfo: TokenAthInfo | undefined = tokenAthMap.get(mint);
+  
+  if (!tokenInfo) {
+    tokenInfo = await checkPendingToken(mint);
+    if (!tokenInfo) return;
+  }
+
+  const solPriceUsd = await getSolPriceUsd();
+  if (solPriceUsd === 0) return;
+
+  // For AMM events, use pool reserves to calculate price
+  const poolQuoteReserves = buyData.pool_quote_token_reserves / 1e9; // SOL
+  const poolBaseReserves = buyData.pool_base_token_reserves / 1e6; // Token
+  
+  if (poolBaseReserves === 0) return;
+  
+  const priceSol = poolQuoteReserves / poolBaseReserves;
+  const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
+
+  if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    tokenInfo.athMarketCapUsd = currentMarketCapUsd;
+    tokenInfo.dirty = true;
+    console.log(`[AthTracker] New ATH (AMM Buy) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
+  }
+
+  // Mark as bonded (on AMM means bonded)
+  if (!tokenInfo.bonded) {
+    tokenInfo.bonded = true;
+    tokenInfo.dirty = true;
+  }
+
+  tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
+  tokenInfo.lastUpdated = Date.now();
+  tokenAthMap.set(mint, tokenInfo);
+}
+
+/**
+ * Handle AMM SellEvent (pump.fun AMM)
+ */
+export async function handleAmmSellEvent(
+  sellData: AmmSellEventData,
+  mint: string,
+  _txSignature: string
+): Promise<void> {
+  let tokenInfo: TokenAthInfo | undefined = tokenAthMap.get(mint);
+  
+  if (!tokenInfo) {
+    tokenInfo = await checkPendingToken(mint);
+    if (!tokenInfo) return;
+  }
+
+  const solPriceUsd = await getSolPriceUsd();
+  if (solPriceUsd === 0) return;
+
+  // For AMM events, use pool reserves to calculate price
+  const poolQuoteReserves = sellData.pool_quote_token_reserves / 1e9; // SOL
+  const poolBaseReserves = sellData.pool_base_token_reserves / 1e6; // Token
+  
+  if (poolBaseReserves === 0) return;
+  
+  const priceSol = poolQuoteReserves / poolBaseReserves;
+  const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
+
+  if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    tokenInfo.athMarketCapUsd = currentMarketCapUsd;
+    tokenInfo.dirty = true;
+    console.log(`[AthTracker] New ATH (AMM Sell) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
+  }
+
+  // Mark as bonded
+  if (!tokenInfo.bonded) {
+    tokenInfo.bonded = true;
+    tokenInfo.dirty = true;
+  }
+
+  tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
+  tokenInfo.lastUpdated = Date.now();
+  tokenAthMap.set(mint, tokenInfo);
+}
+
+/**
+ * Check Redis cache for pending token (edge case handling)
+ * Uses the same events cache as tokenTracker (pumpfun:events:1min)
+ */
+async function checkPendingToken(mint: string): Promise<TokenAthInfo | undefined> {
+  try {
+    // Query the events sorted set for CreateEvent with this mint
+    const oneMinuteAgo = Date.now() - 60000;
+    const events = await redis.zrangebyscore(EVENTS_SORTED_SET, oneMinuteAgo, '+inf');
+    
+    for (const eventJson of events) {
+      const event = JSON.parse(eventJson);
+      
+      // Look for CreateEvent with matching mint
+      if (event.eventType === 'CreateEvent' && event.data?.mint === mint) {
+        const createData = event.data;
+        const creator = createData.creator || createData.user;
+        
+        // Filtering logic: Only recover pending tokens if the creator wallet is registered.
+        // This ensures we only track tokens from registered creator wallets, even in edge cases.
+        // COMMENTED OUT: Filtering disabled - now recovering all pending tokens regardless of creator wallet
+        // const isTarget = await isTargetCreatorWallet(creator);
+        // if (!isTarget) return undefined;
+
+        // Create token info and add to map
+        const tokenInfo: TokenAthInfo = {
+          mint: createData.mint,
+          name: createData.name || '',
+          symbol: createData.symbol || '',
+          creator,
+          bonded: false,
+          athMarketCapUsd: 0,
+          currentMarketCapUsd: 0,
+          lastUpdated: Date.now(),
+          createdAt: (createData.timestamp || Math.floor(Date.now() / 1000)) * 1000,
+          dirty: true,
+        };
+        
+        tokenAthMap.set(mint, tokenInfo);
+        console.log(`[AthTracker] Recovered pending token from events cache: ${mint}`);
+        return tokenInfo;
+      }
+    }
+  } catch (error) {
+    console.error('[AthTracker] Error checking pending token:', error);
+  }
+  return undefined;
+}
+
+/**
+ * Update ATH from external source (e.g., Bitquery callback)
+ */
+export function updateAthFromExternal(athDataList: TokenAthData[]): void {
+  for (const athData of athDataList) {
+    const tokenInfo = tokenAthMap.get(athData.mintAddress);
+    if (tokenInfo && athData.athMarketCapUsd > tokenInfo.athMarketCapUsd) {
+      tokenInfo.athMarketCapUsd = athData.athMarketCapUsd;
+      tokenInfo.lastUpdated = Date.now();
+      tokenInfo.dirty = true;
+      console.log(`[AthTracker] Updated ATH from Bitquery for ${tokenInfo.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
+    }
+  }
+}
+
+/**
+ * Start periodic save to database
+ */
+function startPeriodicSave(): void {
+  if (saveInterval) {
+    clearInterval(saveInterval);
+  }
+
+  saveInterval = setInterval(async () => {
+    await saveAthDataToDb();
+  }, SAVE_INTERVAL_MS);
+
+  console.log(`[AthTracker] Started periodic save (every ${SAVE_INTERVAL_MS / 1000}s)`);
+}
+
+// Track if ATH columns exist in database
+let athColumnsExist = true;
+
+/**
+ * Save dirty ATH data to database
+ */
+async function saveAthDataToDb(): Promise<void> {
+  const dirtyTokens = Array.from(tokenAthMap.values()).filter(t => t.dirty);
+  
+  if (dirtyTokens.length === 0) {
+    return;
+  }
+
+  console.log(`[AthTracker] Saving ${dirtyTokens.length} tokens to database...`);
+
+  for (const token of dirtyTokens) {
+    try {
+      if (athColumnsExist) {
+        // Try with ATH columns
+        await pool.query(
+          `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (mint) DO UPDATE SET
+             name = COALESCE(EXCLUDED.name, created_tokens.name),
+             symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+             bonded = EXCLUDED.bonded,
+             ath_market_cap_usd = GREATEST(EXCLUDED.ath_market_cap_usd, COALESCE(created_tokens.ath_market_cap_usd, 0)),
+             updated_at = NOW()`,
+          [
+            token.mint,
+            token.name,
+            token.symbol,
+            token.creator,
+            token.bonded,
+            token.athMarketCapUsd,
+            new Date(token.createdAt),
+          ]
+        );
+      } else {
+        // Fallback: save without ATH columns
+        await pool.query(
+          `INSERT INTO created_tokens (mint, name, symbol, creator, created_at)
+           VALUES ($1, $2, $3, $4, $5)
+           ON CONFLICT (mint) DO UPDATE SET
+             name = COALESCE(EXCLUDED.name, created_tokens.name),
+             symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+             updated_at = NOW()`,
+          [
+            token.mint,
+            token.name,
+            token.symbol,
+            token.creator,
+            new Date(token.createdAt),
+          ]
+        );
+      }
+      
+      token.dirty = false;
+    } catch (error: any) {
+      // Check if error is due to missing columns
+      if (error?.code === '42703' && athColumnsExist) {
+        console.warn('[AthTracker] ATH columns not found. Run migration! Falling back to basic save...');
+        athColumnsExist = false;
+        
+        // Retry with fallback query
+        try {
+          await pool.query(
+            `INSERT INTO created_tokens (mint, name, symbol, creator, created_at)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (mint) DO UPDATE SET
+               name = COALESCE(EXCLUDED.name, created_tokens.name),
+               symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+               updated_at = NOW()`,
+            [
+              token.mint,
+              token.name,
+              token.symbol,
+              token.creator,
+              new Date(token.createdAt),
+            ]
+          );
+          token.dirty = false;
+        } catch (fallbackError) {
+          console.error(`[AthTracker] Fallback save failed for ${token.mint}:`, fallbackError);
+        }
+      } else {
+        console.error(`[AthTracker] Error saving token ${token.mint}:`, error);
+      }
+    }
+  }
+}
+
+/**
+ * Get tracking statistics
+ */
+export function getAthTrackerStats(): { 
+  trackedTokens: number; 
+  dirtyTokens: number;
+  isInitialized: boolean;
+} {
+  return {
+    trackedTokens: tokenAthMap.size,
+    dirtyTokens: Array.from(tokenAthMap.values()).filter(t => t.dirty).length,
+    isInitialized,
+  };
+}
+
+/**
+ * Get token ATH info
+ */
+export function getTokenAthInfo(mint: string): TokenAthInfo | undefined {
+  return tokenAthMap.get(mint);
+}
+
+/**
+ * Cleanup (call on shutdown)
+ */
+export async function cleanupAthTracker(): Promise<void> {
+  console.log('[AthTracker] Cleaning up...');
+  
+  // Stop periodic save
+  if (saveInterval) {
+    clearInterval(saveInterval);
+    saveInterval = null;
+  }
+
+  // Final save
+  await saveAthDataToDb();
+  
+  isInitialized = false;
+  console.log('[AthTracker] Cleanup complete');
+}
+

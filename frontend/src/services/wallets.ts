@@ -90,3 +90,32 @@ export const removeCreatorWallet = async (address: string): Promise<{ success: b
   }
 }
 
+export interface WalletStats {
+  totalTokens: number
+  bondedTokens: number
+  bondedRate: number
+  avgAthMcap: number | null
+}
+
+export const getWalletStats = async (address: string): Promise<WalletStats> => {
+  try {
+    const response = await fetch(`${API_BASE}/${encodeURIComponent(address)}/stats`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch wallet statistics')
+    }
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    console.error('Error fetching wallet statistics:', error)
+    throw error
+  }
+}
+

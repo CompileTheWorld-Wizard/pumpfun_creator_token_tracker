@@ -41,3 +41,24 @@ export const checkAuth = async (): Promise<boolean> => {
   }
 }
 
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<{ success: boolean; message?: string; error?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE}/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    })
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    return { success: false, error: 'Network error' }
+  }
+}
+

@@ -252,5 +252,63 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
   }
 });
 
+// Get wallet statistics (bonded rate and average ATH mcap)
+router.get('/:address/stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { address } = req.params;
+    const userId = (req.session as any)?.userId || 'admin';
+
+    if (!address) {
+      res.status(400).json({ 
+        error: 'Wallet address is required' 
+      });
+      return;
+    }
+
+    // Verify wallet belongs to user
+    const walletCheck = await pool.query(
+      'SELECT wallet_address FROM creator_wallets WHERE user_id = $1 AND wallet_address = $2',
+      [userId, address]
+    );
+
+    if (walletCheck.rows.length === 0) {
+      res.status(404).json({ 
+        error: 'Wallet address not found' 
+      });
+      return;
+    }
+
+    // Get statistics
+    const statsResult = await pool.query(
+      `SELECT 
+        COUNT(*) as total_tokens,
+        COUNT(*) FILTER (WHERE bonded = true) as bonded_tokens,
+        AVG(ath_market_cap_usd) FILTER (WHERE ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
+      FROM created_tokens
+      WHERE creator = $1
+        AND creator IN (SELECT wallet_address FROM creator_wallets WHERE user_id = $2)`,
+      [address, userId]
+    );
+
+    const stats = statsResult.rows[0];
+    const totalTokens = parseInt(stats.total_tokens) || 0;
+    const bondedTokens = parseInt(stats.bonded_tokens) || 0;
+    const bondedRate = totalTokens > 0 ? (bondedTokens / totalTokens) * 100 : 0;
+    const avgAthMcap = stats.avg_ath_mcap ? parseFloat(stats.avg_ath_mcap) : null;
+
+    res.json({
+      totalTokens,
+      bondedTokens,
+      bondedRate: Math.round(bondedRate * 100) / 100, // Round to 2 decimal places
+      avgAthMcap
+    });
+  } catch (error: any) {
+    console.error('Error fetching wallet statistics:', error);
+    res.status(500).json({ 
+      error: 'Error fetching wallet statistics. Please try again.' 
+    });
+  }
+});
+
 export default router;
 
