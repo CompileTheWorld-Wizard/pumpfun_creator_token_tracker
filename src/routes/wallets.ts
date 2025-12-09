@@ -94,31 +94,30 @@ router.post('/validate', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// Get all creator wallets for the authenticated user
-router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
+// Get all blacklist wallets for the authenticated user
+router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req.session as any)?.userId || 'admin';
-    
     const result = await pool.query(
-      'SELECT wallet_address FROM creator_wallets WHERE user_id = $1 ORDER BY created_at DESC',
-      [userId]
+      'SELECT wallet_address, name as nickname FROM creator_wallets ORDER BY created_at DESC'
     );
     
-    const wallets = result.rows.map(row => row.wallet_address);
+    const wallets = result.rows.map(row => ({
+      address: row.wallet_address,
+      nickname: row.nickname || null
+    }));
     res.json({ wallets });
   } catch (error: any) {
-    console.error('Error fetching creator wallets:', error);
+    console.error('Error fetching blacklist wallets:', error);
     res.status(500).json({ 
-      error: 'Error fetching creator wallets' 
+      error: 'Error fetching blacklist wallets' 
     });
   }
 });
 
-// Add a creator wallet
+// Add a blacklist wallet
 router.post('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { address } = req.body;
-    const userId = (req.session as any)?.userId || 'admin';
+    const { address, nickname } = req.body;
 
     if (!address || typeof address !== 'string') {
       res.status(400).json({ 
@@ -128,6 +127,7 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
     }
 
     const trimmed = address.trim();
+    const trimmedNickname = nickname ? String(nickname).trim() : null;
 
     // Validate using PublicKey constructor
     let publicKey: PublicKey;
@@ -189,37 +189,36 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
     // Insert wallet into database
     try {
       await pool.query(
-        'INSERT INTO creator_wallets (user_id, wallet_address) VALUES ($1, $2)',
-        [userId, trimmed]
+        'INSERT INTO creator_wallets (wallet_address, name) VALUES ($1, $2)',
+        [trimmed, trimmedNickname]
       );
       
       res.json({ 
         success: true, 
-        message: 'Creator wallet added successfully' 
+        message: 'Blacklist wallet added successfully' 
       });
     } catch (dbError: any) {
       // Check if it's a unique constraint violation
       if (dbError.code === '23505') {
         res.status(400).json({ 
-          error: 'This wallet address is already added' 
+          error: 'This wallet address is already in the blacklist' 
         });
         return;
       }
       throw dbError;
     }
   } catch (error: any) {
-    console.error('Error adding creator wallet:', error);
+    console.error('Error adding blacklist wallet:', error);
     res.status(500).json({ 
-      error: 'Error adding creator wallet. Please try again.' 
+      error: 'Error adding blacklist wallet. Please try again.' 
     });
   }
 });
 
-// Delete a creator wallet
+// Delete a blacklist wallet
 router.delete('/:address', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
-    const userId = (req.session as any)?.userId || 'admin';
 
     if (!address) {
       res.status(400).json({ 
@@ -229,25 +228,25 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
     }
 
     const result = await pool.query(
-      'DELETE FROM creator_wallets WHERE user_id = $1 AND wallet_address = $2',
-      [userId, address]
+      'DELETE FROM creator_wallets WHERE wallet_address = $1',
+      [address]
     );
 
     if (result.rowCount === 0) {
       res.status(404).json({ 
-        error: 'Wallet address not found' 
+        error: 'Wallet address not found in blacklist' 
       });
       return;
     }
 
     res.json({ 
       success: true, 
-      message: 'Creator wallet removed successfully' 
+      message: 'Blacklist wallet removed successfully' 
     });
   } catch (error: any) {
-    console.error('Error deleting creator wallet:', error);
+    console.error('Error deleting blacklist wallet:', error);
     res.status(500).json({ 
-      error: 'Error deleting creator wallet. Please try again.' 
+      error: 'Error deleting blacklist wallet. Please try again.' 
     });
   }
 });
@@ -256,7 +255,6 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
 router.get('/:address/stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
-    const userId = (req.session as any)?.userId || 'admin';
 
     if (!address) {
       res.status(400).json({ 
@@ -265,29 +263,28 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
       return;
     }
 
-    // Verify wallet belongs to user
+    // Verify wallet is in blacklist
     const walletCheck = await pool.query(
-      'SELECT wallet_address FROM creator_wallets WHERE user_id = $1 AND wallet_address = $2',
-      [userId, address]
+      'SELECT wallet_address FROM creator_wallets WHERE wallet_address = $1',
+      [address]
     );
 
     if (walletCheck.rows.length === 0) {
       res.status(404).json({ 
-        error: 'Wallet address not found' 
+        error: 'Wallet address not found in blacklist' 
       });
       return;
     }
 
-    // Get statistics
+    // Get statistics for tokens created by this wallet
     const statsResult = await pool.query(
       `SELECT 
         COUNT(*) as total_tokens,
         COUNT(*) FILTER (WHERE bonded = true) as bonded_tokens,
         AVG(ath_market_cap_usd) FILTER (WHERE ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
       FROM created_tokens
-      WHERE creator = $1
-        AND creator IN (SELECT wallet_address FROM creator_wallets WHERE user_id = $2)`,
-      [address, userId]
+      WHERE creator = $1`,
+      [address]
     );
 
     const stats = statsResult.rows[0];

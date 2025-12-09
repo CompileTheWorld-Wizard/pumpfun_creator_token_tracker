@@ -18,8 +18,8 @@ const EVENTS_SORTED_SET = 'pumpfun:events:1min';
 // Token total supply (standard for pump.fun tokens)
 const DEFAULT_TOKEN_SUPPLY = 1_000_000_000;
 
-// In-memory set of target creator wallets
-let targetCreatorWallets: Set<string> = new Set();
+// In-memory set of blacklisted creator wallets
+let blacklistedCreatorWallets: Set<string> = new Set();
 
 // Pending token tracking jobs
 const pendingTrackingJobs: Map<string, NodeJS.Timeout> = new Map();
@@ -55,44 +55,44 @@ export interface TokenTrackingResult {
 }
 
 /**
- * Initialize the token tracker by loading target creator wallets
+ * Initialize the token tracker by loading blacklisted creator wallets
  */
 export async function initializeTokenTracker(): Promise<void> {
-  await refreshTargetWallets();
-  console.log(`[TokenTracker] Initialized with ${targetCreatorWallets.size} target wallets`);
+  await refreshBlacklistedWallets();
+  console.log(`[TokenTracker] Initialized with ${blacklistedCreatorWallets.size} blacklisted wallets`);
 }
 
 /**
- * Refresh target creator wallets from the database
+ * Refresh blacklisted creator wallets from the database
  * 
- * This function loads all registered creator wallet addresses from the creator_wallets table
- * and stores them in memory for fast filtering. Only tokens created by these registered
- * wallets will be tracked for market cap data collection.
+ * This function loads all blacklisted creator wallet addresses from the creator_wallets table
+ * and stores them in memory for fast filtering. Tokens created by these wallets will NOT
+ * be tracked for market cap data collection.
  */
-export async function refreshTargetWallets(): Promise<void> {
+export async function refreshBlacklistedWallets(): Promise<void> {
   try {
-    // Filter: Load all registered creator wallet addresses from database
+    // Load all blacklisted creator wallet addresses from database
     const result = await pool.query(
       'SELECT DISTINCT wallet_address FROM creator_wallets'
     );
-    targetCreatorWallets = new Set(result.rows.map(row => row.wallet_address));
+    blacklistedCreatorWallets = new Set(result.rows.map(row => row.wallet_address));
   } catch (error) {
-    console.error('[TokenTracker] Error refreshing target wallets:', error);
+    console.error('[TokenTracker] Error refreshing blacklisted wallets:', error);
   }
 }
 
 /**
- * Check if a wallet is a target creator wallet
+ * Check if a wallet is blacklisted
  * 
- * Filtering logic: Returns true only if the wallet address is in the set of
- * registered creator wallets loaded from the creator_wallets table.
+ * Filtering logic: Returns true if the wallet address is in the blacklist.
+ * Tokens created by blacklisted wallets should NOT be tracked.
  */
-export function isTargetCreator(walletAddress: string): boolean {
-  return targetCreatorWallets.has(walletAddress);
+export function isBlacklistedCreator(walletAddress: string): boolean {
+  return blacklistedCreatorWallets.has(walletAddress);
 }
 
 /**
- * Handle a CreateEvent - schedule tracking if from a target wallet
+ * Handle a CreateEvent - schedule tracking if NOT from a blacklisted wallet
  */
 export async function handleCreateEvent(
   createEventData: CreateEventData,
@@ -100,12 +100,12 @@ export async function handleCreateEvent(
 ): Promise<void> {
   const creator = createEventData.creator || createEventData.user;
   
-  // Filtering logic: Only process tokens created by registered creator wallets.
-  // If the creator wallet is not in our target list, skip tracking this token.
-  // COMMENTED OUT: Filtering disabled - now tracking all tokens regardless of creator wallet
-  // if (!isTargetCreator(creator)) {
-  //   return;
-  // }
+  // Filtering logic: Skip tokens created by blacklisted wallets.
+  // If the creator wallet is in the blacklist, skip tracking this token.
+  if (isBlacklistedCreator(creator)) {
+    console.log(`[TokenTracker] Skipping token from blacklisted creator: ${creator}`);
+    return;
+  }
 
   const mint = createEventData.mint;
   console.log(`[TokenTracker] Creator ${creator} created token: ${mint}`);
@@ -362,10 +362,10 @@ async function saveTokenTrackingResult(
 /**
  * Get tracking statistics
  */
-export function getTrackingStats(): { pendingJobs: number; targetWallets: number } {
+export function getTrackingStats(): { pendingJobs: number; blacklistedWallets: number } {
   return {
     pendingJobs: pendingTrackingJobs.size,
-    targetWallets: targetCreatorWallets.size,
+    blacklistedWallets: blacklistedCreatorWallets.size,
   };
 }
 

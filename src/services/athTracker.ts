@@ -8,7 +8,6 @@
 import { pool } from '../db.js';
 import { redis } from '../redis.js';
 import { fetchAthMarketCapBatched, type TokenAthData } from '../utils/bitquery.js';
-import { getCreatedTokens } from '../utils/solscan.js';
 import type { TradeEventData, AmmBuyEventData, AmmSellEventData } from '../types.js';
 
 // Constants
@@ -68,15 +67,14 @@ export async function initializeAthTracker(): Promise<void> {
 async function loadTrackedTokensFromDb(): Promise<void> {
   try {
     // Use a query that works with or without ATH columns (for backward compatibility)
-    // Filtering logic: Only load tokens where the creator wallet is registered in creator_wallets table.
-    // This ensures we only track ATH data for tokens from registered creator wallets.
-    // COMMENTED OUT: Filtering disabled - now loading all tokens regardless of creator wallet
+    // Filtering logic: Only load tokens where the creator wallet is NOT in the blacklist.
+    // This ensures we don't track ATH data for tokens from blacklisted wallets.
     const result = await pool.query(
       `SELECT mint, name, symbol, creator, created_at,
               COALESCE(bonded, false) as bonded,
               COALESCE(ath_market_cap_usd, 0) as ath_market_cap_usd
-       FROM created_tokens`
-      // WHERE creator IN (SELECT wallet_address FROM creator_wallets)
+       FROM created_tokens
+       WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)`
     );
 
     for (const row of result.rows) {
@@ -102,12 +100,11 @@ async function loadTrackedTokensFromDb(): Promise<void> {
       console.warn('[AthTracker] Falling back to basic query...');
       
       try {
-        // Filtering logic: Fallback query also filters by registered creator wallets
-        // COMMENTED OUT: Filtering disabled - now loading all tokens regardless of creator wallet
+        // Filtering logic: Fallback query also filters out blacklisted wallets
         const fallbackResult = await pool.query(
           `SELECT mint, name, symbol, creator, created_at
-           FROM created_tokens`
-          // WHERE creator IN (SELECT wallet_address FROM creator_wallets)
+           FROM created_tokens
+           WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)`
         );
 
         for (const row of fallbackResult.rows) {
@@ -139,74 +136,13 @@ let pendingTokenData: Map<string, { mint: string; name: string; symbol: string; 
 
 /**
  * Fetch tokens from creator wallets via Solscan and load to tracker
+ * NOTE: This function is no longer used for blacklisted wallets.
+ * It's kept for backward compatibility but should not fetch tokens for blacklisted wallets.
  */
 async function fetchTokensFromCreatorWallets(): Promise<void> {
-  try {
-    // Filtering logic: Get all registered creator wallet addresses from the database.
-    // Only tokens created by these wallets will be fetched and tracked for ATH data.
-    const walletsResult = await pool.query(
-      'SELECT DISTINCT wallet_address FROM creator_wallets'
-    );
-    const wallets = walletsResult.rows.map(row => row.wallet_address);
-
-    if (wallets.length === 0) {
-      console.log('[AthTracker] No creator wallets found');
-      return;
-    }
-
-    console.log(`[AthTracker] Fetching tokens for ${wallets.length} creator wallets...`);
-
-    for (const wallet of wallets) {
-      try {
-        const response = await getCreatedTokens(wallet) as any;
-        
-        if (response?.data && Array.isArray(response.data)) {
-          for (const activity of response.data) {
-            // Extract token from routers
-            const token1 = activity.routers?.token1;
-            if (token1 && token1 !== 'So11111111111111111111111111111111111111111') {
-              const tokenMeta = response.metadata?.tokens?.[token1];
-              const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
-              
-              // Store token data with earliest block time
-              const existing = pendingTokenData.get(token1);
-              if (!existing || blockTime < existing.blockTime) {
-                pendingTokenData.set(token1, {
-                  mint: token1,
-                  name: tokenMeta?.token_name || '',
-                  symbol: tokenMeta?.token_symbol || '',
-                  creator: wallet,
-                  blockTime,
-                });
-              }
-              
-              // Add to tracker immediately (without ATH data)
-              if (!tokenAthMap.has(token1)) {
-                tokenAthMap.set(token1, {
-                  mint: token1,
-                  name: tokenMeta?.token_name || '',
-                  symbol: tokenMeta?.token_symbol || '',
-                  creator: wallet,
-                  bonded: false,
-                  athMarketCapUsd: 0,
-                  currentMarketCapUsd: 0,
-                  lastUpdated: Date.now(),
-                  createdAt: blockTime * 1000,
-                  dirty: true,
-                });
-              }
-            }
-          }
-        }
-      } catch (error) {
-        console.error(`[AthTracker] Error fetching tokens for wallet ${wallet}:`, error);
-      }
-    }
-
-    console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens from creator wallets`);
-  } catch (error) {
-    console.error('[AthTracker] Error fetching tokens from creator wallets:', error);
-  }
+  // This function is deprecated - we don't fetch tokens for blacklisted wallets
+  // Tokens are now fetched dynamically when new creators are encountered during streaming
+  console.log('[AthTracker] Skipping initial token fetch - tokens will be fetched dynamically during streaming');
 }
 
 /**
@@ -276,13 +212,12 @@ export async function registerToken(
   creator: string,
   createdAt: number
 ): Promise<void> {
-  // Filtering logic: Only register tokens if the creator wallet is registered in creator_wallets.
-  // This ensures we only track ATH data for tokens from registered creator wallets.
-  // COMMENTED OUT: Filtering disabled - now registering all tokens regardless of creator wallet
-  // const isTarget = await isTargetCreatorWallet(creator);
-  // if (!isTarget) {
-  //   return;
-  // }
+  // Filtering logic: Skip tokens created by blacklisted wallets.
+  const isBlacklisted = await isBlacklistedCreatorWallet(creator);
+  if (isBlacklisted) {
+    console.log(`[AthTracker] Skipping token from blacklisted creator: ${creator}`);
+    return;
+  }
 
   console.log(`[AthTracker] Registering new token: ${mint} (${symbol})`);
 
@@ -303,13 +238,12 @@ export async function registerToken(
 }
 
 /**
- * Check if a wallet is a target creator wallet
+ * Check if a wallet is blacklisted
  * 
  * Filtering logic: Queries the creator_wallets table to determine if the given wallet
- * address is registered as a creator wallet. Returns true only if the wallet exists
- * in the registered creator wallets list.
+ * address is blacklisted. Returns true if the wallet exists in the blacklist.
  */
-async function isTargetCreatorWallet(walletAddress: string): Promise<boolean> {
+async function isBlacklistedCreatorWallet(walletAddress: string): Promise<boolean> {
   try {
     const result = await pool.query(
       'SELECT 1 FROM creator_wallets WHERE wallet_address = $1 LIMIT 1',
@@ -317,7 +251,7 @@ async function isTargetCreatorWallet(walletAddress: string): Promise<boolean> {
     );
     return result.rows.length > 0;
   } catch (error) {
-    console.error('[AthTracker] Error checking target wallet:', error);
+    console.error('[AthTracker] Error checking blacklisted wallet:', error);
     return false;
   }
 }
@@ -506,11 +440,9 @@ async function checkPendingToken(mint: string): Promise<TokenAthInfo | undefined
         const createData = event.data;
         const creator = createData.creator || createData.user;
         
-        // Filtering logic: Only recover pending tokens if the creator wallet is registered.
-        // This ensures we only track tokens from registered creator wallets, even in edge cases.
-        // COMMENTED OUT: Filtering disabled - now recovering all pending tokens regardless of creator wallet
-        // const isTarget = await isTargetCreatorWallet(creator);
-        // if (!isTarget) return undefined;
+        // Filtering logic: Skip pending tokens if the creator wallet is blacklisted.
+        const isBlacklisted = await isBlacklistedCreatorWallet(creator);
+        if (isBlacklisted) return undefined;
 
         // Create token info and add to map
         const tokenInfo: TokenAthInfo = {

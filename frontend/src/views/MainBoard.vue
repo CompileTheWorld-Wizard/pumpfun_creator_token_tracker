@@ -115,8 +115,8 @@
           class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-[250px] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <option value="">All Wallets</option>
-          <option v-for="wallet in wallets" :key="wallet" :value="wallet">
-            {{ formatWalletAddress(wallet) }}
+          <option v-for="wallet in wallets" :key="wallet.address" :value="wallet.address">
+            {{ wallet.nickname || formatWalletAddress(wallet.address) }}
           </option>
         </select>
         <label class="text-xs text-gray-400 font-medium ml-3">Items per page:</label>
@@ -361,6 +361,21 @@
               <p class="mt-1.5 text-xs text-gray-500">Must be a valid Solana wallet address (not a token or program address)</p>
             </div>
 
+            <div>
+              <label for="walletNickname" class="block text-xs font-semibold text-gray-300 mb-1.5">
+                Nickname (Optional)
+              </label>
+              <input
+                id="walletNickname"
+                v-model="walletNicknameInput"
+                type="text"
+                class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
+                placeholder="Enter a nickname for this wallet"
+                :disabled="addingWallet"
+              />
+              <p class="mt-1.5 text-xs text-gray-500">Optional: Give this wallet a friendly name</p>
+            </div>
+
             <div class="flex gap-3">
               <button
                 type="button"
@@ -410,22 +425,23 @@
           <div v-if="filteredWallets.length > 0" class="max-h-64 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
             <div 
               v-for="wallet in filteredWallets" 
-              :key="wallet"
+              :key="wallet.address"
               class="flex items-center gap-2 p-3 bg-gray-800/50 border border-gray-700 rounded-lg hover:border-purple-500/50 transition"
             >
               <button
-                @click="copyWalletAddress(wallet)"
+                @click="copyWalletAddress(wallet.address)"
                 class="p-1.5 text-gray-400 hover:text-purple-400 hover:bg-purple-900/20 rounded transition flex-shrink-0"
-                :title="copiedAddress === wallet ? 'Copied!' : 'Copy address'"
+                :title="copiedAddress === wallet.address ? 'Copied!' : 'Copy address'"
               >
-                <CheckIcon v-if="copiedAddress === wallet" class="text-green-400" />
+                <CheckIcon v-if="copiedAddress === wallet.address" class="text-green-400" />
                 <CopyIcon v-else />
               </button>
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-mono text-gray-300 break-all">{{ wallet }}</p>
+                <p v-if="wallet.nickname" class="text-sm font-semibold text-gray-200">{{ wallet.nickname }}</p>
+                <p class="text-xs font-mono text-gray-400 break-all">{{ formatWalletAddress(wallet.address) }}</p>
               </div>
               <button
-                @click="removeWalletByAddress(wallet)"
+                @click="removeWalletByAddress(wallet.address)"
                 class="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition flex-shrink-0"
                 title="Remove wallet"
               >
@@ -686,7 +702,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { logout, changePassword } from '../services/auth'
-import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats } from '../services/wallets'
+import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
 import { getCreatedTokens, type Token, type PaginationInfo } from '../services/tokens'
 import CopyIcon from '../icons/CopyIcon.vue'
@@ -697,7 +713,8 @@ import CloseIcon from '../icons/CloseIcon.vue'
 
 const router = useRouter()
 
-const wallets = ref<string[]>([])
+const wallets = ref<Wallet[]>([])
+const walletNicknameInput = ref('')
 const isTracking = ref(false)
 const trackingLoading = ref(false)
 const showManageDialog = ref(false)
@@ -757,7 +774,8 @@ const filteredWallets = computed(() => {
   }
   const query = searchQuery.value.toLowerCase().trim()
   return wallets.value.filter(wallet => 
-    wallet.toLowerCase().includes(query)
+    wallet.address.toLowerCase().includes(query) ||
+    (wallet.nickname && wallet.nickname.toLowerCase().includes(query))
   )
 })
 
@@ -830,13 +848,14 @@ const formatWalletAddress = (address: string): string => {
 const handleAddWallet = async () => {
   walletError.value = ''
   const address = walletAddressInput.value.trim()
+  const nickname = walletNicknameInput.value.trim() || null
   
   if (!address) {
     walletError.value = 'Wallet address is required'
     return
   }
   
-  if (wallets.value.includes(address)) {
+  if (wallets.value.some(w => w.address === address)) {
     walletError.value = 'This wallet address is already added'
     return
   }
@@ -852,7 +871,7 @@ const handleAddWallet = async () => {
       return
     }
     
-    const result = await addCreatorWallet(address)
+    const result = await addCreatorWallet(address, nickname)
     
     if (!result.success) {
       walletError.value = result.error || 'Failed to save wallet address'
@@ -860,8 +879,9 @@ const handleAddWallet = async () => {
       return
     }
     
-    wallets.value.unshift(address)
+    wallets.value.unshift({ address, nickname })
     walletAddressInput.value = ''
+    walletNicknameInput.value = ''
     walletError.value = ''
     addingWallet.value = false
   } catch (error) {
@@ -947,7 +967,7 @@ const removeWalletByAddress = async (address: string) => {
       return
     }
     
-    const index = wallets.value.indexOf(address)
+    const index = wallets.value.findIndex(w => w.address === address)
     if (index > -1) {
       wallets.value.splice(index, 1)
     }

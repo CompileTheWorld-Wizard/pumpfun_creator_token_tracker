@@ -72,7 +72,7 @@ function getPoolsQuery(): string {
 /**
  * Fetch bonding status for a batch of tokens from Shyft API
  */
-async function fetchBondingStatusBatch(tokenMints: string[]): Promise<Map<string, boolean>> {
+export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<Map<string, boolean>> {
   const bondingStatusMap = new Map<string, boolean>();
 
   if (tokenMints.length === 0) {
@@ -138,13 +138,14 @@ async function fetchBondingStatusBatch(tokenMints: string[]): Promise<Map<string
 
 /**
  * Get all unbonded tokens from database
+ * Excludes tokens created by blacklisted wallets
  */
 async function getUnbondedTokens(): Promise<string[]> {
   try {
     const result = await pool.query(
       `SELECT mint 
        FROM created_tokens
-       WHERE creator IN (SELECT wallet_address FROM creator_wallets)
+       WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)
          AND COALESCE(bonded, false) = false
        ORDER BY created_at DESC`
     );
