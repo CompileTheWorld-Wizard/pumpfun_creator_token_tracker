@@ -265,34 +265,45 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
       return;
     }
 
-    // Verify wallet is in blacklist
+    // Check if wallet has any tokens in created_tokens
+    const tokenCheck = await pool.query(
+      'SELECT COUNT(*) as count FROM created_tokens WHERE creator = $1',
+      [address]
+    );
+
+    const tokenCount = parseInt(tokenCheck.rows[0].count) || 0;
+    if (tokenCount === 0) {
+      res.status(404).json({ 
+        error: 'No tokens found for this wallet address' 
+      });
+      return;
+    }
+
+    // Check if wallet is in blacklist (for updating stats)
     const walletCheck = await pool.query(
       'SELECT wallet_address FROM blacklist_creator WHERE wallet_address = $1',
       [address]
     );
 
-    if (walletCheck.rows.length === 0) {
-      res.status(404).json({ 
-        error: 'Wallet address not found in blacklist' 
-      });
-      return;
-    }
+    const isBlacklisted = walletCheck.rows.length > 0;
 
     // Update bonding status and ATH mcap for tokens from this creator wallet
-    // This ensures stats are up-to-date even if the wallet is blacklisted
-    try {
-      console.log(`[Wallets] Updating bonding status and ATH mcap for creator: ${address}`);
-      await Promise.all([
-        updateBondingStatusForCreator(address).catch(err => {
-          console.error(`[Wallets] Error updating bonding status:`, err);
-        }),
-        updateAthMcapForCreator(address).catch(err => {
-          console.error(`[Wallets] Error updating ATH mcap:`, err);
-        })
-      ]);
-    } catch (error) {
-      console.error(`[Wallets] Error updating stats for creator ${address}:`, error);
-      // Continue to return stats even if update fails
+    // Only update if wallet is blacklisted (to refresh stats)
+    if (isBlacklisted) {
+      try {
+        console.log(`[Wallets] Updating bonding status and ATH mcap for creator: ${address}`);
+        await Promise.all([
+          updateBondingStatusForCreator(address).catch(err => {
+            console.error(`[Wallets] Error updating bonding status:`, err);
+          }),
+          updateAthMcapForCreator(address).catch(err => {
+            console.error(`[Wallets] Error updating ATH mcap:`, err);
+          })
+        ]);
+      } catch (error) {
+        console.error(`[Wallets] Error updating stats for creator ${address}:`, error);
+        // Continue to return stats even if update fails
+      }
     }
 
     // Get statistics for tokens created by this wallet
