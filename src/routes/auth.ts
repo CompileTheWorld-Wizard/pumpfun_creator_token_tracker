@@ -135,5 +135,62 @@ router.post('/change-password', async (req: Request, res: Response) => {
   }
 });
 
+// Clear database endpoint (requires authentication and password verification)
+router.post('/clear-database', async (req: Request, res: Response) => {
+  // Check authentication
+  const isAuthenticated = (req.session as any)?.authenticated === true;
+  if (!isAuthenticated) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const { password } = req.body;
+
+  if (!password) {
+    return res.status(400).json({ 
+      error: 'Password is required' 
+    });
+  }
+
+  try {
+    // Get current password hash
+    const result = await pool.query(
+      'SELECT password_hash FROM passwords ORDER BY id DESC LIMIT 1'
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(500).json({ 
+        error: 'Password not configured' 
+      });
+    }
+
+    const passwordHash = result.rows[0].password_hash;
+
+    // Verify password
+    const isValid = await bcrypt.compare(password, passwordHash);
+
+    if (!isValid) {
+      return res.status(401).json({ 
+        error: 'Invalid password' 
+      });
+    }
+
+    // Clear all data from database (except passwords table)
+    await pool.query('TRUNCATE TABLE created_tokens CASCADE');
+    await pool.query('TRUNCATE TABLE creator_wallets CASCADE');
+
+    console.log('[ClearDatabase] Database cleared successfully');
+
+    return res.json({ 
+      success: true, 
+      message: 'Database cleared successfully' 
+    });
+  } catch (error: any) {
+    console.error('Clear database error:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error' 
+    });
+  }
+});
+
 export default router;
 

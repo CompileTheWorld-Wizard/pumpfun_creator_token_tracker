@@ -62,3 +62,23 @@ export const changePassword = async (
   }
 }
 
+export const clearDatabase = async (
+  password: string
+): Promise<{ success: boolean; message?: string; error?: string }> => {
+  try {
+    const response = await fetch(`${API_BASE}/clear-database`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ password }),
+    })
+
+    const data = await response.json()
+    return data
+  } catch (error) {
+    return { success: false, error: 'Network error' }
+  }
+}
+

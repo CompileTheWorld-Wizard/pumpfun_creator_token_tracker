@@ -15,7 +15,13 @@
               @click="showManageDialog = true"
               class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50"
             >
-              Manage Creator
+              Manage Blacklist
+            </button>
+            <button
+              @click="showClearDatabaseDialog = true"
+              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50"
+            >
+              Clear Database
             </button>
             <button
               @click="showChangePasswordDialog = true"
@@ -258,7 +264,7 @@
                 </td>
                 <td class="px-2 py-1.5 whitespace-nowrap">
                   <div v-if="token.marketCapTimeSeries && token.marketCapTimeSeries.length > 0" class="w-16 h-8">
-                    <canvas :ref="el => setChartRef(token.mint, el)" class="w-full h-full"></canvas>
+                    <canvas :ref="el => setChartRef(token.mint, el as HTMLCanvasElement | null)" class="w-full h-full"></canvas>
                   </div>
                   <div v-else class="w-16 h-8 flex items-center justify-center">
                     <span class="text-[10px] text-gray-600">No data</span>
@@ -322,7 +328,7 @@
       </div>
     </main>
 
-    <!-- Manage Creator Wallets Dialog -->
+    <!-- Manage Blacklist Dialog -->
     <div 
       v-if="showManageDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
@@ -330,7 +336,7 @@
     >
       <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-gray-100">Manage Creator Wallets</h3>
+          <h3 class="text-lg font-bold text-gray-100">Manage Blacklist</h3>
           <button
             @click="closeManageDialog"
             class="text-gray-400 hover:text-gray-200 transition"
@@ -399,7 +405,7 @@
 
         <!-- Wallet List -->
         <div>
-          <h4 class="text-sm font-semibold text-gray-300 mb-3">Tracked Wallets</h4>
+          <h4 class="text-sm font-semibold text-gray-300 mb-3">Blacklisted Wallets</h4>
           
           <!-- Search Box -->
           <div v-if="wallets.length > 0" class="mb-3">
@@ -455,10 +461,84 @@
             <svg class="w-8 h-8 text-gray-600 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
             </svg>
-            <p class="text-gray-400 text-sm font-semibold mb-1">No wallets tracked</p>
-            <p class="text-gray-500 text-xs">Add creator wallets to start tracking</p>
+            <p class="text-gray-400 text-sm font-semibold mb-1">No wallets blacklisted</p>
+            <p class="text-gray-500 text-xs">Add wallets to blacklist to exclude them from tracking</p>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Clear Database Dialog -->
+    <div 
+      v-if="showClearDatabaseDialog"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      @click.self="closeClearDatabaseDialog"
+    >
+      <div class="bg-gray-900 border border-red-500/50 rounded-lg p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-red-400">⚠️ Clear Database</h3>
+          <button
+            @click="closeClearDatabaseDialog"
+            class="text-gray-400 hover:text-gray-200 transition"
+          >
+            <CloseIcon class="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div class="mb-4">
+          <div class="bg-red-950/50 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4">
+            <p class="text-sm font-semibold mb-2">⚠️ DANGER: This action cannot be undone!</p>
+            <p class="text-xs text-red-200">
+              This will permanently delete ALL data from the database including:
+            </p>
+            <ul class="text-xs text-red-200 mt-2 ml-4 list-disc">
+              <li>All tracked tokens</li>
+              <li>All blacklisted wallets</li>
+              <li>All market cap data</li>
+              <li>All statistics</li>
+            </ul>
+            <p class="text-xs text-red-200 mt-2 font-semibold">
+              Only the password will be preserved.
+            </p>
+          </div>
+        </div>
+        
+        <form @submit.prevent="handleClearDatabase" class="space-y-4">
+          <div>
+            <label for="clearPassword" class="block text-xs font-semibold text-gray-300 mb-1.5">
+              Enter Password to Confirm
+            </label>
+            <input
+              id="clearPassword"
+              v-model="clearDatabasePassword"
+              type="password"
+              required
+              class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-red-500 focus:border-red-500 outline-none transition text-sm"
+              placeholder="Enter your password"
+              :disabled="clearingDatabase"
+            />
+            <p v-if="clearDatabaseError" class="mt-1.5 text-xs text-red-400">{{ clearDatabaseError }}</p>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              type="button"
+              @click="closeClearDatabaseDialog"
+              class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
+              :disabled="clearingDatabase"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="clearingDatabase || !clearDatabasePassword"
+              class="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span v-if="clearingDatabase">Clearing...</span>
+              <span v-else>Clear All Data</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -701,7 +781,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout, changePassword } from '../services/auth'
+import { logout, changePassword, clearDatabase } from '../services/auth'
 import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
 import { getCreatedTokens, type Token, type PaginationInfo } from '../services/tokens'
@@ -719,6 +799,10 @@ const isTracking = ref(false)
 const trackingLoading = ref(false)
 const showManageDialog = ref(false)
 const showChangePasswordDialog = ref(false)
+const showClearDatabaseDialog = ref(false)
+const clearDatabasePassword = ref('')
+const clearingDatabase = ref(false)
+const clearDatabaseError = ref('')
 const walletAddressInput = ref('')
 const walletAddressInputRef = ref<HTMLInputElement | null>(null)
 const walletError = ref('')
@@ -1309,7 +1393,6 @@ const handleChartMouseMove = (event: MouseEvent) => {
     const container = canvas.parentElement
     if (container) {
       const containerWidth = container.clientWidth
-      const containerHeight = container.clientHeight
       
       // Adjust if tooltip would go off right edge
       if (tooltipX + 200 > containerWidth) {
@@ -1500,6 +1583,53 @@ const handleChangePassword = async () => {
 const handleLogout = async () => {
   await logout()
   router.push('/login')
+}
+
+const closeClearDatabaseDialog = () => {
+  showClearDatabaseDialog.value = false
+  clearDatabasePassword.value = ''
+  clearDatabaseError.value = ''
+}
+
+const handleClearDatabase = async () => {
+  if (!clearDatabasePassword.value) {
+    clearDatabaseError.value = 'Password is required'
+    return
+  }
+
+  clearingDatabase.value = true
+  clearDatabaseError.value = ''
+
+  try {
+    const result = await clearDatabase(clearDatabasePassword.value)
+    
+    if (result.success) {
+      // Clear all local state
+      wallets.value = []
+      tokens.value = []
+      selectedCreatorWallet.value = ''
+      walletStats.value = null
+      pagination.value = {
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0
+      }
+      
+      // Close dialog and show success
+      closeClearDatabaseDialog()
+      alert('Database cleared successfully!')
+      
+      // Reload tokens to show empty state
+      await loadTokens()
+    } else {
+      clearDatabaseError.value = result.error || 'Failed to clear database'
+    }
+  } catch (error) {
+    clearDatabaseError.value = 'An unexpected error occurred'
+  } finally {
+    clearingDatabase.value = false
+  }
 }
 </script>
 
