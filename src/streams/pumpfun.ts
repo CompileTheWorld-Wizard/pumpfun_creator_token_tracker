@@ -19,9 +19,6 @@ import {
   cleanupBondingTracker,
   handleMigrateEvent
 } from '../services/bondingTracker.js';
-import { getCreatedTokens } from '../utils/solscan.js';
-import { pool } from '../db.js';
-import { fetchBondingStatusBatch } from '../services/bondingTracker.js';
 import type { CreateEventData, TradeEventData, AmmBuyEventData, AmmSellEventData } from '../types.js';
 
 dotenv.config();
@@ -35,9 +32,6 @@ const ADDRESSES_TO_STREAM_FROM = [
 // Stream control state
 let isStreaming = false;
 let txnStreamer: TransactionStreamer | null = null;
-
-// Track creator wallets that have been fetched during this streaming cycle
-const fetchedCreatorWallets: Set<string> = new Set();
 
 /**
  * Extract mint address from AMM event
@@ -134,90 +128,8 @@ function initializeParser(): Parser {
 }
 
 /**
- * Fetch all tokens created by a creator wallet and get their bonding status
- */
-async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promise<void> {
-  try {
-    console.log(`[PumpFun] Fetching tokens for creator: ${creatorAddress}`);
-    
-    // Fetch all tokens created by this wallet from Solscan
-    const response = await getCreatedTokens(creatorAddress) as any;
-    
-    if (!response?.data || !Array.isArray(response.data)) {
-      console.log(`[PumpFun] No tokens found for creator: ${creatorAddress}`);
-      return;
-    }
-    
-    const tokenMints: string[] = [];
-    const tokenDataMap = new Map<string, { name: string; symbol: string; blockTime: number }>();
-    
-    // Extract token mints from the response
-    for (const activity of response.data) {
-      const token1 = activity.routers?.token1;
-      if (token1 && token1 !== 'So11111111111111111111111111111111111111111') {
-        const tokenMeta = response.metadata?.tokens?.[token1];
-        const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
-        
-        if (!tokenMints.includes(token1)) {
-          tokenMints.push(token1);
-          tokenDataMap.set(token1, {
-            name: tokenMeta?.token_name || '',
-            symbol: tokenMeta?.token_symbol || '',
-            blockTime,
-          });
-        }
-      }
-    }
-    
-    if (tokenMints.length === 0) {
-      console.log(`[PumpFun] No valid tokens found for creator: ${creatorAddress}`);
-      return;
-    }
-    
-    console.log(`[PumpFun] Found ${tokenMints.length} tokens for creator ${creatorAddress}`);
-    
-    // Fetch bonding status for all tokens
-    const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
-    
-    // Save tokens to database
-    for (const mint of tokenMints) {
-      const tokenData = tokenDataMap.get(mint);
-      const isBonded = bondingStatusMap.get(mint) || false;
-      
-      if (tokenData) {
-        try {
-          await pool.query(
-            `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (mint) DO UPDATE SET
-               name = COALESCE(EXCLUDED.name, created_tokens.name),
-               symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
-               bonded = EXCLUDED.bonded,
-               updated_at = NOW()`,
-            [
-              mint,
-              tokenData.name,
-              tokenData.symbol,
-              creatorAddress,
-              isBonded,
-              new Date(tokenData.blockTime * 1000),
-            ]
-          );
-        } catch (error) {
-          console.error(`[PumpFun] Error saving token ${mint} to database:`, error);
-        }
-      }
-    }
-    
-    console.log(`[PumpFun] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded`);
-  } catch (error) {
-    console.error(`[PumpFun] Error fetching creator tokens and bonding status:`, error);
-    throw error;
-  }
-}
-
-/**
  * Process incoming transaction data from ladysbug
+ * Streamer only detects events and signals trackers - no heavy processing here
  */
 async function processData(processed: any) {
   try {
@@ -229,24 +141,27 @@ async function processData(processed: any) {
       ? processed.transaction.signatures[0] 
       : String(processed.transaction.signatures[0] || 'unknown');
 
-    // Check for migrate instruction
+    // Check for migrate instruction (non-blocking signal to bonding tracker)
     try {
       const instructions = processed.transaction.message?.compiledInstructions || [];
       for (const instruction of instructions) {
         if (instruction?.data?.name?.includes('migrate')) {
-          console.log(`[BondingTracker] Token migrate detected in transaction ${txSignature}`);
+          console.log(`[PumpFun] Token migrate detected in transaction ${txSignature}`);
           // Extract mint address from transaction
           const mintAddress = extractMintFromTransaction(processed);
           if (mintAddress) {
-            await handleMigrateEvent(mintAddress);
+            // Signal bonding tracker (non-blocking)
+            handleMigrateEvent(mintAddress).catch((error) => {
+              console.error(`[PumpFun] Error handling migrate event for ${mintAddress}:`, error);
+            });
           } else {
-            console.warn(`[BondingTracker] Could not extract mint address from migrate transaction`);
+            console.warn(`[PumpFun] Could not extract mint address from migrate transaction`);
           }
         }
       }
     } catch (error) {
       // Don't fail the whole transaction processing if migrate detection fails
-      console.error('[BondingTracker] Error detecting migrate:', error);
+      console.error('[PumpFun] Error detecting migrate:', error);
     }
 
     // Log events if available
@@ -283,31 +198,20 @@ async function processData(processed: any) {
         }
         
         // Send CreateEvent to token tracker (15-second tracking)
+        // Token tracker will handle fetching creator's latest 100 tokens
         if (eventType === 'CreateEvent' && event?.data) {
           const createData = event.data as CreateEventData;
           const creator = createData.creator || createData.user;
           
-          // Skip if creator is blacklisted
+          // Skip if creator is blacklisted (fast check in streamer)
           if (isBlacklistedCreator(creator)) {
-            console.log(`[PumpFun] Skipping token from blacklisted creator: ${creator}`);
             continue;
           }
           
-          // Check if this creator wallet has been fetched in this streaming cycle
-          if (!fetchedCreatorWallets.has(creator)) {
-            console.log(`[PumpFun] New creator wallet detected: ${creator}, fetching all tokens...`);
-            fetchedCreatorWallets.add(creator);
-            
-            // Fetch all tokens created by this wallet and get bonding status
-            // Run in background to avoid blocking event processing
-            fetchCreatorTokensAndBondingStatus(creator).catch((error) => {
-              console.error(`[PumpFun] Error fetching tokens for creator ${creator}:`, error);
-            });
-          }
-          
+          // Signal token tracker (handles 15-sec tracking + creator token fetching)
           handleCreateEvent(createData, txSignature);
           
-          // Also register for ATH tracking
+          // Signal ATH tracker to register token
           registerTokenForAth(
             createData.mint,
             createData.name,
@@ -394,9 +298,6 @@ async function startStreaming(): Promise<void> {
     // Start streaming
     txnStreamer.start();
 
-    // Clear fetched creator wallets set when starting a new stream
-    fetchedCreatorWallets.clear();
-
     isStreaming = true;
     console.log('Stream started successfully');
   } catch (error) {
@@ -433,9 +334,6 @@ async function stopStreaming(): Promise<void> {
 
   // Cleanup bonding tracker
   await cleanupBondingTracker();
-
-  // Clear fetched creator wallets set when stopping stream
-  fetchedCreatorWallets.clear();
 
   isStreaming = false;
   txnStreamer = null;

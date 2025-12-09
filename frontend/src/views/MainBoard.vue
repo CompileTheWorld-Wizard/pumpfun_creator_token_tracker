@@ -851,6 +851,8 @@ const pagination = ref<PaginationInfo>({
   total: 0,
   totalPages: 0
 })
+let pollingInterval: NodeJS.Timeout | null = null
+const POLLING_INTERVAL_MS = 10000 // 10 seconds
 
 // Filter wallets based on search query
 const filteredWallets = computed(() => {
@@ -1079,9 +1081,11 @@ const toggleTracking = async () => {
     if (isTracking.value) {
       await stopStream()
       isTracking.value = false
+      stopPolling()
     } else {
       await startStream()
       isTracking.value = true
+      startPolling()
     }
   } catch (error: any) {
     console.error('Error toggling stream:', error)
@@ -1503,6 +1507,29 @@ const loadTokens = async () => {
   }
 }
 
+const startPolling = () => {
+  // Only poll if tracking is active and we're on the first page
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+  }
+  
+  pollingInterval = setInterval(() => {
+    // Only refresh if tracking is active and on first page
+    if (isTracking.value && pagination.value.page === 1) {
+      loadTokens().catch(err => {
+        console.error('Error polling tokens:', err)
+      })
+    }
+  }, POLLING_INTERVAL_MS)
+}
+
+const stopPolling = () => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+}
+
 onMounted(async () => {
   try {
     wallets.value = await getCreatorWallets()
@@ -1511,18 +1538,43 @@ onMounted(async () => {
     isTracking.value = response.status || false
     
     await loadTokens()
+    
+    // Start polling if tracking is active
+    if (isTracking.value) {
+      startPolling()
+    }
   } catch (error) {
     console.error('Error loading data:', error)
   }
 })
 
 onUnmounted(async () => {
+  stopPolling()
+  
   if (isTracking.value) {
     try {
       await stopStream()
     } catch (error) {
       console.error('Error stopping stream on unmount:', error)
     }
+  }
+})
+
+// Watch tracking status to start/stop polling
+watch(isTracking, (newValue) => {
+  if (newValue) {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+})
+
+// Watch pagination to stop polling when user navigates away from page 1
+watch(() => pagination.value.page, (newPage) => {
+  if (newPage !== 1 && pollingInterval) {
+    stopPolling()
+  } else if (newPage === 1 && isTracking.value && !pollingInterval) {
+    startPolling()
   }
 })
 

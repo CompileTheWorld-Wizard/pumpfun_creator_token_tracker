@@ -8,6 +8,8 @@
 import { pool } from '../db.js';
 import { redis } from '../redis.js';
 import type { CreateEventData, TradeEventData } from '../types.js';
+import { getCreatedTokens } from '../utils/solscan.js';
+import { fetchBondingStatusBatch } from './bondingTracker.js';
 
 // Constants
 const COLLECTION_DELAY_MS = 20000; // Wait 20 seconds before collecting data
@@ -23,6 +25,10 @@ let blacklistedCreatorWallets: Set<string> = new Set();
 
 // Pending token tracking jobs
 const pendingTrackingJobs: Map<string, NodeJS.Timeout> = new Map();
+
+// Track creator wallets that have been fetched during this streaming cycle
+// Prevents re-fetching the same creator's tokens multiple times
+const fetchedCreatorWallets: Set<string> = new Set();
 
 /**
  * Market cap data point
@@ -92,7 +98,112 @@ export function isBlacklistedCreator(walletAddress: string): boolean {
 }
 
 /**
+ * Fetch latest 100 tokens created by a creator wallet and get their bonding status
+ * Limits to latest 100 tokens as per API request
+ */
+async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promise<void> {
+  try {
+    console.log(`[TokenTracker] Fetching tokens for creator: ${creatorAddress}`);
+    
+    // Fetch latest 100 tokens created by this wallet from Solscan
+    const response = await getCreatedTokens(creatorAddress) as any;
+    
+    if (!response?.data || !Array.isArray(response.data)) {
+      console.log(`[TokenTracker] No tokens found for creator: ${creatorAddress}`);
+      return;
+    }
+    
+    const tokenMintsSet = new Set<string>();
+    const tokenDataMap = new Map<string, { name: string; symbol: string; blockTime: number }>();
+    const MAX_TOKENS = 100; // Limit to 100 tokens as per requirements
+    
+    // Extract token mints from the response (limit to 100)
+    for (const activity of response.data) {
+      // Try multiple possible fields for token mint address in INIT_MINT activities
+      const tokenMint = activity.token || 
+                       activity.mint || 
+                       activity.token_address ||
+                       activity.routers?.token1 ||
+                       activity.routers?.token0;
+      
+      if (tokenMint && 
+          typeof tokenMint === 'string' &&
+          tokenMint !== 'So11111111111111111111111111111111111111111' &&
+          tokenMint !== 'So11111111111111111111111111111111111111112') {
+        
+        // Limit to 100 tokens
+        if (tokenMintsSet.size >= MAX_TOKENS) {
+          break;
+        }
+        
+        if (!tokenMintsSet.has(tokenMint)) {
+          tokenMintsSet.add(tokenMint);
+          
+          // Get token metadata from response
+          const tokenMeta = response.metadata?.tokens?.[tokenMint] || {};
+          const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
+          
+          tokenDataMap.set(tokenMint, {
+            name: tokenMeta?.token_name || tokenMeta?.name || '',
+            symbol: tokenMeta?.token_symbol || tokenMeta?.symbol || '',
+            blockTime,
+          });
+        }
+      }
+    }
+    
+    const tokenMints = Array.from(tokenMintsSet);
+    
+    if (tokenMints.length === 0) {
+      console.log(`[TokenTracker] No valid tokens found for creator: ${creatorAddress}`);
+      return;
+    }
+    
+    console.log(`[TokenTracker] Found ${tokenMints.length} tokens for creator ${creatorAddress} (limited to ${MAX_TOKENS})`);
+    
+    // Fetch bonding status for all tokens using Shyft GraphQL API
+    const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
+    
+    // Save tokens to database
+    for (const mint of tokenMints) {
+      const tokenData = tokenDataMap.get(mint);
+      const isBonded = bondingStatusMap.get(mint) || false;
+      
+      if (tokenData) {
+        try {
+          await pool.query(
+            `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (mint) DO UPDATE SET
+               name = COALESCE(EXCLUDED.name, created_tokens.name),
+               symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+               bonded = EXCLUDED.bonded,
+               updated_at = NOW()`,
+            [
+              mint,
+              tokenData.name,
+              tokenData.symbol,
+              creatorAddress,
+              isBonded,
+              new Date(tokenData.blockTime * 1000),
+            ]
+          );
+        } catch (error) {
+          console.error(`[TokenTracker] Error saving token ${mint} to database:`, error);
+        }
+      }
+    }
+    
+    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded`);
+  } catch (error) {
+    console.error(`[TokenTracker] Error fetching creator tokens and bonding status:`, error);
+    throw error;
+  }
+}
+
+/**
  * Handle a CreateEvent - schedule tracking if NOT from a blacklisted wallet
+ * Also fetches latest 100 tokens by the same creator if not already fetched
  */
 export async function handleCreateEvent(
   createEventData: CreateEventData,
@@ -105,6 +216,22 @@ export async function handleCreateEvent(
   if (isBlacklistedCreator(creator)) {
     console.log(`[TokenTracker] Skipping token from blacklisted creator: ${creator}`);
     return;
+  }
+
+  // Check if this creator wallet has been fetched in this streaming cycle
+  // If not, fetch latest 100 tokens created by this creator
+  if (!fetchedCreatorWallets.has(creator)) {
+    console.log(`[TokenTracker] New creator wallet detected: ${creator}, fetching latest 100 tokens...`);
+    fetchedCreatorWallets.add(creator);
+    
+    // Fetch latest 100 tokens created by this wallet and get bonding status
+    // Run in background to avoid blocking event processing
+    // If fetch fails, remove from Set to allow retry on next CreateEvent
+    fetchCreatorTokensAndBondingStatus(creator).catch((error) => {
+      console.error(`[TokenTracker] Error fetching tokens for creator ${creator}:`, error);
+      // Remove from Set on error to allow retry
+      fetchedCreatorWallets.delete(creator);
+    });
   }
 
   const mint = createEventData.mint;
@@ -378,5 +505,8 @@ export function cleanup(): void {
     console.log(`[TokenTracker] Cancelled pending tracking for ${mint}`);
   }
   pendingTrackingJobs.clear();
+  
+  // Clear fetched creator wallets set when stopping
+  fetchedCreatorWallets.clear();
 }
 
