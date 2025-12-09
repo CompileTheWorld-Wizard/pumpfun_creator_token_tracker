@@ -145,7 +145,7 @@ async function getUnbondedTokens(): Promise<string[]> {
     const result = await pool.query(
       `SELECT mint 
        FROM created_tokens
-       WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)
+       WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)
          AND COALESCE(bonded, false) = false
        ORDER BY created_at DESC`
     );

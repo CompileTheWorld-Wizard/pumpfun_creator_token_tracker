@@ -51,14 +51,30 @@ export async function initializeAthTracker(): Promise<void> {
   // Fetch tokens from creator wallets via Solscan and load to tracker
   await fetchTokensFromCreatorWallets();
 
+  // Populate pendingTokenData for tokens that need ATH fetching (those with ATH = 0)
+  for (const [mint, tokenInfo] of tokenAthMap.entries()) {
+    if (tokenInfo.athMarketCapUsd === 0) {
+      const blockTime = Math.floor(tokenInfo.createdAt / 1000);
+      pendingTokenData.set(mint, {
+        mint,
+        name: tokenInfo.name,
+        symbol: tokenInfo.symbol,
+        creator: tokenInfo.creator,
+        blockTime,
+      });
+    }
+  }
+
   // Start periodic save
   startPeriodicSave();
 
   isInitialized = true;
-  console.log(`[AthTracker] Initialized with ${tokenAthMap.size} tokens`);
+  console.log(`[AthTracker] Initialized with ${tokenAthMap.size} tokens, ${pendingTokenData.size} pending ATH fetch`);
 
   // Fetch ATH from Bitquery in background (async - don't block stream start)
-  fetchAthFromBitqueryAsync();
+  if (pendingTokenData.size > 0) {
+    fetchAthFromBitqueryAsync();
+  }
 }
 
 /**
@@ -74,7 +90,7 @@ async function loadTrackedTokensFromDb(): Promise<void> {
               COALESCE(bonded, false) as bonded,
               COALESCE(ath_market_cap_usd, 0) as ath_market_cap_usd
        FROM created_tokens
-       WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)`
+       WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)`
     );
 
     for (const row of result.rows) {
@@ -104,7 +120,7 @@ async function loadTrackedTokensFromDb(): Promise<void> {
         const fallbackResult = await pool.query(
           `SELECT mint, name, symbol, creator, created_at
            FROM created_tokens
-           WHERE creator NOT IN (SELECT wallet_address FROM creator_wallets)`
+           WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)`
         );
 
         for (const row of fallbackResult.rows) {
@@ -133,6 +149,7 @@ async function loadTrackedTokensFromDb(): Promise<void> {
 
 // Store token data for Bitquery fetch
 let pendingTokenData: Map<string, { mint: string; name: string; symbol: string; creator: string; blockTime: number }> = new Map();
+let bitqueryFetchScheduled = false; // Flag to prevent multiple concurrent fetches
 
 /**
  * Fetch tokens from creator wallets via Solscan and load to tracker
@@ -193,10 +210,12 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Clear pending data
       pendingTokenData.clear();
+      bitqueryFetchScheduled = false;
       
       console.log('[AthTracker] Bitquery ATH update completed');
     } catch (error) {
       console.error('[AthTracker] Error fetching ATH from Bitquery:', error);
+      bitqueryFetchScheduled = false;
     }
   })();
 }
@@ -221,6 +240,9 @@ export async function registerToken(
 
   console.log(`[AthTracker] Registering new token: ${mint} (${symbol})`);
 
+  // Convert createdAt (milliseconds) to blockTime (seconds) for Bitquery
+  const blockTime = Math.floor(createdAt / 1000);
+
   // Add to in-memory map
   tokenAthMap.set(mint, {
     mint,
@@ -234,19 +256,48 @@ export async function registerToken(
     createdAt,
     dirty: true,
   });
+
+  // Add to pendingTokenData for Bitquery ATH fetching
+  pendingTokenData.set(mint, {
+    mint,
+    name,
+    symbol,
+    creator,
+    blockTime,
+  });
+
+  // Trigger Bitquery fetch in background (non-blocking)
+  // Batch tokens: fetch immediately if we have 10+ tokens, otherwise wait 5s to accumulate
+  if (!bitqueryFetchScheduled) {
+    if (pendingTokenData.size >= 10) {
+      // Fetch immediately for batches
+      bitqueryFetchScheduled = true;
+      fetchAthFromBitqueryAsync();
+    } else {
+      // Schedule fetch after delay to accumulate more tokens
+      bitqueryFetchScheduled = true;
+      setTimeout(() => {
+        bitqueryFetchScheduled = false;
+        if (pendingTokenData.size > 0) {
+          fetchAthFromBitqueryAsync();
+        }
+      }, 5000); // Wait 5s to accumulate more tokens
+    }
+  }
+
   // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:1min)
 }
 
 /**
  * Check if a wallet is blacklisted
  * 
- * Filtering logic: Queries the creator_wallets table to determine if the given wallet
+ * Filtering logic: Queries the blacklist_creator table to determine if the given wallet
  * address is blacklisted. Returns true if the wallet exists in the blacklist.
  */
 async function isBlacklistedCreatorWallet(walletAddress: string): Promise<boolean> {
   try {
     const result = await pool.query(
-      'SELECT 1 FROM creator_wallets WHERE wallet_address = $1 LIMIT 1',
+      'SELECT 1 FROM blacklist_creator WHERE wallet_address = $1 LIMIT 1',
       [walletAddress]
     );
     return result.rows.length > 0;

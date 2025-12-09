@@ -112,9 +112,25 @@ async function startServer() {
     const client = await pool.connect();
     console.log('Connected to PostgreSQL database');
     
-    // Create creator_wallets table if it doesn't exist
+    // Migrate creator_wallets to blacklist_creator if old table exists
     await client.query(`
-      CREATE TABLE IF NOT EXISTS creator_wallets (
+      DO $$ 
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'creator_wallets'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'blacklist_creator'
+        ) THEN
+          ALTER TABLE creator_wallets RENAME TO blacklist_creator;
+        END IF;
+      END $$;
+    `);
+    
+    // Create blacklist_creator table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS blacklist_creator (
         id SERIAL PRIMARY KEY,
         wallet_address VARCHAR(64) NOT NULL UNIQUE,
         name VARCHAR(255),
@@ -129,9 +145,9 @@ async function startServer() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'creator_wallets' AND column_name = 'name'
+          WHERE table_name = 'blacklist_creator' AND column_name = 'name'
         ) THEN
-          ALTER TABLE creator_wallets ADD COLUMN name VARCHAR(255);
+          ALTER TABLE blacklist_creator ADD COLUMN name VARCHAR(255);
         END IF;
       END $$;
     `);
@@ -142,9 +158,9 @@ async function startServer() {
       BEGIN
         IF EXISTS (
           SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'creator_wallets' AND column_name = 'user_id'
+          WHERE table_name = 'blacklist_creator' AND column_name = 'user_id'
         ) THEN
-          ALTER TABLE creator_wallets DROP COLUMN user_id;
+          ALTER TABLE blacklist_creator DROP COLUMN user_id;
         END IF;
       END $$;
     `);
@@ -155,14 +171,14 @@ async function startServer() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint 
-          WHERE conname = 'creator_wallets_wallet_address_key'
+          WHERE conname = 'blacklist_creator_wallet_address_key'
         ) THEN
-          ALTER TABLE creator_wallets ADD CONSTRAINT creator_wallets_wallet_address_key UNIQUE (wallet_address);
+          ALTER TABLE blacklist_creator ADD CONSTRAINT blacklist_creator_wallet_address_key UNIQUE (wallet_address);
         END IF;
       END $$;
     `);
     
-    console.log('Database table creator_wallets initialized');
+    console.log('Database table blacklist_creator initialized');
     
     // Create passwords table if it doesn't exist
     await client.query(`

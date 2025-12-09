@@ -71,7 +71,7 @@ export async function initializeTokenTracker(): Promise<void> {
 /**
  * Refresh blacklisted creator wallets from the database
  * 
- * This function loads all blacklisted creator wallet addresses from the creator_wallets table
+ * This function loads all blacklisted creator wallet addresses from the blacklist_creator table
  * and stores them in memory for fast filtering. Tokens created by these wallets will NOT
  * be tracked for market cap data collection.
  */
@@ -79,7 +79,7 @@ export async function refreshBlacklistedWallets(): Promise<void> {
   try {
     // Load all blacklisted creator wallet addresses from database
     const result = await pool.query(
-      'SELECT DISTINCT wallet_address FROM creator_wallets'
+      'SELECT DISTINCT wallet_address FROM blacklist_creator'
     );
     blacklistedCreatorWallets = new Set(result.rows.map(row => row.wallet_address));
   } catch (error) {

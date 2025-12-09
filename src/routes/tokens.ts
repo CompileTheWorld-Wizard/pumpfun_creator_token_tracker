@@ -7,8 +7,6 @@ const router = Router();
 // Get all created tokens with their 15-second market cap data
 router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req.session as any)?.userId || 'admin';
-    
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -32,10 +30,8 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         whereClause = ''; // No filter, show all tokens
       }
     } else {
-      // Normal mode: filter by creator wallets
-      whereClause = 'WHERE ct.creator IN (SELECT wallet_address FROM creator_wallets WHERE user_id = $1)';
-      queryParams.push(userId);
-      paramIndex = 2;
+      // Normal mode: exclude blacklisted wallets (show tokens NOT from blacklisted wallets)
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)';
       
       if (creatorWallet) {
         whereClause += ` AND ct.creator = $${paramIndex}`;
@@ -137,7 +133,6 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
 router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const { mint } = req.params;
-    const userId = (req.session as any)?.userId || 'admin';
     
     const result = await pool.query(
       `SELECT 
@@ -159,13 +154,9 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
         ct.updated_at
       FROM created_tokens ct
       WHERE ct.mint = $1 
-        AND ct.creator IN (
-          SELECT wallet_address 
-          FROM creator_wallets 
-          WHERE user_id = $2
-        )
+        AND ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)
       LIMIT 1`,
-      [mint, userId]
+      [mint]
     );
     
     if (result.rows.length === 0) {
@@ -222,7 +213,6 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
 // Get distinct creator wallets from created_tokens
 router.get('/creators/list', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const userId = (req.session as any)?.userId || 'admin';
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
     let query: string;
@@ -237,18 +227,14 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
       `;
       params = [];
     } else {
-      // Show only creator wallets that have tokens AND are in the user's tracked wallets
+      // Show only creator wallets that have tokens AND are NOT blacklisted
       query = `
         SELECT DISTINCT ct.creator as address
         FROM created_tokens ct
-        WHERE ct.creator IN (
-          SELECT wallet_address 
-          FROM creator_wallets 
-          WHERE user_id = $1
-        )
+        WHERE ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)
         ORDER BY ct.creator ASC
       `;
-      params = [userId];
+      params = [];
     }
     
     const result = await pool.query(query, params);

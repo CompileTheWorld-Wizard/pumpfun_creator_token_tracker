@@ -1,7 +1,7 @@
 -- Schema for pumpfun_creator_token_tracker
 
--- Creator wallets table (if not exists)
-CREATE TABLE IF NOT EXISTS creator_wallets (
+-- Blacklist creator wallets table (if not exists)
+CREATE TABLE IF NOT EXISTS blacklist_creator (
   id SERIAL PRIMARY KEY,
   wallet_address VARCHAR(64) NOT NULL UNIQUE,
   name VARCHAR(255),
@@ -57,7 +57,7 @@ CREATE INDEX IF NOT EXISTS idx_created_tokens_ath ON created_tokens(ath_market_c
 -- (optional, uncomment if you want strict referential integrity)
 -- ALTER TABLE created_tokens 
 -- ADD CONSTRAINT fk_creator_wallet 
--- FOREIGN KEY (creator) REFERENCES creator_wallets(wallet_address);
+-- FOREIGN KEY (creator) REFERENCES blacklist_creator(wallet_address);
 
 -- Password table for authentication
 CREATE TABLE IF NOT EXISTS passwords (
