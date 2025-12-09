@@ -110,7 +110,6 @@ async function startServer() {
   try {
     // Test database connection
     const client = await pool.connect();
-    console.log('Connected to PostgreSQL database');
     
     // Migrate creator_wallets to blacklist_creator if old table exists
     await client.query(`
@@ -178,7 +177,6 @@ async function startServer() {
       END $$;
     `);
     
-    console.log('Database table blacklist_creator initialized');
     
     // Create passwords table if it doesn't exist
     await client.query(`
@@ -189,7 +187,6 @@ async function startServer() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    console.log('Database table passwords initialized');
     
     // Add is_fetched column to created_tokens if it doesn't exist
     await client.query(`
@@ -203,7 +200,6 @@ async function startServer() {
         END IF;
       END $$;
     `);
-    console.log('Database column is_fetched initialized');
     
     // Initialize default password if no password exists
     const passwordCheck = await client.query(
@@ -219,7 +215,6 @@ async function startServer() {
         'INSERT INTO passwords (password_hash) VALUES ($1)',
         [passwordHash]
       );
-      console.log('Default password initialized (use DEFAULT_PASSWORD env var to customize)');
     }
     
     client.release();
@@ -227,7 +222,6 @@ async function startServer() {
     // Bind to 0.0.0.0 to allow external connections (required for remote server access)
     const HOST = process.env.HOST || '0.0.0.0';
     app.listen(PORT, HOST, () => {
-      console.log(`Server running on http://${HOST}:${PORT}`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);

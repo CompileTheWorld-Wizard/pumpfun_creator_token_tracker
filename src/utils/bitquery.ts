@@ -106,7 +106,6 @@ export async function fetchAthMarketCap(
       athMarketCapUsd: parseFloat(trade.ATH_Marketcap) || 0,
     })).filter((data: TokenAthData) => data.mintAddress);
 
-    console.log(`[Bitquery] Fetched ATH data for ${athDataList.length} tokens`);
     
     return athDataList;
   } catch (error) {

@@ -126,9 +126,6 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<Map
       bondingStatusMap.set(mint, bondedMints.has(mint));
     }
 
-    if (bondedMints.size > 0) {
-      console.log(`[BondingTracker] Found ${bondedMints.size} bonded tokens in batch of ${tokenMints.length}`);
-    }
   } catch (error) {
     console.error('[BondingTracker] Error fetching bonding status:', error);
   }
@@ -179,9 +176,6 @@ async function updateBondingStatus(
       [...mintAddresses, bonded]
     );
 
-    console.log(
-      `[BondingTracker] Updated bonding status for ${mintAddresses.length} tokens: bonded=${bonded}`
-    );
   } catch (error) {
     console.error('[BondingTracker] Error updating bonding status:', error);
     throw error;
@@ -192,16 +186,11 @@ async function updateBondingStatus(
  * Fetch bonding status for all unbonded tokens in batches
  */
 async function fetchBondingStatusForAllTokens(): Promise<void> {
-  console.log('[BondingTracker] Fetching bonding status for all unbonded tokens...');
-
   const unbondedTokens = await getUnbondedTokens();
-  
+
   if (unbondedTokens.length === 0) {
-    console.log('[BondingTracker] No unbonded tokens to check');
     return;
   }
-
-  console.log(`[BondingTracker] Found ${unbondedTokens.length} unbonded tokens to check`);
 
   // Process in batches of 50
   const batches: string[][] = [];
@@ -239,9 +228,6 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
     }
   }
 
-  console.log(
-    `[BondingTracker] Completed checking ${unbondedTokens.length} tokens. Found ${totalBondedFound} bonded tokens.`
-  );
 }
 
 /**
@@ -251,7 +237,6 @@ export async function handleMigrateEvent(mintAddress: string): Promise<void> {
   try {
     // Update bonding status to true
     await updateBondingStatus([mintAddress], true);
-    console.log(`[BondingTracker] Token migrated: ${mintAddress}`);
   } catch (error) {
     console.error(`[BondingTracker] Error handling migrate event for ${mintAddress}:`, error);
   }
@@ -263,11 +248,8 @@ export async function handleMigrateEvent(mintAddress: string): Promise<void> {
  */
 export async function initializeBondingTracker(): Promise<void> {
   if (isInitialized) {
-    console.log('[BondingTracker] Already initialized');
     return;
   }
-
-  console.log('[BondingTracker] Initializing...');
 
   // Fetch bonding status for all unbonded tokens
   // Run in background so it doesn't block stream start
@@ -276,7 +258,6 @@ export async function initializeBondingTracker(): Promise<void> {
   });
 
   isInitialized = true;
-  console.log('[BondingTracker] Initialized');
 }
 
 /**
@@ -285,8 +266,6 @@ export async function initializeBondingTracker(): Promise<void> {
  */
 export async function updateBondingStatusForCreator(creatorAddress: string): Promise<void> {
   try {
-    console.log(`[BondingTracker] Updating bonding status for tokens from creator: ${creatorAddress}`);
-    
     // Get all tokens (bonded and unbonded) from this creator
     const result = await pool.query(
       `SELECT mint 
@@ -298,11 +277,8 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
     const tokenMints = result.rows.map((row) => row.mint);
     
     if (tokenMints.length === 0) {
-      console.log(`[BondingTracker] No tokens found for creator: ${creatorAddress}`);
       return;
     }
-
-    console.log(`[BondingTracker] Found ${tokenMints.length} tokens for creator ${creatorAddress}`);
 
     // Process in batches of 50
     const batches: string[][] = [];
@@ -344,9 +320,6 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
       }
     }
 
-    console.log(
-      `[BondingTracker] Completed updating bonding status for creator ${creatorAddress}: ${tokenMints.length} tokens, ${totalBondedFound} bonded`
-    );
   } catch (error) {
     console.error(`[BondingTracker] Error updating bonding status for creator ${creatorAddress}:`, error);
     throw error;
@@ -358,15 +331,12 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
  * Finalizes bonding status updates for any remaining tokens
  */
 export async function cleanupBondingTracker(): Promise<void> {
-  console.log('[BondingTracker] Cleaning up...');
-  
   // Finalize bonding status for any unbonded tokens that might need checking
   // This ensures we have the latest bonding status before stopping
   try {
     const unbondedTokens = await getUnbondedTokens();
     
     if (unbondedTokens.length > 0) {
-      console.log(`[BondingTracker] Finalizing bonding status for ${unbondedTokens.length} unbonded tokens...`);
       
       // Process in batches of 50
       const batches: string[][] = [];
@@ -400,15 +370,11 @@ export async function cleanupBondingTracker(): Promise<void> {
         }
       }
 
-      if (totalBondedFound > 0) {
-        console.log(`[BondingTracker] Found ${totalBondedFound} newly bonded tokens during cleanup`);
-      }
     }
   } catch (error) {
     console.error('[BondingTracker] Error during cleanup bonding status fetch:', error);
   }
   
   isInitialized = false;
-  console.log('[BondingTracker] Cleanup complete');
 }
 

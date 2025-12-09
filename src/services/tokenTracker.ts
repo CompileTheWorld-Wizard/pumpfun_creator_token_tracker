@@ -234,14 +234,12 @@ export async function handleCreateEvent(
   // Filtering logic: Skip tokens created by blacklisted wallets.
   // If the creator wallet is in the blacklist, skip tracking this token.
   if (isBlacklistedCreator(creator)) {
-    console.log(`[TokenTracker] Skipping token from blacklisted creator: ${creator}`);
     return;
   }
 
   // Check if this creator wallet has been fetched in this streaming cycle
   // If not, fetch latest 100 tokens created by this creator
   if (!fetchedCreatorWallets.has(creator)) {
-    console.log(`[TokenTracker] New creator wallet detected: ${creator}, fetching latest 100 tokens...`);
     fetchedCreatorWallets.add(creator);
     
     // Fetch latest 100 tokens created by this wallet and get bonding status
@@ -255,9 +253,6 @@ export async function handleCreateEvent(
   }
 
   const mint = createEventData.mint;
-  console.log(`[TokenTracker] Creator ${creator} created token: ${mint}`);
-  console.log(`[TokenTracker] Token: ${createEventData.name} (${createEventData.symbol})`);
-  console.log(`[TokenTracker] Scheduling data collection in ${COLLECTION_DELAY_MS / 1000} seconds...`);
 
   // Cancel existing tracking job if any
   if (pendingTrackingJobs.has(mint)) {

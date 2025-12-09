@@ -291,7 +291,6 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
     // Only update if wallet is blacklisted (to refresh stats)
     if (isBlacklisted) {
       try {
-        console.log(`[Wallets] Updating bonding status and ATH mcap for creator: ${address}`);
         await Promise.all([
           updateBondingStatusForCreator(address).catch(err => {
             console.error(`[Wallets] Error updating bonding status:`, err);

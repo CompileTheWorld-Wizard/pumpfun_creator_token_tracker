@@ -39,17 +39,11 @@ let isInitialized = false;
  */
 export async function initializeAthTracker(): Promise<void> {
   if (isInitialized) {
-    console.log('[AthTracker] Already initialized');
     return;
   }
 
-  console.log('[AthTracker] Initializing...');
-
   // Load existing tracked tokens from database
   await loadTrackedTokensFromDb();
-
-  // Fetch tokens from creator wallets via Solscan and load to tracker
-  await fetchTokensFromCreatorWallets();
 
   // Populate pendingTokenData for tokens that need ATH fetching (those with ATH = 0)
   for (const [mint, tokenInfo] of tokenAthMap.entries()) {
@@ -69,7 +63,6 @@ export async function initializeAthTracker(): Promise<void> {
   startPeriodicSave();
 
   isInitialized = true;
-  console.log(`[AthTracker] Initialized with ${tokenAthMap.size} tokens, ${pendingTokenData.size} pending ATH fetch`);
 
   // Fetch ATH from Bitquery in background (async - don't block stream start)
   if (pendingTokenData.size > 0) {
@@ -108,7 +101,6 @@ async function loadTrackedTokensFromDb(): Promise<void> {
       });
     }
 
-    console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens from database`);
   } catch (error: any) {
     // Handle case where columns don't exist yet (migration not run)
     if (error?.code === '42703') {
@@ -137,7 +129,6 @@ async function loadTrackedTokensFromDb(): Promise<void> {
             dirty: false,
           });
         }
-        console.log(`[AthTracker] Loaded ${tokenAthMap.size} tokens (without ATH data)`);
       } catch (fallbackError) {
         console.error('[AthTracker] Fallback query also failed:', fallbackError);
       }
@@ -151,16 +142,6 @@ async function loadTrackedTokensFromDb(): Promise<void> {
 let pendingTokenData: Map<string, { mint: string; name: string; symbol: string; creator: string; blockTime: number }> = new Map();
 let bitqueryFetchScheduled = false; // Flag to prevent multiple concurrent fetches
 
-/**
- * Fetch tokens from creator wallets via Solscan and load to tracker
- * NOTE: This function is no longer used for blacklisted wallets.
- * It's kept for backward compatibility but should not fetch tokens for blacklisted wallets.
- */
-async function fetchTokensFromCreatorWallets(): Promise<void> {
-  // This function is deprecated - we don't fetch tokens for blacklisted wallets
-  // Tokens are now fetched dynamically when new creators are encountered during streaming
-  console.log('[AthTracker] Skipping initial token fetch - tokens will be fetched dynamically during streaming');
-}
 
 /**
  * Fetch ATH from Bitquery in background (async, non-blocking)
@@ -170,7 +151,6 @@ function fetchAthFromBitqueryAsync(): void {
   (async () => {
     try {
       if (pendingTokenData.size === 0) {
-        console.log('[AthTracker] No tokens to fetch ATH for');
         return;
       }
 
@@ -190,13 +170,10 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Convert to ISO string
       const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
-      console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${pendingTokenData.size} tokens...`);
 
       // Fetch ATH from Bitquery
       const tokenAddresses = Array.from(pendingTokenData.keys());
       const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
-
-      console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
 
       // Update token map with ATH data (only if higher than current)
       for (const athData of athDataList) {
@@ -206,7 +183,6 @@ function fetchAthFromBitqueryAsync(): void {
           if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
             existing.athMarketCapUsd = athData.athMarketCapUsd;
             existing.dirty = true;
-            console.log(`[AthTracker] Updated ATH from Bitquery for ${existing.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
           }
           // Update name/symbol if missing
           if (!existing.name && athData.name) existing.name = athData.name;
@@ -217,8 +193,6 @@ function fetchAthFromBitqueryAsync(): void {
       // Clear pending data
       pendingTokenData.clear();
       bitqueryFetchScheduled = false;
-      
-      console.log('[AthTracker] Bitquery ATH update completed');
     } catch (error) {
       console.error('[AthTracker] Error fetching ATH from Bitquery:', error);
       bitqueryFetchScheduled = false;
@@ -240,11 +214,8 @@ export async function registerToken(
   // Filtering logic: Skip tokens created by blacklisted wallets.
   const isBlacklisted = await isBlacklistedCreatorWallet(creator);
   if (isBlacklisted) {
-    console.log(`[AthTracker] Skipping token from blacklisted creator: ${creator}`);
     return;
   }
-
-  console.log(`[AthTracker] Registering new token: ${mint} (${symbol})`);
 
   // Convert createdAt (milliseconds) to blockTime (seconds) for Bitquery
   const blockTime = Math.floor(createdAt / 1000);
@@ -383,7 +354,6 @@ export async function handleTradeEvent(
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
     tokenInfo.athMarketCapUsd = currentMarketCapUsd;
     tokenInfo.dirty = true;
-    console.log(`[AthTracker] New ATH for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
   }
 
   tokenInfo.currentMarketCapUsd = currentMarketCapUsd;

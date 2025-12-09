@@ -146,7 +146,6 @@ async function processData(processed: any) {
       const instructions = processed.transaction.message?.compiledInstructions || [];
       for (const instruction of instructions) {
         if (instruction?.data?.name?.includes('migrate')) {
-          console.log(`[PumpFun] Token migrate detected in transaction ${txSignature}`);
           // Extract mint address from transaction
           const mintAddress = extractMintFromTransaction(processed);
           if (mintAddress) {
@@ -257,7 +256,6 @@ async function processData(processed: any) {
  */
 async function startStreaming(): Promise<void> {
   if (isStreaming) {
-    console.log("Stream is already running");
     return;
   }
 
@@ -269,7 +267,6 @@ async function startStreaming(): Promise<void> {
       throw new Error('ENDPOINT and X_TOKEN environment variables are required');
     }
 
-    console.log('Starting pump.fun stream with ladysbug...');
 
     // Initialize token tracker (15-second tracking)
     await initializeTokenTracker();
@@ -299,7 +296,6 @@ async function startStreaming(): Promise<void> {
     txnStreamer.start();
 
     isStreaming = true;
-    console.log('Stream started successfully');
   } catch (error) {
     console.error('Error starting stream:', error);
     isStreaming = false;
@@ -313,11 +309,9 @@ async function startStreaming(): Promise<void> {
  */
 async function stopStreaming(): Promise<void> {
   if (!isStreaming || !txnStreamer) {
-    console.log("No stream is currently running");
     return;
   }
 
-  console.log("Stopping stream...");
 
   try {
     // Ladysbug TransactionStreamer has a stop() method
@@ -337,7 +331,6 @@ async function stopStreaming(): Promise<void> {
 
   isStreaming = false;
   txnStreamer = null;
-  console.log("Stream stopped");
 }
 
 /**
