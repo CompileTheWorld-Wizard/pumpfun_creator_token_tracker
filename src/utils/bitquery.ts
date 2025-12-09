@@ -72,20 +72,29 @@ export async function fetchAthMarketCap(
   `;
 
   try {
+    const requestBody = {
+      query,
+      variables: {
+        tokens: addresses,
+        since: sinceTime,
+      },
+    };
+
+    console.log(`[Bitquery] Requesting ATH for ${addresses.length} tokens:`);
+    console.log(`[Bitquery] Token addresses:`, addresses);
+    console.log(`[Bitquery] Since time: ${sinceTime}`);
+    console.log(`[Bitquery] Request body:`, JSON.stringify(requestBody, null, 2));
+
     const response = await fetch(BITQUERY_ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        query,
-        variables: {
-          tokens: addresses,
-          since: sinceTime,
-        },
-      }),
+      body: JSON.stringify(requestBody),
     });
+
+    console.log(`[Bitquery] Response status: ${response.status} ${response.statusText}`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -95,26 +104,56 @@ export async function fetchAthMarketCap(
 
     const result: any = await response.json();
     
+    // Log full response for debugging
+    console.log(`[Bitquery] Full API response:`, JSON.stringify(result, null, 2));
+    
     if (result.errors) {
-      console.error('[Bitquery] GraphQL errors:', result.errors);
+      console.error('[Bitquery] GraphQL errors:', JSON.stringify(result.errors, null, 2));
       return [];
     }
 
     const trades = result.data?.Solana?.DEXTradeByTokens || [];
+    console.log(`[Bitquery] Raw trades array length: ${trades.length}`);
+    console.log(`[Bitquery] Raw trades data:`, JSON.stringify(trades, null, 2));
     
-    const athDataList: TokenAthData[] = trades.map((trade: any) => ({
-      mintAddress: trade.Trade?.Currency?.MintAddress || '',
-      name: trade.Trade?.Currency?.Name || '',
-      symbol: trade.Trade?.Currency?.Symbol || '',
-      athPriceUsd: parseFloat(trade.max) || 0,
-      athMarketCapUsd: parseFloat(trade.ATH_Marketcap) || 0,
-    })).filter((data: TokenAthData) => data.mintAddress);
+    const athDataList: TokenAthData[] = trades.map((trade: any, index: number) => {
+      const mintAddress = trade.Trade?.Currency?.MintAddress || '';
+      const name = trade.Trade?.Currency?.Name || '';
+      const symbol = trade.Trade?.Currency?.Symbol || '';
+      const max = trade.max;
+      const athMarketcap = trade.ATH_Marketcap;
+      const priceInUsd = trade.Trade?.PriceInUSD;
+      
+      console.log(`[Bitquery] Trade ${index}:`, {
+        mintAddress,
+        name,
+        symbol,
+        max,
+        athMarketcap,
+        priceInUsd,
+        rawTrade: JSON.stringify(trade, null, 2)
+      });
+      
+      return {
+        mintAddress,
+        name,
+        symbol,
+        athPriceUsd: parseFloat(max) || 0,
+        athMarketCapUsd: parseFloat(athMarketcap) || 0,
+      };
+    }).filter((data: TokenAthData) => data.mintAddress);
 
-    console.log(`[Bitquery] Fetched ATH data for ${athDataList.length} tokens`);
+    console.log(`[Bitquery] Processed ATH data for ${athDataList.length} tokens:`);
+    athDataList.forEach((data, index) => {
+      console.log(`[Bitquery] Token ${index + 1}: ${data.mintAddress} (${data.symbol}) - ATH: $${data.athMarketCapUsd}, Price: $${data.athPriceUsd}`);
+    });
     
     return athDataList;
   } catch (error) {
     console.error('[Bitquery] Error fetching ATH data:', error);
+    if (error instanceof Error) {
+      console.error('[Bitquery] Error stack:', error.stack);
+    }
     return [];
   }
 }

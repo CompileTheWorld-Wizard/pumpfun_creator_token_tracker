@@ -176,7 +176,9 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Find earliest block time for Bitquery query
       let earliestBlockTime = Math.floor(Date.now() / 1000);
+      const tokenDetails: Array<{ mint: string; name: string; symbol: string; blockTime: number }> = [];
       for (const data of pendingTokenData.values()) {
+        tokenDetails.push(data);
         if (data.blockTime < earliestBlockTime) {
           earliestBlockTime = data.blockTime;
         }
@@ -184,28 +186,88 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Convert to ISO string
       const sinceTime = new Date(earliestBlockTime * 1000).toISOString();
-      console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${pendingTokenData.size} tokens...`);
+      console.log(`[AthTracker] ===== Starting Bitquery ATH Fetch =====`);
+      console.log(`[AthTracker] Pending tokens count: ${pendingTokenData.size}`);
+      console.log(`[AthTracker] Token details:`, tokenDetails.map(t => ({
+        mint: t.mint,
+        name: t.name,
+        symbol: t.symbol,
+        blockTime: t.blockTime,
+        blockTimeISO: new Date(t.blockTime * 1000).toISOString()
+      })));
+      console.log(`[AthTracker] Earliest block time: ${earliestBlockTime} (${sinceTime})`);
 
       // Fetch ATH from Bitquery
       const tokenAddresses = Array.from(pendingTokenData.keys());
+      console.log(`[AthTracker] Token addresses to fetch:`, tokenAddresses);
+      
       const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
 
-      console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
+      console.log(`[AthTracker] ===== Bitquery Response Summary =====`);
+      console.log(`[AthTracker] Requested ${tokenAddresses.length} tokens`);
+      console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens`);
+      
+      if (athDataList.length === 0) {
+        console.warn(`[AthTracker] WARNING: No ATH data returned from Bitquery for ${tokenAddresses.length} tokens`);
+        console.warn(`[AthTracker] This could mean:`);
+        console.warn(`[AthTracker] 1. Tokens have no trades on DEX`);
+        console.warn(`[AthTracker] 2. Tokens are too new (no trades yet)`);
+        console.warn(`[AthTracker] 3. Token addresses are incorrect`);
+        console.warn(`[AthTracker] 4. Bitquery API issue`);
+      }
 
       // Update token map with ATH data (only if higher than current)
+      let updatedCount = 0;
+      let skippedCount = 0;
+      let zeroAthCount = 0;
+      
       for (const athData of athDataList) {
         const existing = tokenAthMap.get(athData.mintAddress);
         if (existing) {
+          console.log(`[AthTracker] Processing ATH for ${athData.mintAddress} (${athData.symbol}):`);
+          console.log(`[AthTracker]   - Current ATH: $${existing.athMarketCapUsd}`);
+          console.log(`[AthTracker]   - Bitquery ATH: $${athData.athMarketCapUsd}`);
+          console.log(`[AthTracker]   - Bitquery Price: $${athData.athPriceUsd}`);
+          
+          if (athData.athMarketCapUsd === 0) {
+            zeroAthCount++;
+            console.warn(`[AthTracker]   - WARNING: ATH is 0 for ${athData.mintAddress}`);
+          }
+          
           // Only update if Bitquery ATH is higher than current
           if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
             existing.athMarketCapUsd = athData.athMarketCapUsd;
             existing.dirty = true;
-            console.log(`[AthTracker] Updated ATH from Bitquery for ${existing.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
+            updatedCount++;
+            console.log(`[AthTracker]   - ✓ Updated ATH from Bitquery: $${athData.athMarketCapUsd.toFixed(2)}`);
+          } else {
+            skippedCount++;
+            console.log(`[AthTracker]   - ✗ Skipped (current ATH ${existing.athMarketCapUsd} >= Bitquery ${athData.athMarketCapUsd})`);
           }
+          
           // Update name/symbol if missing
-          if (!existing.name && athData.name) existing.name = athData.name;
-          if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
+          if (!existing.name && athData.name) {
+            existing.name = athData.name;
+            console.log(`[AthTracker]   - Updated name: ${athData.name}`);
+          }
+          if (!existing.symbol && athData.symbol) {
+            existing.symbol = athData.symbol;
+            console.log(`[AthTracker]   - Updated symbol: ${athData.symbol}`);
+          }
+        } else {
+          console.warn(`[AthTracker] Token ${athData.mintAddress} not found in tokenAthMap`);
         }
+      }
+      
+      console.log(`[AthTracker] ===== Update Summary =====`);
+      console.log(`[AthTracker] Updated: ${updatedCount}, Skipped: ${skippedCount}, Zero ATH: ${zeroAthCount}`);
+      
+      // Check for tokens that weren't in the response
+      const tokensNotInResponse = tokenAddresses.filter(addr => 
+        !athDataList.some(data => data.mintAddress === addr)
+      );
+      if (tokensNotInResponse.length > 0) {
+        console.warn(`[AthTracker] Tokens not in Bitquery response (${tokensNotInResponse.length}):`, tokensNotInResponse);
       }
 
       // Clear pending data
