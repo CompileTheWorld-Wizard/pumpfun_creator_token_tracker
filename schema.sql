@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS created_tokens (
   final_market_cap_usd DECIMAL(20, 2),
   trade_count_15s INTEGER DEFAULT 0,
   
+  -- Source tracking: false = from streaming, true = from Solscan API
+  is_fetched BOOLEAN DEFAULT FALSE,
+  
   -- Timestamps
   tracked_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()

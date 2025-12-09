@@ -632,13 +632,14 @@ async function saveAthDataToDb(): Promise<void> {
       if (athColumnsExist) {
         // Try with ATH columns
         await pool.query(
-          `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at, is_fetched)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (mint) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, created_tokens.name),
              symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
              bonded = EXCLUDED.bonded,
              ath_market_cap_usd = GREATEST(EXCLUDED.ath_market_cap_usd, COALESCE(created_tokens.ath_market_cap_usd, 0)),
+             is_fetched = created_tokens.is_fetched,
              updated_at = NOW()`,
           [
             token.mint,
@@ -648,16 +649,18 @@ async function saveAthDataToDb(): Promise<void> {
             token.bonded,
             token.athMarketCapUsd,
             new Date(token.createdAt),
+            false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
           ]
         );
       } else {
         // Fallback: save without ATH columns
         await pool.query(
-          `INSERT INTO created_tokens (mint, name, symbol, creator, created_at)
-           VALUES ($1, $2, $3, $4, $5)
+          `INSERT INTO created_tokens (mint, name, symbol, creator, created_at, is_fetched)
+           VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (mint) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, created_tokens.name),
              symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+             is_fetched = created_tokens.is_fetched,
              updated_at = NOW()`,
           [
             token.mint,
@@ -665,6 +668,7 @@ async function saveAthDataToDb(): Promise<void> {
             token.symbol,
             token.creator,
             new Date(token.createdAt),
+            false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
           ]
         );
       }
@@ -679,11 +683,12 @@ async function saveAthDataToDb(): Promise<void> {
         // Retry with fallback query
         try {
           await pool.query(
-            `INSERT INTO created_tokens (mint, name, symbol, creator, created_at)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO created_tokens (mint, name, symbol, creator, created_at, is_fetched)
+             VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (mint) DO UPDATE SET
                name = COALESCE(EXCLUDED.name, created_tokens.name),
                symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+               is_fetched = created_tokens.is_fetched,
                updated_at = NOW()`,
             [
               token.mint,
@@ -691,6 +696,7 @@ async function saveAthDataToDb(): Promise<void> {
               token.symbol,
               token.creator,
               new Date(token.createdAt),
+              false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
             ]
           );
           token.dirty = false;

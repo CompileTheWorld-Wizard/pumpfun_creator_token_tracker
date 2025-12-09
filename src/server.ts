@@ -191,6 +191,20 @@ async function startServer() {
     `);
     console.log('Database table passwords initialized');
     
+    // Add is_fetched column to created_tokens if it doesn't exist
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'created_tokens' AND column_name = 'is_fetched'
+        ) THEN
+          ALTER TABLE created_tokens ADD COLUMN is_fetched BOOLEAN DEFAULT FALSE;
+        END IF;
+      END $$;
+    `);
+    console.log('Database column is_fetched initialized');
+    
     // Initialize default password if no password exists
     const passwordCheck = await client.query(
       'SELECT COUNT(*) as count FROM passwords'

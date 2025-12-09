@@ -172,12 +172,13 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       if (tokenData) {
         try {
           await pool.query(
-            `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6)
+            `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (mint) DO UPDATE SET
                name = COALESCE(EXCLUDED.name, created_tokens.name),
                symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
                bonded = EXCLUDED.bonded,
+               is_fetched = COALESCE(EXCLUDED.is_fetched, created_tokens.is_fetched),
                updated_at = NOW()`,
             [
               mint,
@@ -186,6 +187,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               creatorAddress,
               isBonded,
               new Date(tokenData.blockTime * 1000),
+              true, // is_fetched = true (from Solscan API)
             ]
           );
         } catch (error) {
@@ -456,14 +458,16 @@ async function saveTokenTrackingResult(
         initial_market_cap_usd,
         peak_market_cap_usd,
         final_market_cap_usd,
-        trade_count_15s
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        trade_count_15s,
+        is_fetched
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       ON CONFLICT (mint) DO UPDATE SET
         market_cap_time_series = EXCLUDED.market_cap_time_series,
         initial_market_cap_usd = EXCLUDED.initial_market_cap_usd,
         peak_market_cap_usd = EXCLUDED.peak_market_cap_usd,
         final_market_cap_usd = EXCLUDED.final_market_cap_usd,
         trade_count_15s = EXCLUDED.trade_count_15s,
+        is_fetched = COALESCE(EXCLUDED.is_fetched, created_tokens.is_fetched),
         updated_at = NOW()`,
       [
         result.mint,
@@ -478,6 +482,7 @@ async function saveTokenTrackingResult(
         result.peakMarketCapUsd,
         result.finalMarketCapUsd,
         result.tradeCount,
+        false, // is_fetched = false (from streaming)
       ]
     );
   } catch (error) {
