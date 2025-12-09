@@ -13,20 +13,23 @@
           <div class="flex items-center gap-3">
             <button
               @click="showManageDialog = true"
-              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50"
+              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-2"
             >
+              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(manageBlacklistIconSvg)"></span>
               Manage Blacklist
             </button>
             <button
               @click="showClearDatabaseDialog = true"
-              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-2"
             >
+              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(clearDatabaseIconSvg)"></span>
               Clear Database
             </button>
             <button
               @click="showChangePasswordDialog = true"
-              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50"
+              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-2"
             >
+              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
               Change Password
             </button>
             <button
@@ -40,13 +43,15 @@
               ]"
             >
               <div v-if="trackingLoading" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+              <span v-if="!trackingLoading" class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(startTrackingIconSvg)"></span>
               <span v-if="isTracking">Stop Tracking</span>
               <span v-else>Start Tracking</span>
             </button>
             <button
               @click="handleLogout"
-              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50"
+              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-2"
             >
+              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
               Logout
             </button>
           </div>
@@ -117,8 +122,7 @@
         <select
           v-model="selectedCreatorWallet"
           @change="handleFilterChange"
-          :disabled="viewAllTokens"
-          class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-[250px] disabled:opacity-50 disabled:cursor-not-allowed"
+          class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-[250px]"
         >
           <option value="">All Wallets</option>
           <option v-for="wallet in wallets" :key="wallet.address" :value="wallet.address">
@@ -137,19 +141,6 @@
           <option :value="100">100</option>
           <option value="all">All</option>
         </select>
-        <label class="flex items-center gap-2 ml-3 cursor-pointer">
-          <input
-            type="checkbox"
-            v-model="viewAllTokens"
-            @change="handleFilterChange"
-            class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-700 rounded focus:ring-purple-500 focus:ring-2"
-          />
-          <span class="text-xs text-gray-400 font-medium">View All tokens</span>
-          <span class="text-xs text-yellow-500" title="Debug mode: Shows all tokens regardless of tracked wallet addresses">(Debug)</span>
-        </label>
-        <span class="text-xs text-gray-500">
-          {{ pagination.total }} token{{ pagination.total !== 1 ? 's' : '' }}
-        </span>
       </div>
 
       <!-- Error State -->
@@ -210,8 +201,7 @@
                       :class="copiedToken === token.mint ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
                       :title="copiedToken === token.mint ? 'Copied!' : 'Copy token address'"
                     >
-                      <CheckIcon v-if="copiedToken === token.mint" class="w-3 h-3" />
-                      <CopyIcon v-else class="w-3 h-3" />
+                      <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(copiedToken === token.mint ? checkIconSvg : copyIconSvg, 'w-3 h-3')"></span>
                     </button>
                     <div>
                       <div class="text-xs font-semibold text-gray-100">{{ token.name || 'Unnamed Token' }}</div>
@@ -230,8 +220,7 @@
                       :class="copiedToken === token.creator ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
                       :title="copiedToken === token.creator ? 'Copied!' : 'Copy creator wallet address'"
                     >
-                      <CheckIcon v-if="copiedToken === token.creator" class="w-3 h-3" />
-                      <CopyIcon v-else class="w-3 h-3" />
+                      <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(copiedToken === token.creator ? checkIconSvg : copyIconSvg, 'w-3 h-3')"></span>
                     </button>
                     <div class="text-[10px] text-gray-400 font-mono">{{ formatAddress(token.creator) }}</div>
                   </div>
@@ -341,7 +330,7 @@
             @click="closeManageDialog"
             class="text-gray-400 hover:text-gray-200 transition"
           >
-            <CloseIcon class="w-5 h-5" />
+            <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg, 'w-5 h-5')"></span>
           </button>
         </div>
         
@@ -416,13 +405,13 @@
                 placeholder="Search wallet addresses..."
                 class="w-full px-3 py-2 pl-9 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm font-mono"
               />
-              <SearchIcon class="text-gray-500 absolute left-3 top-1/2 transform -translate-y-1/2" />
+              <span class="w-4 h-4 text-gray-500 absolute left-3 top-1/2 transform -translate-y-1/2 inline-flex items-center justify-center" v-html="processSvg(searchIconSvg)"></span>
               <button
                 v-if="searchQuery"
                 @click="searchQuery = ''"
                 class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition"
               >
-                <CloseIcon />
+                <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg)"></span>
               </button>
             </div>
           </div>
@@ -439,8 +428,7 @@
                 class="p-1.5 text-gray-400 hover:text-purple-400 hover:bg-purple-900/20 rounded transition flex-shrink-0"
                 :title="copiedAddress === wallet.address ? 'Copied!' : 'Copy address'"
               >
-                <CheckIcon v-if="copiedAddress === wallet.address" class="text-green-400" />
-                <CopyIcon v-else />
+                <span class="w-4 h-4 inline-flex items-center justify-center" :class="copiedAddress === wallet.address ? 'text-green-400' : ''" v-html="processSvg(copiedAddress === wallet.address ? checkIconSvg : copyIconSvg)"></span>
               </button>
               <div class="flex-1 min-w-0">
                 <p v-if="wallet.nickname" class="text-sm font-semibold text-gray-200">{{ wallet.nickname }}</p>
@@ -451,7 +439,7 @@
                 class="p-1.5 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded transition flex-shrink-0"
                 title="Remove wallet"
               >
-                <TrashIcon />
+                <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(trashIconSvg)"></span>
               </button>
             </div>
           </div>
@@ -481,7 +469,7 @@
             @click="closeClearDatabaseDialog"
             class="text-gray-400 hover:text-gray-200 transition"
           >
-            <CloseIcon class="w-5 h-5" />
+            <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg, 'w-5 h-5')"></span>
           </button>
         </div>
         
@@ -555,7 +543,7 @@
             @click="closeChangePasswordDialog"
             class="text-gray-400 hover:text-gray-200 transition"
           >
-            <CloseIcon class="w-5 h-5" />
+            <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg, 'w-5 h-5')"></span>
           </button>
         </div>
         
@@ -785,13 +773,27 @@ import { logout, changePassword, clearDatabase } from '../services/auth'
 import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
 import { getCreatedTokens, type Token, type PaginationInfo } from '../services/tokens'
-import CopyIcon from '../icons/CopyIcon.vue'
-import CheckIcon from '../icons/CheckIcon.vue'
-import TrashIcon from '../icons/TrashIcon.vue'
-import SearchIcon from '../icons/SearchIcon.vue'
-import CloseIcon from '../icons/CloseIcon.vue'
+// Import SVG files as raw strings
+import copyIconSvg from '../icons/copy.svg?raw'
+import checkIconSvg from '../icons/check.svg?raw'
+import trashIconSvg from '../icons/trash.svg?raw'
+import searchIconSvg from '../icons/search.svg?raw'
+import closeIconSvg from '../icons/close.svg?raw'
+import manageBlacklistIconSvg from '../icons/manage-blacklist.svg?raw'
+import clearDatabaseIconSvg from '../icons/clear-database.svg?raw'
+import changePasswordIconSvg from '../icons/change-password.svg?raw'
+import startTrackingIconSvg from '../icons/start-tracking.svg?raw'
+import logoutIconSvg from '../icons/logout.svg?raw'
 
 const router = useRouter()
+
+// Helper function to process SVG for inline rendering
+const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
+  return svg.replace(
+    '<svg',
+    `<svg class="${sizeClass}" style="display: block;"`
+  )
+}
 
 const wallets = ref<Wallet[]>([])
 const walletNicknameInput = ref('')
@@ -842,7 +844,6 @@ const chartMetadata = ref<{
 } | null>(null)
 const copiedToken = ref<string | null>(null)
 const itemsPerPage = ref<number | string>(20)
-const viewAllTokens = ref(false)
 const walletStats = ref<WalletStats | null>(null)
 const pagination = ref<PaginationInfo>({
   page: 1,
@@ -1109,10 +1110,6 @@ const goToPage = (page: number) => {
 }
 
 const handleFilterChange = async () => {
-  // Clear wallet selection when "View All tokens" is enabled
-  if (viewAllTokens.value) {
-    selectedCreatorWallet.value = ''
-  }
   pagination.value.page = 1
   await loadTokens()
   await loadWalletStats()
@@ -1491,11 +1488,14 @@ const loadTokens = async () => {
   
   try {
     const limit = itemsPerPage.value === 'all' ? 1000000 : (itemsPerPage.value as number)
+    // When "All Wallets" is selected (empty string), show all tokens without filtering
+    // When a specific wallet is selected, filter by that wallet
+    const viewAll = !selectedCreatorWallet.value
     const response = await getCreatedTokens(
       pagination.value.page,
       limit,
       selectedCreatorWallet.value || undefined,
-      viewAllTokens.value
+      viewAll
     )
     tokens.value = response.tokens
     pagination.value = response.pagination
