@@ -1061,10 +1061,6 @@ const removeWalletByAddress = async (address: string) => {
       selectedCreatorWallet.value = ''
     }
     
-    if (wallets.value.length === 0) {
-      isTracking.value = false
-    }
-    
     loadTokens()
   } catch (error) {
     console.error('Error removing wallet:', error)
@@ -1073,7 +1069,7 @@ const removeWalletByAddress = async (address: string) => {
 }
 
 const toggleTracking = async () => {
-  if (wallets.value.length === 0 || trackingLoading.value) {
+  if (trackingLoading.value) {
     return
   }
 
