@@ -10,8 +10,12 @@ import authRoutes from './routes/auth.js';
 import walletRoutes from './routes/wallets.js';
 import streamRoutes from './routes/stream.js';
 import tokenRoutes from './routes/tokens.js';
+import { initializeConsoleSanitizer } from './utils/consoleSanitizer.js';
 
 dotenv.config();
+
+// Initialize console sanitizer early to prevent binary data corruption in terminal output
+initializeConsoleSanitizer();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
