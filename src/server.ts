@@ -116,12 +116,52 @@ async function startServer() {
     await client.query(`
       CREATE TABLE IF NOT EXISTS creator_wallets (
         id SERIAL PRIMARY KEY,
-        user_id VARCHAR(255) NOT NULL,
-        wallet_address VARCHAR(44) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, wallet_address)
+        wallet_address VARCHAR(64) NOT NULL UNIQUE,
+        name VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+    
+    // Add name column if it doesn't exist (migration for existing tables)
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'creator_wallets' AND column_name = 'name'
+        ) THEN
+          ALTER TABLE creator_wallets ADD COLUMN name VARCHAR(255);
+        END IF;
+      END $$;
+    `);
+    
+    // Remove user_id column if it exists (migration for old schema)
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'creator_wallets' AND column_name = 'user_id'
+        ) THEN
+          ALTER TABLE creator_wallets DROP COLUMN user_id;
+        END IF;
+      END $$;
+    `);
+    
+    // Ensure wallet_address is unique if not already
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'creator_wallets_wallet_address_key'
+        ) THEN
+          ALTER TABLE creator_wallets ADD CONSTRAINT creator_wallets_wallet_address_key UNIQUE (wallet_address);
+        END IF;
+      END $$;
+    `);
+    
     console.log('Database table creator_wallets initialized');
     
     // Create passwords table if it doesn't exist
