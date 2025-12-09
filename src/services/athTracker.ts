@@ -727,6 +727,85 @@ export function getTokenAthInfo(mint: string): TokenAthInfo | undefined {
 }
 
 /**
+ * Update ATH mcap for all tokens from a specific creator wallet
+ * This is useful when stats are requested for a blacklisted wallet
+ */
+export async function updateAthMcapForCreator(creatorAddress: string): Promise<void> {
+  try {
+    console.log(`[AthTracker] Updating ATH mcap for tokens from creator: ${creatorAddress}`);
+    
+    // Get all tokens from this creator
+    const result = await pool.query(
+      `SELECT mint, name, symbol, created_at, COALESCE(ath_market_cap_usd, 0) as current_ath
+       FROM created_tokens
+       WHERE creator = $1`,
+      [creatorAddress]
+    );
+
+    if (result.rows.length === 0) {
+      console.log(`[AthTracker] No tokens found for creator: ${creatorAddress}`);
+      return;
+    }
+
+    console.log(`[AthTracker] Found ${result.rows.length} tokens for creator ${creatorAddress}`);
+
+    // Find earliest block time for Bitquery query
+    let earliestBlockTime = Math.floor(Date.now() / 1000);
+    const tokenAddresses: string[] = [];
+    const tokenDataMap = new Map<string, { name: string; symbol: string; blockTime: number; currentAth: number }>();
+
+    for (const row of result.rows) {
+      const blockTime = Math.floor(new Date(row.created_at).getTime() / 1000);
+      if (blockTime < earliestBlockTime) {
+        earliestBlockTime = blockTime;
+      }
+      tokenAddresses.push(row.mint);
+      tokenDataMap.set(row.mint, {
+        name: row.name || '',
+        symbol: row.symbol || '',
+        blockTime,
+        currentAth: parseFloat(row.current_ath) || 0,
+      });
+    }
+
+    // Convert to ISO string
+    const sinceTime = new Date(earliestBlockTime * 1000).toISOString();
+    console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${tokenAddresses.length} tokens...`);
+
+    // Fetch ATH from Bitquery
+    const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
+
+    console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
+
+    // Update database with ATH data (only if higher than current)
+    let updatedCount = 0;
+    for (const athData of athDataList) {
+      const tokenInfo = tokenDataMap.get(athData.mintAddress);
+      if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
+        try {
+          await pool.query(
+            `UPDATE created_tokens 
+             SET ath_market_cap_usd = GREATEST($1, COALESCE(ath_market_cap_usd, 0)),
+                 updated_at = NOW()
+             WHERE mint = $2`,
+            [athData.athMarketCapUsd, athData.mintAddress]
+          );
+          updatedCount++;
+          console.log(`[AthTracker] Updated ATH for ${athData.symbol || athData.mintAddress}: $${athData.athMarketCapUsd.toFixed(2)}`);
+        } catch (error) {
+          console.error(`[AthTracker] Error updating ATH for ${athData.mintAddress}:`, error);
+        }
+      }
+    }
+
+    console.log(`[AthTracker] Completed updating ATH mcap for creator ${creatorAddress}: ${updatedCount} tokens updated`);
+  } catch (error) {
+    console.error(`[AthTracker] Error updating ATH mcap for creator ${creatorAddress}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Cleanup (call on shutdown)
  */
 export async function cleanupAthTracker(): Promise<void> {

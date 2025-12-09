@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { PublicKey, Connection } from '@solana/web3.js';
 import { requireAuth } from '../middleware/auth.js';
 import { pool } from '../db.js';
+import { updateBondingStatusForCreator } from '../services/bondingTracker.js';
+import { updateAthMcapForCreator } from '../services/athTracker.js';
 
 const router = Router();
 
@@ -274,6 +276,23 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
         error: 'Wallet address not found in blacklist' 
       });
       return;
+    }
+
+    // Update bonding status and ATH mcap for tokens from this creator wallet
+    // This ensures stats are up-to-date even if the wallet is blacklisted
+    try {
+      console.log(`[Wallets] Updating bonding status and ATH mcap for creator: ${address}`);
+      await Promise.all([
+        updateBondingStatusForCreator(address).catch(err => {
+          console.error(`[Wallets] Error updating bonding status:`, err);
+        }),
+        updateAthMcapForCreator(address).catch(err => {
+          console.error(`[Wallets] Error updating ATH mcap:`, err);
+        })
+      ]);
+    } catch (error) {
+      console.error(`[Wallets] Error updating stats for creator ${address}:`, error);
+      // Continue to return stats even if update fails
     }
 
     // Get statistics for tokens created by this wallet

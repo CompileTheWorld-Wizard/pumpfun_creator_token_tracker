@@ -280,6 +280,80 @@ export async function initializeBondingTracker(): Promise<void> {
 }
 
 /**
+ * Update bonding status for all tokens from a specific creator wallet
+ * This is useful when stats are requested for a blacklisted wallet
+ */
+export async function updateBondingStatusForCreator(creatorAddress: string): Promise<void> {
+  try {
+    console.log(`[BondingTracker] Updating bonding status for tokens from creator: ${creatorAddress}`);
+    
+    // Get all tokens (bonded and unbonded) from this creator
+    const result = await pool.query(
+      `SELECT mint 
+       FROM created_tokens
+       WHERE creator = $1`,
+      [creatorAddress]
+    );
+
+    const tokenMints = result.rows.map((row) => row.mint);
+    
+    if (tokenMints.length === 0) {
+      console.log(`[BondingTracker] No tokens found for creator: ${creatorAddress}`);
+      return;
+    }
+
+    console.log(`[BondingTracker] Found ${tokenMints.length} tokens for creator ${creatorAddress}`);
+
+    // Process in batches of 50
+    const batches: string[][] = [];
+    for (let i = 0; i < tokenMints.length; i += BATCH_SIZE) {
+      batches.push(tokenMints.slice(i, i + BATCH_SIZE));
+    }
+
+    let totalBondedFound = 0;
+
+    for (const batch of batches) {
+      const bondingStatusMap = await fetchBondingStatusBatch(batch);
+
+      // Collect bonded and unbonded tokens separately
+      const bondedTokens: string[] = [];
+      const unbondedTokens: string[] = [];
+
+      for (const mint of batch) {
+        const isBonded = bondingStatusMap.get(mint) || false;
+        if (isBonded) {
+          bondedTokens.push(mint);
+        } else {
+          unbondedTokens.push(mint);
+        }
+      }
+
+      // Update database for both bonded and unbonded tokens
+      if (bondedTokens.length > 0) {
+        await updateBondingStatus(bondedTokens, true);
+        totalBondedFound += bondedTokens.length;
+      }
+      
+      if (unbondedTokens.length > 0) {
+        await updateBondingStatus(unbondedTokens, false);
+      }
+
+      // Add a small delay between batches to avoid rate limiting
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log(
+      `[BondingTracker] Completed updating bonding status for creator ${creatorAddress}: ${tokenMints.length} tokens, ${totalBondedFound} bonded`
+    );
+  } catch (error) {
+    console.error(`[BondingTracker] Error updating bonding status for creator ${creatorAddress}:`, error);
+    throw error;
+  }
+}
+
+/**
  * Cleanup function (for consistency with other trackers)
  */
 export async function cleanupBondingTracker(): Promise<void> {
