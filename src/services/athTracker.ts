@@ -184,8 +184,12 @@ function fetchAthFromBitqueryAsync(): void {
         }
       }
 
+      // Subtract 1 day (86400 seconds) to account for timezone issues
+      const ONE_DAY_SECONDS = 86400;
+      const adjustedBlockTime = earliestBlockTime - ONE_DAY_SECONDS;
+
       // Convert to ISO string
-      const sinceTime = new Date(earliestBlockTime * 1000).toISOString();
+      const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
       console.log(`[AthTracker] ===== Starting Bitquery ATH Fetch =====`);
       console.log(`[AthTracker] Pending tokens count: ${pendingTokenData.size}`);
       console.log(`[AthTracker] Token details:`, tokenDetails.map(t => ({
@@ -195,7 +199,8 @@ function fetchAthFromBitqueryAsync(): void {
         blockTime: t.blockTime,
         blockTimeISO: new Date(t.blockTime * 1000).toISOString()
       })));
-      console.log(`[AthTracker] Earliest block time: ${earliestBlockTime} (${sinceTime})`);
+      console.log(`[AthTracker] Earliest block time: ${earliestBlockTime} (${new Date(earliestBlockTime * 1000).toISOString()})`);
+      console.log(`[AthTracker] Adjusted block time (minus 1 day): ${adjustedBlockTime} (${sinceTime})`);
 
       // Fetch ATH from Bitquery
       const tokenAddresses = Array.from(pendingTokenData.keys());
@@ -774,8 +779,14 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
       });
     }
 
+    // Subtract 1 day (86400 seconds) to account for timezone issues
+    const ONE_DAY_SECONDS = 86400;
+    const adjustedBlockTime = earliestBlockTime - ONE_DAY_SECONDS;
+
     // Convert to ISO string
-    const sinceTime = new Date(earliestBlockTime * 1000).toISOString();
+    const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
+    console.log(`[AthTracker] Earliest block time: ${earliestBlockTime} (${new Date(earliestBlockTime * 1000).toISOString()})`);
+    console.log(`[AthTracker] Adjusted block time (minus 1 day): ${adjustedBlockTime} (${sinceTime})`);
     console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${tokenAddresses.length} tokens...`);
 
     // Fetch ATH from Bitquery
