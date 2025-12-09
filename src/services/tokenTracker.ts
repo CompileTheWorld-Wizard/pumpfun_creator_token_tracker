@@ -10,6 +10,7 @@ import { redis } from '../redis.js';
 import type { CreateEventData, TradeEventData } from '../types.js';
 import { getCreatedTokens } from '../utils/solscan.js';
 import { fetchBondingStatusBatch } from './bondingTracker.js';
+import { registerToken as registerTokenForAth } from './athTracker.js';
 
 // Constants
 const COLLECTION_DELAY_MS = 20000; // Wait 20 seconds before collecting data
@@ -164,7 +165,8 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
     // Fetch bonding status for all tokens using Shyft GraphQL API
     const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
     
-    // Save tokens to database
+    // Save tokens to database and register for ATH tracking
+    let registeredCount = 0;
     for (const mint of tokenMints) {
       const tokenData = tokenDataMap.get(mint);
       const isBonded = bondingStatusMap.get(mint) || false;
@@ -190,13 +192,29 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               true, // is_fetched = true (from Solscan API)
             ]
           );
+
+          // Register token in ATH tracker for Bitquery ATH fetching
+          // Only register if creator is not blacklisted (registerToken checks this internally)
+          try {
+            await registerTokenForAth(
+              mint,
+              tokenData.name,
+              tokenData.symbol,
+              creatorAddress,
+              tokenData.blockTime * 1000 // Convert to milliseconds
+            );
+            registeredCount++;
+          } catch (athError) {
+            // Log but don't fail - ATH registration might fail if creator is blacklisted
+            console.log(`[TokenTracker] Token ${mint} not registered for ATH tracking (may be blacklisted)`);
+          }
         } catch (error) {
           console.error(`[TokenTracker] Error saving token ${mint} to database:`, error);
         }
       }
     }
     
-    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded`);
+    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded, ${registeredCount} registered for ATH tracking`);
   } catch (error) {
     console.error(`[TokenTracker] Error fetching creator tokens and bonding status:`, error);
     throw error;
