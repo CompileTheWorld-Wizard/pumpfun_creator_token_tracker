@@ -34,7 +34,7 @@
             </button>
             <button
               @click="toggleTracking"
-              :disabled="wallets.length === 0 || trackingLoading"
+              :disabled="trackingLoading"
               :class="[
                 'px-4 py-2 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 flex items-center gap-2',
                 isTracking
