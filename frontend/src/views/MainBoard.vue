@@ -125,8 +125,8 @@
           class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-[250px]"
         >
           <option value="">All Wallets</option>
-          <option v-for="wallet in wallets" :key="wallet.address" :value="wallet.address">
-            {{ wallet.nickname || formatWalletAddress(wallet.address) }}
+          <option v-for="walletAddress in creatorWallets" :key="walletAddress" :value="walletAddress">
+            {{ formatWalletAddress(walletAddress) }}
           </option>
         </select>
         <label class="text-xs text-gray-400 font-medium ml-3">Items per page:</label>
@@ -772,7 +772,7 @@ import { useRouter } from 'vue-router'
 import { logout, changePassword, clearDatabase } from '../services/auth'
 import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
-import { getCreatedTokens, type Token, type PaginationInfo } from '../services/tokens'
+import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type PaginationInfo } from '../services/tokens'
 // Import SVG files as raw strings
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
@@ -796,6 +796,7 @@ const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
 }
 
 const wallets = ref<Wallet[]>([])
+const creatorWallets = ref<string[]>([]) // Creator wallets from created_tokens (for filter)
 const walletNicknameInput = ref('')
 const isTracking = ref(false)
 const trackingLoading = ref(false)
@@ -1110,6 +1111,8 @@ const goToPage = (page: number) => {
 }
 
 const handleFilterChange = async () => {
+  // Reload creator wallets when filter changes
+  await loadCreatorWallets()
   pagination.value.page = 1
   await loadTokens()
   await loadWalletStats()
@@ -1482,6 +1485,17 @@ const loadWalletStats = async () => {
   }
 }
 
+const loadCreatorWallets = async () => {
+  try {
+    // Always load all creator wallets that have tokens (for the filter dropdown)
+    // The filter dropdown should show all wallets that have created tokens
+    creatorWallets.value = await getCreatorWalletsFromTokens(true)
+  } catch (err: any) {
+    console.error('Error loading creator wallets:', err)
+    creatorWallets.value = []
+  }
+}
+
 const loadTokens = async () => {
   loading.value = true
   error.value = null
@@ -1499,6 +1513,9 @@ const loadTokens = async () => {
     )
     tokens.value = response.tokens
     pagination.value = response.pagination
+    
+    // Reload creator wallets list after loading tokens
+    await loadCreatorWallets()
   } catch (err: any) {
     error.value = err.message || 'Failed to load tokens'
     console.error('Error loading tokens:', err)
@@ -1538,6 +1555,7 @@ onMounted(async () => {
     isTracking.value = response.status || false
     
     await loadTokens()
+    await loadCreatorWallets()
     
     // Start polling if tracking is active
     if (isTracking.value) {

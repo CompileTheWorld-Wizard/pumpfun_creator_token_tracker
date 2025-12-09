@@ -78,6 +78,32 @@ export async function getCreatedTokens(page: number = 1, limit: number = 20, cre
   };
 }
 
+export async function getCreatorWalletsFromTokens(viewAll: boolean = false): Promise<string[]> {
+  const params = new URLSearchParams();
+  if (viewAll) {
+    params.append('viewAll', 'true');
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/tokens/creators/list?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch creator wallets');
+  }
+
+  const data = await response.json();
+  return data.creators || [];
+}
+
 export async function getTokenByMint(mint: string): Promise<Token> {
   const response = await fetch(`${API_BASE_URL}/tokens/${mint}`, {
     method: 'GET',

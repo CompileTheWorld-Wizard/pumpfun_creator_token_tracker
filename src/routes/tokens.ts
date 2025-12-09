@@ -219,5 +219,50 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
   }
 });
 
+// Get distinct creator wallets from created_tokens
+router.get('/creators/list', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req.session as any)?.userId || 'admin';
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    
+    let query: string;
+    let params: any[];
+    
+    if (viewAll) {
+      // Show all creator wallets that have tokens
+      query = `
+        SELECT DISTINCT ct.creator as address
+        FROM created_tokens ct
+        ORDER BY ct.creator ASC
+      `;
+      params = [];
+    } else {
+      // Show only creator wallets that have tokens AND are in the user's tracked wallets
+      query = `
+        SELECT DISTINCT ct.creator as address
+        FROM created_tokens ct
+        WHERE ct.creator IN (
+          SELECT wallet_address 
+          FROM creator_wallets 
+          WHERE user_id = $1
+        )
+        ORDER BY ct.creator ASC
+      `;
+      params = [userId];
+    }
+    
+    const result = await pool.query(query, params);
+    
+    res.json({ 
+      creators: result.rows.map(row => row.address)
+    });
+  } catch (error: any) {
+    console.error('Error fetching creator wallets:', error);
+    res.status(500).json({ 
+      error: 'Error fetching creator wallets' 
+    });
+  }
+});
+
 export default router;
 
