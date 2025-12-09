@@ -17,6 +17,9 @@
             >
               <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(manageBlacklistIconSvg)"></span>
               Manage Blacklist
+              <span v-if="wallets.length > 0" class="px-1.5 py-0.5 bg-red-600/80 text-white text-xs font-bold rounded-full">
+                {{ wallets.length }}
+              </span>
             </button>
             <button
               @click="showClearDatabaseDialog = true"
@@ -71,8 +74,8 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
             </svg>
           </div>
-          <p class="text-2xl font-bold text-purple-400">{{ wallets.length }}</p>
-          <p class="text-xs text-gray-500 mt-0.5">Active</p>
+          <p class="text-2xl font-bold text-purple-400">{{ totalWalletsCount }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Total</p>
         </div>
         
         <div class="bg-gradient-to-br from-blue-600/20 to-blue-800/20 border border-blue-500/30 p-3 rounded-lg backdrop-blur-sm">
@@ -869,6 +872,7 @@ const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
 
 const wallets = ref<Wallet[]>([])
 const creatorWallets = ref<string[]>([]) // Creator wallets from created_tokens (for filter)
+const totalWalletsCount = ref<number>(0) // Total unique creator wallets from tokens
 const walletNicknameInput = ref('')
 const isTracking = ref(false)
 const trackingLoading = ref(false)
@@ -1080,6 +1084,8 @@ const handleAddWallet = async () => {
     walletNicknameInput.value = ''
     walletError.value = ''
     addingWallet.value = false
+    // Reload creator wallets to update total count
+    await loadCreatorWallets()
   } catch (error) {
     walletError.value = 'Error adding wallet address. Please try again.'
     addingWallet.value = false
@@ -1172,6 +1178,8 @@ const removeWalletByAddress = async (address: string) => {
       selectedCreatorWallet.value = ''
     }
     
+    // Reload creator wallets to update total count
+    await loadCreatorWallets()
     loadTokens()
   } catch (error) {
     console.error('Error removing wallet:', error)
@@ -1666,9 +1674,12 @@ const loadCreatorWallets = async () => {
     // Always load all creator wallets that have tokens (for the filter dropdown)
     // The filter dropdown should show all wallets that have created tokens
     creatorWallets.value = await getCreatorWalletsFromTokens(true)
+    // Update total wallets count (all unique creator wallets)
+    totalWalletsCount.value = creatorWallets.value.length
   } catch (err: any) {
     console.error('Error loading creator wallets:', err)
     creatorWallets.value = []
+    totalWalletsCount.value = 0
   }
 }
 
