@@ -120,16 +120,58 @@
       <!-- Filter Section -->
       <div class="mb-3 flex items-center gap-3 flex-wrap">
         <label class="text-xs text-gray-400 font-medium">Filter by Creator Wallet:</label>
-        <select
-          v-model="selectedCreatorWallet"
-          @change="handleFilterChange"
-          class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-[250px]"
-        >
-          <option value="">All Wallets</option>
-          <option v-for="walletAddress in creatorWallets" :key="walletAddress" :value="walletAddress">
-            {{ formatWalletAddress(walletAddress) }}
-          </option>
-        </select>
+        <div class="relative min-w-[250px]">
+          <div class="relative">
+            <input
+              v-model="walletInputValue"
+              @focus="handleWalletInputFocus"
+              @blur="walletInputFocused = false"
+              @input="showWalletDropdown = true; highlightedWalletIndex = -1"
+              @keydown.escape="showWalletDropdown = false; walletInputFocused = false"
+              @keydown.enter.prevent="handleWalletSelect(filteredWalletOptions[highlightedWalletIndex >= 0 ? highlightedWalletIndex : 0]?.value || '')"
+              @keydown.down.prevent="navigateWalletDropdown(1)"
+              @keydown.up.prevent="navigateWalletDropdown(-1)"
+              type="text"
+              :placeholder="!selectedCreatorWallet ? 'Search or select wallet...' : ''"
+              class="w-full px-2 py-1 pr-8 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+            />
+            <button
+              v-if="selectedCreatorWallet"
+              @click.stop="clearWalletSelection"
+              class="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200 transition"
+            >
+              <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg, 'w-3 h-3')"></span>
+            </button>
+            <div
+              v-else
+              class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
+            >
+              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </div>
+          </div>
+          <!-- Dropdown -->
+          <div
+            v-if="showWalletDropdown && filteredWalletOptions.length > 0"
+            class="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+          >
+            <div
+              v-for="(option, index) in filteredWalletOptions"
+              :key="option.value"
+              :data-index="index"
+              @click="handleWalletSelect(option.value)"
+              @mouseenter="highlightedWalletIndex = index"
+              :class="[
+                'px-3 py-2 text-xs cursor-pointer transition',
+                highlightedWalletIndex === index ? 'bg-purple-600/30 text-purple-300' : 'text-gray-200 hover:bg-gray-800'
+              ]"
+            >
+              <div v-if="option.value === ''" class="font-semibold text-purple-400">{{ option.label }}</div>
+              <div v-else class="font-mono">{{ option.label }}</div>
+            </div>
+          </div>
+        </div>
         <label class="text-xs text-gray-400 font-medium ml-3">Items per page:</label>
         <select
           v-model="itemsPerPage"
@@ -142,6 +184,21 @@
           <option :value="100">100</option>
           <option value="all">All</option>
         </select>
+        <button
+          @click="handleRefresh"
+          :disabled="refreshing"
+          class="ml-auto px-3 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <svg 
+            :class="['w-4 h-4', refreshing ? 'animate-spin' : '']"
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+          <span>{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
+        </button>
       </div>
 
       <!-- Error State -->
@@ -834,6 +891,23 @@ const passwordSuccess = ref('')
 const searchQuery = ref('')
 const copiedAddress = ref<string | null>(null)
 const selectedCreatorWallet = ref<string>('')
+const walletSearchQuery = ref('')
+const showWalletDropdown = ref(false)
+const highlightedWalletIndex = ref(-1)
+const walletInputFocused = ref(false)
+
+// Computed property for wallet input display value
+const walletInputValue = computed({
+  get: () => {
+    if (walletInputFocused.value || showWalletDropdown.value) {
+      return walletSearchQuery.value
+    }
+    return selectedCreatorWallet.value ? formatWalletAddress(selectedCreatorWallet.value) : walletSearchQuery.value
+  },
+  set: (value: string) => {
+    walletSearchQuery.value = value
+  }
+})
 const tokens = ref<Token[]>([])
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -867,8 +941,7 @@ const pagination = ref<PaginationInfo>({
   total: 0,
   totalPages: 0
 })
-let pollingInterval: NodeJS.Timeout | null = null
-const POLLING_INTERVAL_MS = 10000 // 10 seconds
+const refreshing = ref(false)
 
 // Filter wallets based on search query
 const filteredWallets = computed(() => {
@@ -880,6 +953,26 @@ const filteredWallets = computed(() => {
     wallet.address.toLowerCase().includes(query) ||
     (wallet.nickname && wallet.nickname.toLowerCase().includes(query))
   )
+})
+
+// Filter wallet options for the Select2-like input
+const filteredWalletOptions = computed(() => {
+  const options: Array<{ value: string; label: string }> = [
+    { value: '', label: 'All Wallets' }
+  ]
+  
+  const query = walletSearchQuery.value.toLowerCase().trim()
+  
+  creatorWallets.value.forEach(address => {
+    if (!query || address.toLowerCase().includes(query) || formatWalletAddress(address).toLowerCase().includes(query)) {
+      options.push({
+        value: address,
+        label: formatWalletAddress(address)
+      })
+    }
+  })
+  
+  return options
 })
 
 const visiblePages = computed(() => {
@@ -1097,11 +1190,9 @@ const toggleTracking = async () => {
     if (isTracking.value) {
       await stopStream()
       isTracking.value = false
-      stopPolling()
     } else {
       await startStream()
       isTracking.value = true
-      startPolling()
     }
   } catch (error: any) {
     console.error('Error toggling stream:', error)
@@ -1131,6 +1222,76 @@ const handleFilterChange = async () => {
   pagination.value.page = 1
   await loadTokens()
   await loadWalletStats()
+}
+
+const handleWalletInputFocus = () => {
+  walletInputFocused.value = true
+  showWalletDropdown.value = true
+  highlightedWalletIndex.value = -1
+  // Clear search query when focusing if a wallet is selected, to allow searching
+  if (selectedCreatorWallet.value) {
+    walletSearchQuery.value = ''
+  }
+}
+
+const handleWalletSelect = async (value: string) => {
+  selectedCreatorWallet.value = value
+  walletSearchQuery.value = ''
+  showWalletDropdown.value = false
+  walletInputFocused.value = false
+  highlightedWalletIndex.value = -1
+  await handleFilterChange()
+}
+
+const clearWalletSelection = async () => {
+  selectedCreatorWallet.value = ''
+  walletSearchQuery.value = ''
+  showWalletDropdown.value = false
+  walletInputFocused.value = false
+  highlightedWalletIndex.value = -1
+  await handleFilterChange()
+}
+
+const navigateWalletDropdown = (direction: number) => {
+  if (filteredWalletOptions.value.length === 0) return
+  
+  highlightedWalletIndex.value += direction
+  
+  if (highlightedWalletIndex.value < 0) {
+    highlightedWalletIndex.value = filteredWalletOptions.value.length - 1
+  } else if (highlightedWalletIndex.value >= filteredWalletOptions.value.length) {
+    highlightedWalletIndex.value = 0
+  }
+  
+  // Scroll into view if needed
+  nextTick(() => {
+    const dropdowns = document.querySelectorAll('.absolute.z-50')
+    if (dropdowns.length > 0) {
+      const dropdown = Array.from(dropdowns).find(el => 
+        el.querySelector(`[data-index="${highlightedWalletIndex.value}"]`)
+      ) as HTMLElement
+      if (dropdown) {
+        const highlighted = dropdown.querySelector(`[data-index="${highlightedWalletIndex.value}"]`) as HTMLElement
+        if (highlighted) {
+          highlighted.scrollIntoView({ block: 'nearest' })
+        }
+      }
+    }
+  })
+}
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  if (!target.closest('.relative.min-w-\\[250px\\]')) {
+    showWalletDropdown.value = false
+    walletInputFocused.value = false
+    highlightedWalletIndex.value = -1
+    // Restore display value if a wallet is selected
+    if (selectedCreatorWallet.value) {
+      walletSearchQuery.value = ''
+    }
+  }
 }
 
 const handleItemsPerPageChange = () => {
@@ -1539,26 +1700,19 @@ const loadTokens = async () => {
   }
 }
 
-const startPolling = () => {
-  // Only poll if tracking is active and we're on the first page
-  if (pollingInterval) {
-    clearInterval(pollingInterval)
+const handleRefresh = async () => {
+  if (refreshing.value) {
+    return
   }
-  
-  pollingInterval = setInterval(() => {
-    // Only refresh if tracking is active and on first page
-    if (isTracking.value && pagination.value.page === 1) {
-      loadTokens().catch(err => {
-        console.error('Error polling tokens:', err)
-      })
-    }
-  }, POLLING_INTERVAL_MS)
-}
 
-const stopPolling = () => {
-  if (pollingInterval) {
-    clearInterval(pollingInterval)
-    pollingInterval = null
+  refreshing.value = true
+  try {
+    await loadTokens()
+    await loadWalletStats()
+  } catch (err: any) {
+    console.error('Error refreshing data:', err)
+  } finally {
+    refreshing.value = false
   }
 }
 
@@ -1572,17 +1726,16 @@ onMounted(async () => {
     await loadTokens()
     await loadCreatorWallets()
     
-    // Start polling if tracking is active
-    if (isTracking.value) {
-      startPolling()
-    }
+    // Add click outside listener
+    document.addEventListener('click', handleClickOutside)
   } catch (error) {
     console.error('Error loading data:', error)
   }
 })
 
 onUnmounted(async () => {
-  stopPolling()
+  // Remove click outside listener
+  document.removeEventListener('click', handleClickOutside)
   
   if (isTracking.value) {
     try {
@@ -1590,24 +1743,6 @@ onUnmounted(async () => {
     } catch (error) {
       console.error('Error stopping stream on unmount:', error)
     }
-  }
-})
-
-// Watch tracking status to start/stop polling
-watch(isTracking, (newValue) => {
-  if (newValue) {
-    startPolling()
-  } else {
-    stopPolling()
-  }
-})
-
-// Watch pagination to stop polling when user navigates away from page 1
-watch(() => pagination.value.page, (newPage) => {
-  if (newPage !== 1 && pollingInterval) {
-    stopPolling()
-  } else if (newPage === 1 && isTracking.value && !pollingInterval) {
-    startPolling()
   }
 })
 

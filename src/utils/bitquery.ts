@@ -44,14 +44,10 @@ export async function fetchAthMarketCap(
     query GetAthMarketCap($tokens: [String!]!, $since: DateTime!) {
       Solana(dataset: combined) {
         DEXTradeByTokens(
+          limitBy: {by: Trade_Currency_MintAddress, count: 100}
           where: {
             Trade: {
-              Currency: {MintAddress: {in: $tokens}},
-              Side: {
-                Currency: {
-                  MintAddress: {in: ["11111111111111111111111111111111", "So11111111111111111111111111111111111111112"]}
-                }
-              }
+              Currency: {MintAddress: {in: $tokens}}
             },
             Block: {Time: {since: $since}}
           }
