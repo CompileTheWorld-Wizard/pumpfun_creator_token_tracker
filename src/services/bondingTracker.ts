@@ -355,9 +355,60 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
 
 /**
  * Cleanup function (for consistency with other trackers)
+ * Finalizes bonding status updates for any remaining tokens
  */
 export async function cleanupBondingTracker(): Promise<void> {
+  console.log('[BondingTracker] Cleaning up...');
+  
+  // Finalize bonding status for any unbonded tokens that might need checking
+  // This ensures we have the latest bonding status before stopping
+  try {
+    const unbondedTokens = await getUnbondedTokens();
+    
+    if (unbondedTokens.length > 0) {
+      console.log(`[BondingTracker] Finalizing bonding status for ${unbondedTokens.length} unbonded tokens...`);
+      
+      // Process in batches of 50
+      const batches: string[][] = [];
+      for (let i = 0; i < unbondedTokens.length; i += BATCH_SIZE) {
+        batches.push(unbondedTokens.slice(i, i + BATCH_SIZE));
+      }
+
+      let totalBondedFound = 0;
+
+      for (const batch of batches) {
+        const bondingStatusMap = await fetchBondingStatusBatch(batch);
+
+        // Collect bonded tokens
+        const bondedTokens: string[] = [];
+        for (const mint of batch) {
+          const isBonded = bondingStatusMap.get(mint) || false;
+          if (isBonded) {
+            bondedTokens.push(mint);
+          }
+        }
+
+        // Update database for bonded tokens
+        if (bondedTokens.length > 0) {
+          await updateBondingStatus(bondedTokens, true);
+          totalBondedFound += bondedTokens.length;
+        }
+
+        // Add a small delay between batches to avoid rate limiting
+        if (batches.indexOf(batch) < batches.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      }
+
+      if (totalBondedFound > 0) {
+        console.log(`[BondingTracker] Found ${totalBondedFound} newly bonded tokens during cleanup`);
+      }
+    }
+  } catch (error) {
+    console.error('[BondingTracker] Error during cleanup bonding status fetch:', error);
+  }
+  
   isInitialized = false;
-  console.log('[BondingTracker] Cleaned up');
+  console.log('[BondingTracker] Cleanup complete');
 }
 
