@@ -233,7 +233,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
           }
         }
         console.log(`[TokenTracker] Registered ${registeredCount} tokens for ATH tracking after 15-second delay`);
-      }, 15000); // 15 seconds delay
+      }, 2000); // 2 seconds delay
     }
   } catch (error) {
     console.error(`[TokenTracker] Error fetching creator tokens and bonding status:`, error);
