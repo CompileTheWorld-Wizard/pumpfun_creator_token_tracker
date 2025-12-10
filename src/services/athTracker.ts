@@ -7,7 +7,7 @@
 
 import { pool } from '../db.js';
 import { redis } from '../redis.js';
-import { fetchAthMarketCapBatched, type TokenAthData } from '../utils/bitquery.js';
+import { fetchAthMarketCap, type TokenAthData } from '../utils/bitquery.js';
 import type { TradeEventData, AmmBuyEventData, AmmSellEventData } from '../types.js';
 
 // Constants
@@ -171,9 +171,9 @@ function fetchAthFromBitqueryAsync(): void {
       // Convert to ISO string
       const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
 
-      // Fetch ATH from Bitquery
-      const tokenAddresses = Array.from(pendingTokenData.keys());
-      const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
+      // Fetch ATH from Bitquery (limit to 100 tokens per call)
+      const tokenAddresses = Array.from(pendingTokenData.keys()).slice(0, 100);
+      const athDataList = await fetchAthMarketCap(tokenAddresses, sinceTime);
 
       // Update token map with ATH data (only if higher than current)
       for (const athData of athDataList) {
@@ -263,6 +263,17 @@ export async function registerToken(
   }
 
   // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:1min)
+}
+
+/**
+ * Trigger ATH fetch immediately for pending tokens
+ * This is useful when tokens are fetched from Solscan and we want to fetch ATH right away
+ */
+export function triggerAthFetch(): void {
+  if (pendingTokenData.size > 0 && !bitqueryFetchScheduled) {
+    bitqueryFetchScheduled = true;
+    fetchAthFromBitqueryAsync();
+  }
 }
 
 /**
@@ -696,8 +707,9 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
     const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
     console.log(`[AthTracker] Fetching ATH from Bitquery since ${sinceTime} for ${tokenAddresses.length} tokens...`);
 
-    // Fetch ATH from Bitquery
-    const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
+    // Fetch ATH from Bitquery (limit to 100 tokens per call)
+    const limitedTokenAddresses = tokenAddresses.slice(0, 100);
+    const athDataList = await fetchAthMarketCap(limitedTokenAddresses, sinceTime);
 
     console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
 
@@ -760,8 +772,9 @@ export async function cleanupAthTracker(): Promise<void> {
     const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
 
     // Fetch ATH from Bitquery synchronously (blocking, but this is cleanup)
-    const tokenAddresses = Array.from(pendingTokenData.keys());
-    const athDataList = await fetchAthMarketCapBatched(tokenAddresses, sinceTime);
+    // Limit to 100 tokens per call
+    const tokenAddresses = Array.from(pendingTokenData.keys()).slice(0, 100);
+    const athDataList = await fetchAthMarketCap(tokenAddresses, sinceTime);
 
     console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery during cleanup`);
 

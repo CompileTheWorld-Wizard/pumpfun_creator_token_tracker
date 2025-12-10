@@ -19,7 +19,7 @@ export interface TokenAthData {
 
 /**
  * Fetch ATH market cap for multiple tokens from Bitquery
- * @param tokenAddresses Array of token mint addresses (max 50)
+ * @param tokenAddresses Array of token mint addresses (max 100)
  * @param sinceTime ISO timestamp string for earliest block time
  */
 export async function fetchAthMarketCap(
@@ -37,8 +37,8 @@ export async function fetchAthMarketCap(
     return [];
   }
 
-  // Limit to 50 tokens per request
-  const addresses = tokenAddresses.slice(0, 50);
+  // Limit to 100 tokens per request
+  const addresses = tokenAddresses.slice(0, 100);
   
   const query = `
     query GetAthMarketCap($tokens: [String!]!, $since: DateTime!) {
@@ -115,7 +115,7 @@ export async function fetchAthMarketCap(
 }
 
 /**
- * Fetch ATH for tokens in batches of 50
+ * Fetch ATH for tokens in batches of 100
  */
 export async function fetchAthMarketCapBatched(
   tokenAddresses: string[],
@@ -124,13 +124,13 @@ export async function fetchAthMarketCapBatched(
 ): Promise<TokenAthData[]> {
   const results: TokenAthData[] = [];
   
-  for (let i = 0; i < tokenAddresses.length; i += 50) {
-    const batch = tokenAddresses.slice(i, i + 50);
+  for (let i = 0; i < tokenAddresses.length; i += 100) {
+    const batch = tokenAddresses.slice(i, i + 100);
     const batchResults = await fetchAthMarketCap(batch, sinceTime);
     results.push(...batchResults);
     
     // Add delay between batches to avoid rate limiting
-    if (i + 50 < tokenAddresses.length) {
+    if (i + 100 < tokenAddresses.length) {
       await new Promise(resolve => setTimeout(resolve, batchDelayMs));
     }
   }
