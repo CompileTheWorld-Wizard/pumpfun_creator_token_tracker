@@ -141,8 +141,8 @@ async function getUnbondedTokens(): Promise<string[]> {
   try {
     const result = await pool.query(
       `SELECT mint 
-       FROM created_tokens
-       WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)
+       FROM tbl_soltrack_created_tokens
+       WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
          AND COALESCE(bonded, false) = false
        ORDER BY created_at DESC`
     );
@@ -169,7 +169,7 @@ async function updateBondingStatus(
     // Update multiple tokens at once using IN clause
     const placeholders = mintAddresses.map((_, i) => `$${i + 1}`).join(', ');
     await pool.query(
-      `UPDATE created_tokens 
+      `UPDATE tbl_soltrack_created_tokens 
        SET bonded = $${mintAddresses.length + 1}, 
            updated_at = NOW()
        WHERE mint IN (${placeholders})`,
@@ -269,7 +269,7 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
     // Get all tokens (bonded and unbonded) from this creator
     const result = await pool.query(
       `SELECT mint 
-       FROM created_tokens
+       FROM tbl_soltrack_created_tokens
        WHERE creator = $1`,
       [creatorAddress]
     );

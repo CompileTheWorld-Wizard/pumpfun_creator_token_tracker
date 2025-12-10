@@ -111,7 +111,7 @@ async function startServer() {
     // Test database connection
     const client = await pool.connect();
     
-    // Migrate creator_wallets to blacklist_creator if old table exists
+    // Migrate creator_wallets to tbl_soltrack_blacklist_creator if old table exists
     await client.query(`
       DO $$ 
       BEGIN
@@ -120,16 +120,32 @@ async function startServer() {
           WHERE table_name = 'creator_wallets'
         ) AND NOT EXISTS (
           SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'blacklist_creator'
+          WHERE table_name = 'tbl_soltrack_blacklist_creator'
         ) THEN
-          ALTER TABLE creator_wallets RENAME TO blacklist_creator;
+          ALTER TABLE creator_wallets RENAME TO tbl_soltrack_blacklist_creator;
         END IF;
       END $$;
     `);
     
-    // Create blacklist_creator table if it doesn't exist
+    // Migrate blacklist_creator to tbl_soltrack_blacklist_creator if old table exists
     await client.query(`
-      CREATE TABLE IF NOT EXISTS blacklist_creator (
+      DO $$ 
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'blacklist_creator'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'tbl_soltrack_blacklist_creator'
+        ) THEN
+          ALTER TABLE blacklist_creator RENAME TO tbl_soltrack_blacklist_creator;
+        END IF;
+      END $$;
+    `);
+    
+    // Create tbl_soltrack_blacklist_creator table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tbl_soltrack_blacklist_creator (
         id SERIAL PRIMARY KEY,
         wallet_address VARCHAR(64) NOT NULL UNIQUE,
         name VARCHAR(255),
@@ -144,9 +160,9 @@ async function startServer() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'blacklist_creator' AND column_name = 'name'
+          WHERE table_name = 'tbl_soltrack_blacklist_creator' AND column_name = 'name'
         ) THEN
-          ALTER TABLE blacklist_creator ADD COLUMN name VARCHAR(255);
+          ALTER TABLE tbl_soltrack_blacklist_creator ADD COLUMN name VARCHAR(255);
         END IF;
       END $$;
     `);
@@ -157,9 +173,9 @@ async function startServer() {
       BEGIN
         IF EXISTS (
           SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'blacklist_creator' AND column_name = 'user_id'
+          WHERE table_name = 'tbl_soltrack_blacklist_creator' AND column_name = 'user_id'
         ) THEN
-          ALTER TABLE blacklist_creator DROP COLUMN user_id;
+          ALTER TABLE tbl_soltrack_blacklist_creator DROP COLUMN user_id;
         END IF;
       END $$;
     `);
@@ -170,9 +186,25 @@ async function startServer() {
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM pg_constraint 
-          WHERE conname = 'blacklist_creator_wallet_address_key'
+          WHERE conname = 'tbl_soltrack_blacklist_creator_wallet_address_key'
         ) THEN
-          ALTER TABLE blacklist_creator ADD CONSTRAINT blacklist_creator_wallet_address_key UNIQUE (wallet_address);
+          ALTER TABLE tbl_soltrack_blacklist_creator ADD CONSTRAINT tbl_soltrack_blacklist_creator_wallet_address_key UNIQUE (wallet_address);
+        END IF;
+      END $$;
+    `);
+    
+    // Migrate created_tokens to tbl_soltrack_created_tokens if old table exists
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'created_tokens'
+        ) AND NOT EXISTS (
+          SELECT 1 FROM information_schema.tables 
+          WHERE table_name = 'tbl_soltrack_created_tokens'
+        ) THEN
+          ALTER TABLE created_tokens RENAME TO tbl_soltrack_created_tokens;
         END IF;
       END $$;
     `);
@@ -188,15 +220,15 @@ async function startServer() {
       )
     `);
     
-    // Add is_fetched column to created_tokens if it doesn't exist
+    // Add is_fetched column to tbl_soltrack_created_tokens if it doesn't exist
     await client.query(`
       DO $$ 
       BEGIN
         IF NOT EXISTS (
           SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'created_tokens' AND column_name = 'is_fetched'
+          WHERE table_name = 'tbl_soltrack_created_tokens' AND column_name = 'is_fetched'
         ) THEN
-          ALTER TABLE created_tokens ADD COLUMN is_fetched BOOLEAN DEFAULT FALSE;
+          ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN is_fetched BOOLEAN DEFAULT FALSE;
         END IF;
       END $$;
     `);

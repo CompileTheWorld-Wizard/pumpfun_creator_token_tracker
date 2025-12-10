@@ -100,7 +100,7 @@ router.post('/validate', requireAuth, async (req: Request, res: Response) => {
 router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
-      'SELECT wallet_address, name as nickname FROM blacklist_creator ORDER BY created_at DESC'
+      'SELECT wallet_address, name as nickname FROM tbl_soltrack_blacklist_creator ORDER BY created_at DESC'
     );
     
     const wallets = result.rows.map(row => ({
@@ -191,7 +191,7 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
     // Insert wallet into database
     try {
       await pool.query(
-        'INSERT INTO blacklist_creator (wallet_address, name) VALUES ($1, $2)',
+        'INSERT INTO tbl_soltrack_blacklist_creator (wallet_address, name) VALUES ($1, $2)',
         [trimmed, trimmedNickname]
       );
       
@@ -230,7 +230,7 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
     }
 
     const result = await pool.query(
-      'DELETE FROM blacklist_creator WHERE wallet_address = $1',
+      'DELETE FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1',
       [address]
     );
 
@@ -265,9 +265,9 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
       return;
     }
 
-    // Check if wallet has any tokens in created_tokens
+    // Check if wallet has any tokens in tbl_soltrack_created_tokens
     const tokenCheck = await pool.query(
-      'SELECT COUNT(*) as count FROM created_tokens WHERE creator = $1',
+      'SELECT COUNT(*) as count FROM tbl_soltrack_created_tokens WHERE creator = $1',
       [address]
     );
 
@@ -281,7 +281,7 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
 
     // Check if wallet is in blacklist (for updating stats)
     const walletCheck = await pool.query(
-      'SELECT wallet_address FROM blacklist_creator WHERE wallet_address = $1',
+      'SELECT wallet_address FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1',
       [address]
     );
 
@@ -311,7 +311,7 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
         COUNT(*) as total_tokens,
         COUNT(*) FILTER (WHERE bonded = true) as bonded_tokens,
         AVG(ath_market_cap_usd) FILTER (WHERE ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
-      FROM created_tokens
+      FROM tbl_soltrack_created_tokens
       WHERE creator = $1`,
       [address]
     );

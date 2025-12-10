@@ -82,8 +82,8 @@ async function loadTrackedTokensFromDb(): Promise<void> {
       `SELECT mint, name, symbol, creator, created_at,
               COALESCE(bonded, false) as bonded,
               COALESCE(ath_market_cap_usd, 0) as ath_market_cap_usd
-       FROM created_tokens
-       WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)`
+       FROM tbl_soltrack_created_tokens
+       WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)`
     );
 
     for (const row of result.rows) {
@@ -111,8 +111,8 @@ async function loadTrackedTokensFromDb(): Promise<void> {
         // Filtering logic: Fallback query also filters out blacklisted wallets
         const fallbackResult = await pool.query(
           `SELECT mint, name, symbol, creator, created_at
-           FROM created_tokens
-           WHERE creator NOT IN (SELECT wallet_address FROM blacklist_creator)`
+           FROM tbl_soltrack_created_tokens
+           WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)`
         );
 
         for (const row of fallbackResult.rows) {
@@ -268,13 +268,13 @@ export async function registerToken(
 /**
  * Check if a wallet is blacklisted
  * 
- * Filtering logic: Queries the blacklist_creator table to determine if the given wallet
+ * Filtering logic: Queries the tbl_soltrack_blacklist_creator table to determine if the given wallet
  * address is blacklisted. Returns true if the wallet exists in the blacklist.
  */
 async function isBlacklistedCreatorWallet(walletAddress: string): Promise<boolean> {
   try {
     const result = await pool.query(
-      'SELECT 1 FROM blacklist_creator WHERE wallet_address = $1 LIMIT 1',
+      'SELECT 1 FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1 LIMIT 1',
       [walletAddress]
     );
     return result.rows.length > 0;
@@ -546,14 +546,14 @@ async function saveAthDataToDb(): Promise<void> {
       if (athColumnsExist) {
         // Try with ATH columns
         await pool.query(
-          `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at, is_fetched)
+          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at, is_fetched)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
            ON CONFLICT (mint) DO UPDATE SET
-             name = COALESCE(EXCLUDED.name, created_tokens.name),
-             symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+             name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+             symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
              bonded = EXCLUDED.bonded,
-             ath_market_cap_usd = GREATEST(EXCLUDED.ath_market_cap_usd, COALESCE(created_tokens.ath_market_cap_usd, 0)),
-             is_fetched = created_tokens.is_fetched,
+             ath_market_cap_usd = GREATEST(EXCLUDED.ath_market_cap_usd, COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0)),
+             is_fetched = tbl_soltrack_created_tokens.is_fetched,
              updated_at = NOW()`,
           [
             token.mint,
@@ -569,12 +569,12 @@ async function saveAthDataToDb(): Promise<void> {
       } else {
         // Fallback: save without ATH columns
         await pool.query(
-          `INSERT INTO created_tokens (mint, name, symbol, creator, created_at, is_fetched)
+          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, created_at, is_fetched)
            VALUES ($1, $2, $3, $4, $5, $6)
            ON CONFLICT (mint) DO UPDATE SET
-             name = COALESCE(EXCLUDED.name, created_tokens.name),
-             symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
-             is_fetched = created_tokens.is_fetched,
+             name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+             symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
+             is_fetched = tbl_soltrack_created_tokens.is_fetched,
              updated_at = NOW()`,
           [
             token.mint,
@@ -597,12 +597,12 @@ async function saveAthDataToDb(): Promise<void> {
         // Retry with fallback query
         try {
           await pool.query(
-            `INSERT INTO created_tokens (mint, name, symbol, creator, created_at, is_fetched)
+            `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, created_at, is_fetched)
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (mint) DO UPDATE SET
-               name = COALESCE(EXCLUDED.name, created_tokens.name),
-               symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
-               is_fetched = created_tokens.is_fetched,
+               name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+               symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
+               is_fetched = tbl_soltrack_created_tokens.is_fetched,
                updated_at = NOW()`,
             [
               token.mint,
@@ -657,7 +657,7 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
     // Get all tokens from this creator
     const result = await pool.query(
       `SELECT mint, name, symbol, created_at, COALESCE(ath_market_cap_usd, 0) as current_ath
-       FROM created_tokens
+       FROM tbl_soltrack_created_tokens
        WHERE creator = $1`,
       [creatorAddress]
     );
@@ -708,7 +708,7 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
       if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
         try {
           await pool.query(
-            `UPDATE created_tokens 
+            `UPDATE tbl_soltrack_created_tokens 
              SET ath_market_cap_usd = GREATEST($1, COALESCE(ath_market_cap_usd, 0)),
                  updated_at = NOW()
              WHERE mint = $2`,

@@ -31,7 +31,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
       }
     } else {
       // Normal mode: exclude blacklisted wallets (show tokens NOT from blacklisted wallets)
-      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)';
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
       
       if (creatorWallet) {
         whereClause += ` AND ct.creator = $${paramIndex}`;
@@ -43,7 +43,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
     // Get total count
     const countResult = await pool.query(
       `SELECT COUNT(*) as total
-       FROM created_tokens ct
+       FROM tbl_soltrack_created_tokens ct
        ${whereClause}`,
       queryParams
     );
@@ -68,7 +68,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM created_tokens ct
+      FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       ORDER BY ct.created_at DESC
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -152,9 +152,9 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM created_tokens ct
+      FROM tbl_soltrack_created_tokens ct
       WHERE ct.mint = $1 
-        AND ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)
+        AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
       LIMIT 1`,
       [mint]
     );
@@ -210,7 +210,7 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
   }
 });
 
-// Get distinct creator wallets from created_tokens
+// Get distinct creator wallets from tbl_soltrack_created_tokens
 router.get('/creators/list', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
@@ -222,7 +222,7 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
       // Show all creator wallets that have tokens
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM created_tokens ct
+        FROM tbl_soltrack_created_tokens ct
         ORDER BY ct.creator ASC
       `;
       params = [];
@@ -230,8 +230,8 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
       // Show only creator wallets that have tokens AND are NOT blacklisted
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM created_tokens ct
-        WHERE ct.creator NOT IN (SELECT wallet_address FROM blacklist_creator)
+        FROM tbl_soltrack_created_tokens ct
+        WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
         ORDER BY ct.creator ASC
       `;
       params = [];

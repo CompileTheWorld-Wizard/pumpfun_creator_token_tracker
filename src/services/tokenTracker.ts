@@ -72,7 +72,7 @@ export async function initializeTokenTracker(): Promise<void> {
 /**
  * Refresh blacklisted creator wallets from the database
  * 
- * This function loads all blacklisted creator wallet addresses from the blacklist_creator table
+ * This function loads all blacklisted creator wallet addresses from the tbl_soltrack_blacklist_creator table
  * and stores them in memory for fast filtering. Tokens created by these wallets will NOT
  * be tracked for market cap data collection.
  */
@@ -80,7 +80,7 @@ export async function refreshBlacklistedWallets(): Promise<void> {
   try {
     // Load all blacklisted creator wallet addresses from database
     const result = await pool.query(
-      'SELECT DISTINCT wallet_address FROM blacklist_creator'
+      'SELECT DISTINCT wallet_address FROM tbl_soltrack_blacklist_creator'
     );
     blacklistedCreatorWallets = new Set(result.rows.map(row => row.wallet_address));
   } catch (error) {
@@ -174,13 +174,13 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       if (tokenData) {
         try {
           await pool.query(
-            `INSERT INTO created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
+            `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              ON CONFLICT (mint) DO UPDATE SET
-               name = COALESCE(EXCLUDED.name, created_tokens.name),
-               symbol = COALESCE(EXCLUDED.symbol, created_tokens.symbol),
+               name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+               symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
                bonded = EXCLUDED.bonded,
-               is_fetched = COALESCE(EXCLUDED.is_fetched, created_tokens.is_fetched),
+               is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
                updated_at = NOW()`,
             [
               mint,
@@ -459,7 +459,7 @@ async function saveTokenTrackingResult(
 ): Promise<void> {
   try {
     await pool.query(
-      `INSERT INTO created_tokens (
+      `INSERT INTO tbl_soltrack_created_tokens (
         mint,
         name,
         symbol,
@@ -480,7 +480,7 @@ async function saveTokenTrackingResult(
         peak_market_cap_usd = EXCLUDED.peak_market_cap_usd,
         final_market_cap_usd = EXCLUDED.final_market_cap_usd,
         trade_count_15s = EXCLUDED.trade_count_15s,
-        is_fetched = COALESCE(EXCLUDED.is_fetched, created_tokens.is_fetched),
+        is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
         updated_at = NOW()`,
       [
         result.mint,

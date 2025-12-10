@@ -175,8 +175,8 @@ router.post('/clear-database', async (req: Request, res: Response) => {
     }
 
     // Clear all data from database (except passwords table)
-    await pool.query('TRUNCATE TABLE created_tokens CASCADE');
-    await pool.query('TRUNCATE TABLE blacklist_creator CASCADE');
+    await pool.query('TRUNCATE TABLE tbl_soltrack_created_tokens CASCADE');
+    await pool.query('TRUNCATE TABLE tbl_soltrack_blacklist_creator CASCADE');
 
     console.log('[ClearDatabase] Database cleared successfully');
 

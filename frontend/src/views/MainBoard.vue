@@ -871,7 +871,7 @@ const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
 }
 
 const wallets = ref<Wallet[]>([])
-const creatorWallets = ref<string[]>([]) // Creator wallets from created_tokens (for filter)
+const creatorWallets = ref<string[]>([]) // Creator wallets from tbl_soltrack_created_tokens (for filter)
 const totalWalletsCount = ref<number>(0) // Total unique creator wallets from tokens
 const walletNicknameInput = ref('')
 const isTracking = ref(false)

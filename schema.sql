@@ -1,7 +1,7 @@
 -- Schema for pumpfun_creator_token_tracker
 
 -- Blacklist creator wallets table (if not exists)
-CREATE TABLE IF NOT EXISTS blacklist_creator (
+CREATE TABLE IF NOT EXISTS tbl_soltrack_blacklist_creator (
   id SERIAL PRIMARY KEY,
   wallet_address VARCHAR(64) NOT NULL UNIQUE,
   name VARCHAR(255),
@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS blacklist_creator (
 );
 
 -- Created tokens table for tracking tokens from target creators
-CREATE TABLE IF NOT EXISTS created_tokens (
+CREATE TABLE IF NOT EXISTS tbl_soltrack_created_tokens (
   id SERIAL PRIMARY KEY,
   mint VARCHAR(64) NOT NULL UNIQUE,
   name VARCHAR(255),
@@ -45,22 +45,22 @@ CREATE TABLE IF NOT EXISTS created_tokens (
 );
 
 -- Indexes for efficient queries
-CREATE INDEX IF NOT EXISTS idx_created_tokens_creator ON created_tokens(creator);
-CREATE INDEX IF NOT EXISTS idx_created_tokens_created_at ON created_tokens(created_at);
-CREATE INDEX IF NOT EXISTS idx_created_tokens_mint ON created_tokens(mint);
-CREATE INDEX IF NOT EXISTS idx_created_tokens_bonded ON created_tokens(bonded);
-CREATE INDEX IF NOT EXISTS idx_created_tokens_ath ON created_tokens(ath_market_cap_usd);
+CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_created_tokens_creator ON tbl_soltrack_created_tokens(creator);
+CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_created_tokens_created_at ON tbl_soltrack_created_tokens(created_at);
+CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_created_tokens_mint ON tbl_soltrack_created_tokens(mint);
+CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_created_tokens_bonded ON tbl_soltrack_created_tokens(bonded);
+CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_created_tokens_ath ON tbl_soltrack_created_tokens(ath_market_cap_usd);
 
 -- Migration: Add new columns to existing table (run if table already exists)
--- ALTER TABLE created_tokens ADD COLUMN IF NOT EXISTS bonded BOOLEAN DEFAULT FALSE;
--- ALTER TABLE created_tokens ADD COLUMN IF NOT EXISTS ath_market_cap_usd DECIMAL(20, 2);
--- ALTER TABLE created_tokens ADD COLUMN IF NOT EXISTS ath_updated_at TIMESTAMP;
+-- ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN IF NOT EXISTS bonded BOOLEAN DEFAULT FALSE;
+-- ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN IF NOT EXISTS ath_market_cap_usd DECIMAL(20, 2);
+-- ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN IF NOT EXISTS ath_updated_at TIMESTAMP;
 
 -- Foreign key to link created tokens to registered creator wallets
 -- (optional, uncomment if you want strict referential integrity)
--- ALTER TABLE created_tokens 
+-- ALTER TABLE tbl_soltrack_created_tokens 
 -- ADD CONSTRAINT fk_creator_wallet 
--- FOREIGN KEY (creator) REFERENCES blacklist_creator(wallet_address);
+-- FOREIGN KEY (creator) REFERENCES tbl_soltrack_blacklist_creator(wallet_address);
 
 -- Password table for authentication
 CREATE TABLE IF NOT EXISTS passwords (
