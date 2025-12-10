@@ -92,13 +92,26 @@ export async function fetchAthMarketCap(
     const result: any = await response.json();
     
     if (result.errors) {
-      console.error('[Bitquery] GraphQL errors:', result.errors);
+      console.error('[Bitquery] GraphQL errors:', JSON.stringify(result.errors, null, 2));
+      return [];
+    }
+
+    // Log full response structure for debugging (first time only)
+    if (!result.data) {
+      console.error('[Bitquery] No data in response:', JSON.stringify(result, null, 2));
       return [];
     }
 
     const trades = result.data?.Solana?.DEXTradeByTokens || [];
     
     console.log(`[Bitquery] Received ${trades.length} trades for ${addresses.length} tokens`);
+    
+    // Log sample trade structure for debugging
+    if (trades.length > 0) {
+      console.log('[Bitquery] Sample trade structure:', JSON.stringify(trades[0], null, 2));
+    } else {
+      console.log(`[Bitquery] No trades found. Full response data:`, JSON.stringify(result.data, null, 2));
+    }
     
     const athDataList: TokenAthData[] = trades.map((trade: any) => {
       const mintAddress = trade.Trade?.Currency?.MintAddress || '';

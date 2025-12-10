@@ -179,15 +179,18 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Update token map with ATH data (only if higher than current)
       let updatedCount = 0;
+      const processedMints = new Set<string>();
+      
       for (const athData of athDataList) {
         const existing = tokenAthMap.get(athData.mintAddress);
         if (existing) {
-          // Only update if Bitquery ATH is higher than current
-          if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
+          processedMints.add(athData.mintAddress);
+          // Only update if Bitquery ATH is higher than current (or if current is 0 and we have data)
+          if (athData.athMarketCapUsd >= existing.athMarketCapUsd && athData.athMarketCapUsd > 0) {
             existing.athMarketCapUsd = athData.athMarketCapUsd;
             existing.dirty = true;
             updatedCount++;
-            console.log(`[AthTracker] Updated ATH for ${athData.mintAddress}: $${athData.athMarketCapUsd.toFixed(2)}`);
+            console.log(`[AthTracker] Updated ATH for ${athData.mintAddress} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
           }
           // Update name/symbol if missing
           if (!existing.name && athData.name) existing.name = athData.name;
@@ -196,11 +199,18 @@ function fetchAthFromBitqueryAsync(): void {
           console.log(`[AthTracker] Token ${athData.mintAddress} not found in tokenAthMap`);
         }
       }
-      console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data`);
-
-      // Clear pending data
-      pendingTokenData.clear();
-      bitqueryFetchScheduled = false;
+      
+      // Remove processed tokens from pending data
+      for (const mint of processedMints) {
+        pendingTokenData.delete(mint);
+      }
+      
+      // If we processed all pending tokens (or less than 100), clear the scheduled flag
+      if (tokenAddresses.length < 100 || pendingTokenData.size === 0) {
+        bitqueryFetchScheduled = false;
+      }
+      
+      console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data, ${pendingTokenData.size} tokens still pending`);
     } catch (error) {
       console.error('[AthTracker] Error fetching ATH from Bitquery:', error);
       bitqueryFetchScheduled = false;
