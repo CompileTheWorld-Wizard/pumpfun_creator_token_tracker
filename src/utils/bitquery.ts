@@ -98,14 +98,36 @@ export async function fetchAthMarketCap(
 
     const trades = result.data?.Solana?.DEXTradeByTokens || [];
     
-    const athDataList: TokenAthData[] = trades.map((trade: any) => ({
-      mintAddress: trade.Trade?.Currency?.MintAddress || '',
-      name: trade.Trade?.Currency?.Name || '',
-      symbol: trade.Trade?.Currency?.Symbol || '',
-      athPriceUsd: parseFloat(trade.max) || 0,
-      athMarketCapUsd: parseFloat(trade.ATH_Marketcap) || 0,
-    })).filter((data: TokenAthData) => data.mintAddress);
+    console.log(`[Bitquery] Received ${trades.length} trades for ${addresses.length} tokens`);
+    
+    const athDataList: TokenAthData[] = trades.map((trade: any) => {
+      const mintAddress = trade.Trade?.Currency?.MintAddress || '';
+      const maxPrice = trade.max;
+      const athMarketcap = trade.ATH_Marketcap;
+      
+      // Log for debugging
+      if (!mintAddress || !maxPrice || !athMarketcap) {
+        console.log(`[Bitquery] Missing data for trade:`, {
+          mintAddress,
+          maxPrice,
+          athMarketcap,
+          trade: JSON.stringify(trade).substring(0, 200)
+        });
+      }
+      
+      return {
+        mintAddress,
+        name: trade.Trade?.Currency?.Name || '',
+        symbol: trade.Trade?.Currency?.Symbol || '',
+        athPriceUsd: maxPrice ? parseFloat(maxPrice) : 0,
+        athMarketCapUsd: athMarketcap ? parseFloat(athMarketcap) : 0,
+      };
+    }).filter((data: TokenAthData) => data.mintAddress);
 
+    console.log(`[Bitquery] Processed ${athDataList.length} tokens with ATH data`);
+    if (athDataList.length > 0) {
+      console.log(`[Bitquery] Sample ATH data:`, athDataList[0]);
+    }
     
     return athDataList;
   } catch (error) {

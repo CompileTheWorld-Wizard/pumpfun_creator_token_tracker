@@ -173,9 +173,12 @@ function fetchAthFromBitqueryAsync(): void {
 
       // Fetch ATH from Bitquery (limit to 100 tokens per call)
       const tokenAddresses = Array.from(pendingTokenData.keys()).slice(0, 100);
+      console.log(`[AthTracker] Fetching ATH for ${tokenAddresses.length} tokens since ${sinceTime}`);
       const athDataList = await fetchAthMarketCap(tokenAddresses, sinceTime);
+      console.log(`[AthTracker] Received ${athDataList.length} ATH results from Bitquery`);
 
       // Update token map with ATH data (only if higher than current)
+      let updatedCount = 0;
       for (const athData of athDataList) {
         const existing = tokenAthMap.get(athData.mintAddress);
         if (existing) {
@@ -183,12 +186,17 @@ function fetchAthFromBitqueryAsync(): void {
           if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
             existing.athMarketCapUsd = athData.athMarketCapUsd;
             existing.dirty = true;
+            updatedCount++;
+            console.log(`[AthTracker] Updated ATH for ${athData.mintAddress}: $${athData.athMarketCapUsd.toFixed(2)}`);
           }
           // Update name/symbol if missing
           if (!existing.name && athData.name) existing.name = athData.name;
           if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
+        } else {
+          console.log(`[AthTracker] Token ${athData.mintAddress} not found in tokenAthMap`);
         }
       }
+      console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data`);
 
       // Clear pending data
       pendingTokenData.clear();
