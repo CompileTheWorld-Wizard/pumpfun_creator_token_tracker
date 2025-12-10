@@ -10,7 +10,7 @@ import { redis } from '../redis.js';
 import type { CreateEventData, TradeEventData } from '../types.js';
 import { getCreatedTokens } from '../utils/solscan.js';
 import { fetchBondingStatusBatch } from './bondingTracker.js';
-import { registerToken as registerTokenForAth, triggerAthFetch } from './athTracker.js';
+import { registerToken as registerTokenForAth, fetchAthForTokens } from './athTracker.js';
 
 // Constants
 const COLLECTION_DELAY_MS = 20000; // Wait 20 seconds before collecting data
@@ -165,8 +165,9 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
     // Fetch bonding status for all tokens using Shyft GraphQL API
     const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
     
-    // Save tokens to database and register for ATH tracking
-    let registeredCount = 0;
+    // Save tokens to database and prepare for ATH fetching
+    const tokensForAth: Array<{ mint: string; name: string; symbol: string; creator: string; blockTime: number }> = [];
+    
     for (const mint of tokenMints) {
       const tokenData = tokenDataMap.get(mint);
       const isBonded = bondingStatusMap.get(mint) || false;
@@ -193,7 +194,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
             ]
           );
 
-          // Register token in ATH tracker for Bitquery ATH fetching
+          // Register token in ATH tracker (for real-time tracking)
           // Only register if creator is not blacklisted (registerToken checks this internally)
           try {
             await registerTokenForAth(
@@ -203,7 +204,15 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               creatorAddress,
               tokenData.blockTime * 1000 // Convert to milliseconds
             );
-            registeredCount++;
+            
+            // Add to list for ATH fetching
+            tokensForAth.push({
+              mint,
+              name: tokenData.name,
+              symbol: tokenData.symbol,
+              creator: creatorAddress,
+              blockTime: tokenData.blockTime,
+            });
           } catch (athError) {
             // Log but don't fail - ATH registration might fail if creator is blacklisted
             console.log(`[TokenTracker] Token ${mint} not registered for ATH tracking (may be blacklisted)`);
@@ -214,11 +223,17 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       }
     }
     
-    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded, ${registeredCount} registered for ATH tracking`);
+    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded`);
     
-    // Trigger ATH fetch immediately for the registered tokens
-    if (registeredCount > 0) {
-      triggerAthFetch();
+    // Fetch ATH for all tokens immediately
+    if (tokensForAth.length > 0) {
+      console.log(`[TokenTracker] Fetching ATH for ${tokensForAth.length} tokens from Bitquery...`);
+      try {
+        await fetchAthForTokens(tokensForAth);
+        console.log(`[TokenTracker] Completed ATH fetching for ${tokensForAth.length} tokens`);
+      } catch (error) {
+        console.error(`[TokenTracker] Error fetching ATH for tokens:`, error);
+      }
     }
   } catch (error) {
     console.error(`[TokenTracker] Error fetching creator tokens and bonding status:`, error);

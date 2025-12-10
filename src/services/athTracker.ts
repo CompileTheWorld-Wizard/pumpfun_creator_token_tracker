@@ -45,29 +45,10 @@ export async function initializeAthTracker(): Promise<void> {
   // Load existing tracked tokens from database
   await loadTrackedTokensFromDb();
 
-  // Populate pendingTokenData for tokens that need ATH fetching (those with ATH = 0)
-  for (const [mint, tokenInfo] of tokenAthMap.entries()) {
-    if (tokenInfo.athMarketCapUsd === 0) {
-      const blockTime = Math.floor(tokenInfo.createdAt / 1000);
-      pendingTokenData.set(mint, {
-        mint,
-        name: tokenInfo.name,
-        symbol: tokenInfo.symbol,
-        creator: tokenInfo.creator,
-        blockTime,
-      });
-    }
-  }
-
   // Start periodic save
   startPeriodicSave();
 
   isInitialized = true;
-
-  // Fetch ATH from Bitquery in background (async - don't block stream start)
-  if (pendingTokenData.size > 0) {
-    fetchAthFromBitqueryAsync();
-  }
 }
 
 /**
@@ -138,84 +119,118 @@ async function loadTrackedTokensFromDb(): Promise<void> {
   }
 }
 
-// Store token data for Bitquery fetch
-let pendingTokenData: Map<string, { mint: string; name: string; symbol: string; creator: string; blockTime: number }> = new Map();
-let bitqueryFetchScheduled = false; // Flag to prevent multiple concurrent fetches
-
-
 /**
- * Fetch ATH from Bitquery in background (async, non-blocking)
+ * Fetch ATH for a list of tokens immediately
+ * Used when tokens are fetched from Solscan for a new creator wallet
  */
-function fetchAthFromBitqueryAsync(): void {
-  // Run in background without blocking
-  (async () => {
-    try {
-      if (pendingTokenData.size === 0) {
-        return;
-      }
+export async function fetchAthForTokens(
+  tokens: Array<{ mint: string; name: string; symbol: string; creator: string; blockTime: number }>
+): Promise<void> {
+  if (tokens.length === 0) {
+    return;
+  }
 
-      // Find earliest block time for Bitquery query
-      let earliestBlockTime = Math.floor(Date.now() / 1000);
-      const tokenDetails: Array<{ mint: string; name: string; symbol: string; blockTime: number }> = [];
-      for (const data of pendingTokenData.values()) {
-        tokenDetails.push(data);
-        if (data.blockTime < earliestBlockTime) {
-          earliestBlockTime = data.blockTime;
-        }
+  try {
+    // Find earliest block time for Bitquery query
+    let earliestBlockTime = Math.floor(Date.now() / 1000);
+    for (const token of tokens) {
+      if (token.blockTime < earliestBlockTime) {
+        earliestBlockTime = token.blockTime;
       }
-
-      // Subtract 1 day (86400 seconds) to account for timezone issues
-      const ONE_DAY_SECONDS = 86400;
-      const adjustedBlockTime = earliestBlockTime - ONE_DAY_SECONDS;
-
-      // Convert to ISO string
-      const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
-
-      // Fetch ATH from Bitquery (limit to 100 tokens per call)
-      const tokenAddresses = Array.from(pendingTokenData.keys()).slice(0, 100);
-      console.log(`[AthTracker] Fetching ATH for ${tokenAddresses.length} tokens since ${sinceTime}`);
-      const athDataList = await fetchAthMarketCap(tokenAddresses, sinceTime);
-      console.log(`[AthTracker] Received ${athDataList.length} ATH results from Bitquery`);
-
-      // Update token map with ATH data (only if higher than current)
-      let updatedCount = 0;
-      const processedMints = new Set<string>();
-      
-      for (const athData of athDataList) {
-        const existing = tokenAthMap.get(athData.mintAddress);
-        if (existing) {
-          processedMints.add(athData.mintAddress);
-          // Only update if Bitquery ATH is higher than current (or if current is 0 and we have data)
-          if (athData.athMarketCapUsd >= existing.athMarketCapUsd && athData.athMarketCapUsd > 0) {
-            existing.athMarketCapUsd = athData.athMarketCapUsd;
-            existing.dirty = true;
-            updatedCount++;
-            console.log(`[AthTracker] Updated ATH for ${athData.mintAddress} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
-          }
-          // Update name/symbol if missing
-          if (!existing.name && athData.name) existing.name = athData.name;
-          if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
-        } else {
-          console.log(`[AthTracker] Token ${athData.mintAddress} not found in tokenAthMap`);
-        }
-      }
-      
-      // Remove processed tokens from pending data
-      for (const mint of processedMints) {
-        pendingTokenData.delete(mint);
-      }
-      
-      // If we processed all pending tokens (or less than 100), clear the scheduled flag
-      if (tokenAddresses.length < 100 || pendingTokenData.size === 0) {
-        bitqueryFetchScheduled = false;
-      }
-      
-      console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data, ${pendingTokenData.size} tokens still pending`);
-    } catch (error) {
-      console.error('[AthTracker] Error fetching ATH from Bitquery:', error);
-      bitqueryFetchScheduled = false;
     }
-  })();
+
+    // Subtract 1 day (86400 seconds) to account for timezone issues
+    const ONE_DAY_SECONDS = 86400;
+    const adjustedBlockTime = earliestBlockTime - ONE_DAY_SECONDS;
+    const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
+
+    // Process tokens in batches of 100
+    const tokenAddresses = tokens.map(t => t.mint);
+    console.log(`[AthTracker] Fetching ATH for ${tokenAddresses.length} tokens from Solscan since ${sinceTime}`);
+
+    // Process in batches of 100
+    for (let i = 0; i < tokenAddresses.length; i += 100) {
+      const batch = tokenAddresses.slice(i, i + 100);
+      console.log(`[AthTracker] Processing batch ${Math.floor(i / 100) + 1}: ${batch.length} tokens`);
+      
+      const athDataList = await fetchAthMarketCap(batch, sinceTime);
+      console.log(`[AthTracker] Received ${athDataList.length} ATH results from Bitquery for this batch`);
+
+      // Create a map of results for quick lookup
+      const resultMap = new Map<string, TokenAthData>();
+      for (const athData of athDataList) {
+        resultMap.set(athData.mintAddress, athData);
+      }
+
+      // Update token map and database with ATH data
+      let updatedCount = 0;
+      for (const mint of batch) {
+        const athData = resultMap.get(mint);
+        const existing = tokenAthMap.get(mint);
+        const tokenInfo = tokens.find(t => t.mint === mint);
+
+        if (existing) {
+          if (athData) {
+            // Only update if Bitquery ATH is higher than current (or if current is 0 and we have data)
+            if (athData.athMarketCapUsd >= existing.athMarketCapUsd && athData.athMarketCapUsd > 0) {
+              existing.athMarketCapUsd = athData.athMarketCapUsd;
+              existing.dirty = true;
+              updatedCount++;
+              console.log(`[AthTracker] Updated ATH for ${mint} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
+            }
+            // Update name/symbol if missing
+            if (!existing.name && athData.name) existing.name = athData.name;
+            if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
+          }
+        } else if (tokenInfo) {
+          // Token not in map yet, add it
+          tokenAthMap.set(mint, {
+            mint,
+            name: tokenInfo.name,
+            symbol: tokenInfo.symbol,
+            creator: tokenInfo.creator,
+            bonded: false,
+            athMarketCapUsd: athData?.athMarketCapUsd || 0,
+            currentMarketCapUsd: 0,
+            lastUpdated: Date.now(),
+            createdAt: tokenInfo.blockTime * 1000,
+            dirty: true,
+          });
+          if (athData && athData.athMarketCapUsd > 0) {
+            updatedCount++;
+            console.log(`[AthTracker] Added ATH for ${mint} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
+          }
+        }
+
+        // Update database directly
+        if (athData && athData.athMarketCapUsd > 0) {
+          try {
+            await pool.query(
+              `UPDATE tbl_soltrack_created_tokens 
+               SET ath_market_cap_usd = GREATEST($1, COALESCE(ath_market_cap_usd, 0)),
+                   updated_at = NOW()
+               WHERE mint = $2`,
+              [athData.athMarketCapUsd, mint]
+            );
+          } catch (error) {
+            console.error(`[AthTracker] Error updating ATH in database for ${mint}:`, error);
+          }
+        }
+      }
+
+      console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data in this batch`);
+
+      // Small delay between batches to avoid rate limiting
+      if (i + 100 < tokenAddresses.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    console.log(`[AthTracker] Completed fetching ATH for all ${tokenAddresses.length} tokens`);
+  } catch (error) {
+    console.error('[AthTracker] Error fetching ATH for tokens:', error);
+    throw error;
+  }
 }
 
 /**
@@ -235,9 +250,6 @@ export async function registerToken(
     return;
   }
 
-  // Convert createdAt (milliseconds) to blockTime (seconds) for Bitquery
-  const blockTime = Math.floor(createdAt / 1000);
-
   // Add to in-memory map
   tokenAthMap.set(mint, {
     mint,
@@ -252,47 +264,10 @@ export async function registerToken(
     dirty: true,
   });
 
-  // Add to pendingTokenData for Bitquery ATH fetching
-  pendingTokenData.set(mint, {
-    mint,
-    name,
-    symbol,
-    creator,
-    blockTime,
-  });
-
-  // Trigger Bitquery fetch in background (non-blocking)
-  // Batch tokens: fetch immediately if we have 10+ tokens, otherwise wait 5s to accumulate
-  if (!bitqueryFetchScheduled) {
-    if (pendingTokenData.size >= 10) {
-      // Fetch immediately for batches
-      bitqueryFetchScheduled = true;
-      fetchAthFromBitqueryAsync();
-    } else {
-      // Schedule fetch after delay to accumulate more tokens
-      bitqueryFetchScheduled = true;
-      setTimeout(() => {
-        bitqueryFetchScheduled = false;
-        if (pendingTokenData.size > 0) {
-          fetchAthFromBitqueryAsync();
-        }
-      }, 5000); // Wait 5s to accumulate more tokens
-    }
-  }
-
   // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:1min)
+  // ATH fetching for real-time tokens is handled separately via trade events
 }
 
-/**
- * Trigger ATH fetch immediately for pending tokens
- * This is useful when tokens are fetched from Solscan and we want to fetch ATH right away
- */
-export function triggerAthFetch(): void {
-  if (pendingTokenData.size > 0 && !bitqueryFetchScheduled) {
-    bitqueryFetchScheduled = true;
-    fetchAthFromBitqueryAsync();
-  }
-}
 
 /**
  * Check if a wallet is blacklisted
@@ -772,50 +747,7 @@ export async function cleanupAthTracker(): Promise<void> {
     saveInterval = null;
   }
 
-  // Finalize pending ATH fetches before cleanup
-  if (pendingTokenData.size > 0) {
-    console.log(`[AthTracker] Finalizing ${pendingTokenData.size} pending ATH fetches...`);
-    
-    // Find earliest block time for Bitquery query
-    let earliestBlockTime = Math.floor(Date.now() / 1000);
-    for (const data of pendingTokenData.values()) {
-      if (data.blockTime < earliestBlockTime) {
-        earliestBlockTime = data.blockTime;
-      }
-    }
-
-    // Subtract 1 day (86400 seconds) to account for timezone issues
-    const ONE_DAY_SECONDS = 86400;
-    const adjustedBlockTime = earliestBlockTime - ONE_DAY_SECONDS;
-    const sinceTime = new Date(adjustedBlockTime * 1000).toISOString();
-
-    // Fetch ATH from Bitquery synchronously (blocking, but this is cleanup)
-    // Limit to 100 tokens per call
-    const tokenAddresses = Array.from(pendingTokenData.keys()).slice(0, 100);
-    const athDataList = await fetchAthMarketCap(tokenAddresses, sinceTime);
-
-    console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery during cleanup`);
-
-    // Update token map with ATH data (only if higher than current)
-    for (const athData of athDataList) {
-      const existing = tokenAthMap.get(athData.mintAddress);
-      if (existing) {
-        // Only update if Bitquery ATH is higher than current
-        if (athData.athMarketCapUsd > existing.athMarketCapUsd) {
-          existing.athMarketCapUsd = athData.athMarketCapUsd;
-          existing.dirty = true;
-          console.log(`[AthTracker] Updated ATH from Bitquery for ${existing.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
-        }
-        // Update name/symbol if missing
-        if (!existing.name && athData.name) existing.name = athData.name;
-        if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
-      }
-    }
-
-    // Clear pending data
-    pendingTokenData.clear();
-    console.log('[AthTracker] Pending ATH fetches finalized');
-  }
+  // No pending queue to process - tokens are fetched immediately when fetched from Solscan
 
   // Final save
   await saveAthDataToDb();
