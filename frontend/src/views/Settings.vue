@@ -47,7 +47,7 @@
             </button>
             <button
               @click="showEditDialog = true"
-              :disabled="!selectedPresetId"
+              :disabled="!selectedPresetId || isSelectedPresetDefault"
               class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Edit Settings
@@ -1102,6 +1102,12 @@ const saveEdit = () => {
 // Watch for edit dialog opening
 watch(showEditDialog, (isOpen) => {
   if (isOpen) {
+    // Prevent opening edit dialog for default preset
+    if (isSelectedPresetDefault.value) {
+      showEditDialog.value = false
+      alert('Cannot edit the default preset. Please create a new preset or set another preset as default first.')
+      return
+    }
     editSettings.value = JSON.parse(JSON.stringify(settings.value))
   }
 })
