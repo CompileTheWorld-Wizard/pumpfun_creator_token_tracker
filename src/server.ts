@@ -268,6 +268,17 @@ async function startServer() {
       END $$;
     `);
     
+    // Create table for currently applied settings (only one row allowed)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tbl_soltrack_applied_settings (
+        id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+        preset_id INTEGER REFERENCES tbl_soltrack_scoring_settings(id) ON DELETE SET NULL,
+        settings JSONB NOT NULL,
+        applied_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
     // Initialize default password if no password exists
     const passwordCheck = await client.query(
       'SELECT COUNT(*) as count FROM passwords'

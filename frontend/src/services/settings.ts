@@ -213,3 +213,55 @@ export async function setDefaultPreset(id: number): Promise<ScoringPreset> {
   return await response.json();
 }
 
+export interface AppliedSettings {
+  presetId: number | null;
+  settings: ScoringSettings;
+  appliedAt: string | null;
+  updatedAt: string | null;
+}
+
+export async function getAppliedSettings(): Promise<AppliedSettings> {
+  const response = await fetch(`${API_BASE_URL}/settings/applied/get`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch applied settings');
+  }
+
+  return await response.json();
+}
+
+export async function applySettings(settings: ScoringSettings, presetId?: number): Promise<AppliedSettings> {
+  const response = await fetch(`${API_BASE_URL}/settings/applied/apply`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ settings, presetId }),
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    if (response.status === 400) {
+      const error = await response.json();
+      throw new Error(error.errors ? error.errors.join(', ') : error.error || 'Validation failed');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to apply settings');
+  }
+
+  return await response.json();
+}
+

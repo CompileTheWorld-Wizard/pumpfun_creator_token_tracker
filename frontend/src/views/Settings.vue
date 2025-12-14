@@ -52,7 +52,21 @@
             >
               Delete
             </button>
+            <button
+              @click="handleApplySettings"
+              :disabled="applying"
+              class="px-4 py-2 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <span v-if="applying" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+              <span v-else>Apply Settings</span>
+            </button>
           </div>
+        </div>
+        <div v-if="appliedPresetId" class="mt-3 text-sm">
+          <span class="text-gray-400">Currently Applied: </span>
+          <span class="text-green-400 font-semibold">
+            {{ presets.find(p => p.id === appliedPresetId)?.name || 'Custom Settings' }}
+          </span>
         </div>
       </div>
 
@@ -576,18 +590,22 @@ import {
   createScoringPreset,
   updateScoringPreset,
   deleteScoringPreset,
+  getAppliedSettings,
+  applySettings,
   type ScoringSettings,
   type ScoringPreset
 } from '../services/settings'
 
 const presets = ref<ScoringPreset[]>([])
 const selectedPresetId = ref<number | ''>('')
+const appliedPresetId = ref<number | null>(null)
 const showSaveDialog = ref(false)
 const showDeleteDialog = ref(false)
 const presetName = ref('')
 const saveAsDefault = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
+const applying = ref(false)
 
 const isSelectedPresetDefault = computed(() => {
   if (!selectedPresetId.value) return false
@@ -763,19 +781,56 @@ const loadPresets = async () => {
   }
 }
 
-onMounted(async () => {
-  await loadPresets()
-  
-  // Try to load default preset
+const loadAppliedSettings = async () => {
   try {
-    const defaultPresetItem = presets.value.find(p => p.isDefault)
-    if (defaultPresetItem) {
-      selectedPresetId.value = defaultPresetItem.id
-      await loadPreset()
+    const applied = await getAppliedSettings()
+    appliedPresetId.value = applied.presetId
+    // If there are applied settings, load them into the form
+    if (applied.settings) {
+      settings.value = { ...applied.settings }
+      if (applied.presetId) {
+        selectedPresetId.value = applied.presetId
+      }
     }
   } catch (error: any) {
-    console.error('Error loading default preset:', error)
+    console.error('Error loading applied settings:', error)
+    // If no applied settings, load default preset
+    try {
+      const defaultPresetItem = presets.value.find(p => p.isDefault)
+      if (defaultPresetItem) {
+        selectedPresetId.value = defaultPresetItem.id
+        await loadPreset()
+        // Auto-apply default preset on first load
+        await handleApplySettings()
+      }
+    } catch (err: any) {
+      console.error('Error loading default preset:', err)
+    }
   }
+}
+
+const handleApplySettings = async () => {
+  // Validate tracking time
+  if (settings.value.trackingTimeSeconds < 15 || settings.value.trackingTimeSeconds > 120) {
+    alert('Tracking time must be between 15 and 120 seconds')
+    return
+  }
+
+  applying.value = true
+  try {
+    const applied = await applySettings(settings.value, selectedPresetId.value as number | undefined)
+    appliedPresetId.value = applied.presetId
+    alert('Settings applied successfully!')
+  } catch (error: any) {
+    alert(error.message || 'Failed to apply settings')
+  } finally {
+    applying.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadPresets()
+  await loadAppliedSettings()
 })
 </script>
 
