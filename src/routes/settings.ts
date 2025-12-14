@@ -251,15 +251,27 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<
   try {
     const { id } = req.params;
     
+    // Check if preset exists and if it's the default
+    const checkResult = await pool.query(
+      'SELECT id, is_default FROM tbl_soltrack_scoring_settings WHERE id = $1',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      res.status(404).json({ error: 'Preset not found' });
+      return;
+    }
+    
+    // Prevent deletion of default preset
+    if (checkResult.rows[0].is_default) {
+      res.status(400).json({ error: 'Cannot delete the default preset. Please set another preset as default first.' });
+      return;
+    }
+    
     const result = await pool.query(
       'DELETE FROM tbl_soltrack_scoring_settings WHERE id = $1 RETURNING id',
       [id]
     );
-    
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Preset not found' });
-      return;
-    }
     
     res.json({ success: true });
   } catch (error: any) {

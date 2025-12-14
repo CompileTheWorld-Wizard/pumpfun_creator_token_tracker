@@ -284,6 +284,109 @@ async function startServer() {
       );
     }
     
+    // Initialize default scoring settings if none exists
+    const scoringSettingsCheck = await client.query(
+      'SELECT COUNT(*) as count FROM tbl_soltrack_scoring_settings WHERE is_default = TRUE'
+    );
+    
+    if (parseInt(scoringSettingsCheck.rows[0].count) === 0) {
+      const defaultScoringSettings = {
+        trackingTimeSeconds: 15,
+        winRate: [
+          { min: 0, max: 20, score: 1 },
+          { min: 21, max: 40, score: 2 },
+          { min: 41, max: 60, score: 3 },
+          { min: 61, max: 80, score: 4 },
+          { min: 81, max: 100, score: 5 }
+        ],
+        avgAthMcap: [
+          { min: 0, max: 20, score: 1 },
+          { min: 21, max: 40, score: 2 },
+          { min: 41, max: 60, score: 3 },
+          { min: 61, max: 80, score: 4 },
+          { min: 81, max: 100, score: 5 }
+        ],
+        medianAthMcap: [
+          { min: 0, max: 20, score: 1 },
+          { min: 21, max: 40, score: 2 },
+          { min: 41, max: 60, score: 3 },
+          { min: 61, max: 80, score: 4 },
+          { min: 81, max: 100, score: 5 }
+        ],
+        multiplierConfigs: [
+          {
+            multiplier: 1.5,
+            ranges: [
+              { min: 0, max: 20, score: 1 },
+              { min: 21, max: 40, score: 2 },
+              { min: 41, max: 60, score: 3 },
+              { min: 61, max: 80, score: 4 },
+              { min: 81, max: 100, score: 5 }
+            ]
+          },
+          {
+            multiplier: 2,
+            ranges: [
+              { min: 0, max: 20, score: 1 },
+              { min: 21, max: 40, score: 2 },
+              { min: 41, max: 60, score: 3 },
+              { min: 61, max: 80, score: 4 },
+              { min: 81, max: 100, score: 5 }
+            ]
+          },
+          {
+            multiplier: 3,
+            ranges: [
+              { min: 0, max: 20, score: 1 },
+              { min: 21, max: 40, score: 2 },
+              { min: 41, max: 60, score: 3 },
+              { min: 61, max: 80, score: 4 },
+              { min: 81, max: 100, score: 5 }
+            ]
+          },
+          {
+            multiplier: 5,
+            ranges: [
+              { min: 0, max: 20, score: 1 },
+              { min: 21, max: 40, score: 2 },
+              { min: 41, max: 60, score: 3 },
+              { min: 61, max: 80, score: 4 },
+              { min: 81, max: 100, score: 5 }
+            ]
+          },
+          {
+            multiplier: 10,
+            ranges: [
+              { min: 0, max: 20, score: 1 },
+              { min: 21, max: 40, score: 2 },
+              { min: 41, max: 60, score: 3 },
+              { min: 61, max: 80, score: 4 },
+              { min: 81, max: 100, score: 5 }
+            ]
+          }
+        ],
+        avgRugRate: [
+          { min: 0, max: 20, score: -2 },
+          { min: 21, max: 40, score: -4 },
+          { min: 41, max: 60, score: -6 },
+          { min: 61, max: 80, score: -8 },
+          { min: 81, max: 100, score: -10 }
+        ],
+        avgRugRateByTimeBucket: [
+          { min: 1, max: 3, score: -10 },
+          { min: 3, max: 6, score: -8 },
+          { min: 6, max: 9, score: -6 },
+          { min: 9, max: 12, score: -4 },
+          { min: 12, max: 15, score: -2 }
+        ]
+      };
+      
+      await client.query(
+        'INSERT INTO tbl_soltrack_scoring_settings (name, settings, is_default) VALUES ($1, $2, $3)',
+        ['Default', JSON.stringify(defaultScoringSettings), true]
+      );
+    }
+    
     client.release();
 
     // Bind to 0.0.0.0 to allow external connections (required for remote server access)
