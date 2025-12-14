@@ -34,7 +34,6 @@
               @change="loadPreset"
               class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">-- Select Preset --</option>
               <option v-for="preset in presets" :key="preset.id" :value="preset.id">
                 {{ preset.name }} {{ preset.isDefault ? '(Default)' : '' }}
               </option>
@@ -1108,7 +1107,12 @@ watch(showEditDialog, (isOpen) => {
       alert('Cannot edit the default preset. Please create a new preset or set another preset as default first.')
       return
     }
-    editSettings.value = JSON.parse(JSON.stringify(settings.value))
+    // Only copy settings if editing an existing preset (not a new preset)
+    // For new presets, editSettings is already initialized with defaults in handleNewPreset()
+    if (selectedPresetId.value) {
+      editSettings.value = JSON.parse(JSON.stringify(settings.value))
+    }
+    // If selectedPresetId is empty, it's a new preset and editSettings already has defaults
   }
 })
 
