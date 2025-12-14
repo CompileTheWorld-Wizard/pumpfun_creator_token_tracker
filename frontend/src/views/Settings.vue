@@ -98,13 +98,18 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Win Rate -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <h2 class="text-lg font-bold text-gray-100 mb-4">Win Rate (0-100%)</h2>
-            <div v-if="displaySettings.winRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Win Rate (0-100%)</h2>
+              <span v-if="displaySettings.winRate.name" class="text-sm text-purple-400 font-semibold">
+                Name: {{ displaySettings.winRate.name }}
+              </span>
+            </div>
+            <div v-if="displaySettings.winRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
               No ranges configured
             </div>
             <div v-else class="space-y-2">
               <div
-                v-for="(range, index) in displaySettings.winRate"
+                v-for="(range, index) in displaySettings.winRate.ranges"
                 :key="index"
                 class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
@@ -119,13 +124,18 @@
 
           <!-- Avg ATH MCap -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <h2 class="text-lg font-bold text-gray-100 mb-4">Average ATH Market Cap (Percentile)</h2>
-            <div v-if="displaySettings.avgAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
+              <span v-if="displaySettings.avgAthMcap.name" class="text-sm text-purple-400 font-semibold">
+                Name: {{ displaySettings.avgAthMcap.name }}
+              </span>
+            </div>
+            <div v-if="displaySettings.avgAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
               No ranges configured
             </div>
             <div v-else class="space-y-2">
               <div
-                v-for="(range, index) in displaySettings.avgAthMcap"
+                v-for="(range, index) in displaySettings.avgAthMcap.ranges"
                 :key="index"
                 class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
@@ -140,13 +150,18 @@
 
           <!-- Median ATH MCap -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <h2 class="text-lg font-bold text-gray-100 mb-4">Median ATH Market Cap (Percentile)</h2>
-            <div v-if="displaySettings.medianAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
+              <span v-if="displaySettings.medianAthMcap.name" class="text-sm text-purple-400 font-semibold">
+                Name: {{ displaySettings.medianAthMcap.name }}
+              </span>
+            </div>
+            <div v-if="displaySettings.medianAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
               No ranges configured
             </div>
             <div v-else class="space-y-2">
               <div
-                v-for="(range, index) in displaySettings.medianAthMcap"
+                v-for="(range, index) in displaySettings.medianAthMcap.ranges"
                 :key="index"
                 class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
@@ -161,13 +176,18 @@
 
           <!-- Avg Rug Rate -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <h2 class="text-lg font-bold text-gray-100 mb-4">Average Rug Rate (%)</h2>
-            <div v-if="displaySettings.avgRugRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate (%)</h2>
+              <span v-if="displaySettings.avgRugRate.name" class="text-sm text-purple-400 font-semibold">
+                Name: {{ displaySettings.avgRugRate.name }}
+              </span>
+            </div>
+            <div v-if="displaySettings.avgRugRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
               No ranges configured
             </div>
             <div v-else class="space-y-2">
               <div
-                v-for="(range, index) in displaySettings.avgRugRate"
+                v-for="(range, index) in displaySettings.avgRugRate.ranges"
                 :key="index"
                 class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
@@ -182,13 +202,18 @@
 
           <!-- Avg Rug Rate by Time Bucket -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <h2 class="text-lg font-bold text-gray-100 mb-4">Average Rug Rate by Time Bucket (seconds)</h2>
-            <div v-if="displaySettings.avgRugRateByTimeBucket.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate by Time Bucket (seconds)</h2>
+              <span v-if="displaySettings.avgRugRateByTimeBucket.name" class="text-sm text-purple-400 font-semibold">
+                Name: {{ displaySettings.avgRugRateByTimeBucket.name }}
+              </span>
+            </div>
+            <div v-if="displaySettings.avgRugRateByTimeBucket.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
               No ranges configured
             </div>
             <div v-else class="space-y-2">
               <div
-                v-for="(range, index) in displaySettings.avgRugRateByTimeBucket"
+                v-for="(range, index) in displaySettings.avgRugRateByTimeBucket.ranges"
                 :key="index"
                 class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
@@ -292,9 +317,18 @@
                 Add Range
               </button>
             </div>
+            <div class="mb-4">
+              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+              <input
+                v-model="editSettings.winRate.name"
+                type="text"
+                placeholder="Enter name..."
+                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div class="space-y-2">
               <div
-                v-for="(range, index) in editSettings.winRate"
+                v-for="(range, index) in editSettings.winRate.ranges"
                 :key="index"
                 class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
@@ -332,7 +366,7 @@
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.winRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.winRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
@@ -349,9 +383,18 @@
                 Add Range
               </button>
             </div>
+            <div class="mb-4">
+              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+              <input
+                v-model="editSettings.avgAthMcap.name"
+                type="text"
+                placeholder="Enter name..."
+                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div class="space-y-2">
               <div
-                v-for="(range, index) in editSettings.avgAthMcap"
+                v-for="(range, index) in editSettings.avgAthMcap.ranges"
                 :key="index"
                 class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
@@ -389,7 +432,7 @@
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.avgAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.avgAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
@@ -406,9 +449,18 @@
                 Add Range
               </button>
             </div>
+            <div class="mb-4">
+              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+              <input
+                v-model="editSettings.medianAthMcap.name"
+                type="text"
+                placeholder="Enter name..."
+                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div class="space-y-2">
               <div
-                v-for="(range, index) in editSettings.medianAthMcap"
+                v-for="(range, index) in editSettings.medianAthMcap.ranges"
                 :key="index"
                 class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
@@ -446,7 +498,7 @@
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.medianAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.medianAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
@@ -463,9 +515,18 @@
                 Add Range
               </button>
             </div>
+            <div class="mb-4">
+              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+              <input
+                v-model="editSettings.avgRugRate.name"
+                type="text"
+                placeholder="Enter name..."
+                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div class="space-y-2">
               <div
-                v-for="(range, index) in editSettings.avgRugRate"
+                v-for="(range, index) in editSettings.avgRugRate.ranges"
                 :key="index"
                 class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
@@ -503,7 +564,7 @@
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.avgRugRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.avgRugRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
@@ -520,9 +581,18 @@
                 Add Range
               </button>
             </div>
+            <div class="mb-4">
+              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+              <input
+                v-model="editSettings.avgRugRateByTimeBucket.name"
+                type="text"
+                placeholder="Enter name..."
+                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
             <div class="space-y-2">
               <div
-                v-for="(range, index) in editSettings.avgRugRateByTimeBucket"
+                v-for="(range, index) in editSettings.avgRugRateByTimeBucket.ranges"
                 :key="index"
                 class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
@@ -558,7 +628,7 @@
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.avgRugRateByTimeBucket.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.avgRugRateByTimeBucket.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
@@ -601,6 +671,15 @@
                 >
                   Remove Multiplier
                 </button>
+              </div>
+              <div class="mb-3">
+                <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+                <input
+                  v-model="config.name"
+                  type="text"
+                  placeholder="Enter name..."
+                  class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
               </div>
               <div class="flex items-center justify-between mb-2">
                 <span class="text-sm text-gray-400">Ranges:</span>
@@ -817,36 +896,60 @@ const saving = ref(false)
 const deleting = ref(false)
 const applying = ref(false)
 
-const settings = ref<ScoringSettings>({
+// Helper to get default empty settings
+const getDefaultSettings = (): ScoringSettings => ({
   trackingTimeSeconds: 15,
-  winRate: [],
-  avgAthMcap: [],
-  medianAthMcap: [],
+  winRate: { ranges: [] },
+  avgAthMcap: { ranges: [] },
+  medianAthMcap: { ranges: [] },
   multiplierConfigs: [],
-  avgRugRate: [],
-  avgRugRateByTimeBucket: []
+  avgRugRate: { ranges: [] },
+  avgRugRateByTimeBucket: { ranges: [] }
 })
 
-const editSettings = ref<ScoringSettings>({
-  trackingTimeSeconds: 15,
-  winRate: [],
-  avgAthMcap: [],
-  medianAthMcap: [],
-  multiplierConfigs: [],
-  avgRugRate: [],
-  avgRugRateByTimeBucket: []
-})
+// Helper function to normalize settings (convert old format to new format if needed)
+const normalizeSettings = (settings: any): ScoringSettings => {
+  const normalized: ScoringSettings = {
+    trackingTimeSeconds: settings.trackingTimeSeconds || 15,
+    winRate: Array.isArray(settings.winRate) 
+      ? { ranges: settings.winRate } 
+      : (settings.winRate && typeof settings.winRate === 'object' && 'ranges' in settings.winRate
+          ? settings.winRate
+          : { ranges: [] }),
+    avgAthMcap: Array.isArray(settings.avgAthMcap)
+      ? { ranges: settings.avgAthMcap }
+      : (settings.avgAthMcap && typeof settings.avgAthMcap === 'object' && 'ranges' in settings.avgAthMcap
+          ? settings.avgAthMcap
+          : { ranges: [] }),
+    medianAthMcap: Array.isArray(settings.medianAthMcap)
+      ? { ranges: settings.medianAthMcap }
+      : (settings.medianAthMcap && typeof settings.medianAthMcap === 'object' && 'ranges' in settings.medianAthMcap
+          ? settings.medianAthMcap
+          : { ranges: [] }),
+    multiplierConfigs: Array.isArray(settings.multiplierConfigs) ? settings.multiplierConfigs : [],
+    avgRugRate: Array.isArray(settings.avgRugRate)
+      ? { ranges: settings.avgRugRate }
+      : (settings.avgRugRate && typeof settings.avgRugRate === 'object' && 'ranges' in settings.avgRugRate
+          ? settings.avgRugRate
+          : { ranges: [] }),
+    avgRugRateByTimeBucket: Array.isArray(settings.avgRugRateByTimeBucket)
+      ? { ranges: settings.avgRugRateByTimeBucket }
+      : (settings.avgRugRateByTimeBucket && typeof settings.avgRugRateByTimeBucket === 'object' && 'ranges' in settings.avgRugRateByTimeBucket
+          ? settings.avgRugRateByTimeBucket
+          : { ranges: [] })
+  }
+  return normalized
+}
+
+const settings = ref<ScoringSettings>(getDefaultSettings())
+
+const editSettings = ref<ScoringSettings>(getDefaultSettings())
 
 const displaySettings = computed(() => {
-  return selectedPresetId.value ? settings.value : (appliedPresetId.value ? settings.value : {
-    trackingTimeSeconds: 15,
-    winRate: [],
-    avgAthMcap: [],
-    medianAthMcap: [],
-    multiplierConfigs: [],
-    avgRugRate: [],
-    avgRugRateByTimeBucket: []
-  })
+  if (selectedPresetId.value || appliedPresetId.value) {
+    return normalizeSettings(settings.value)
+  }
+  return getDefaultSettings()
 })
 
 const isSelectedPresetDefault = computed(() => {
@@ -856,11 +959,16 @@ const isSelectedPresetDefault = computed(() => {
 })
 
 const addRange = (type: 'winRate' | 'avgAthMcap' | 'medianAthMcap' | 'avgRugRate') => {
-  editSettings.value[type].push({ min: 0, max: 100, score: 0 })
+  if (!editSettings.value[type].ranges) {
+    editSettings.value[type].ranges = []
+  }
+  editSettings.value[type].ranges.push({ min: 0, max: 100, score: 0 })
 }
 
 const removeRange = (type: 'winRate' | 'avgAthMcap' | 'medianAthMcap' | 'avgRugRate', index: number) => {
-  editSettings.value[type].splice(index, 1)
+  if (editSettings.value[type].ranges) {
+    editSettings.value[type].ranges.splice(index, 1)
+  }
 }
 
 const addMultiplierConfig = () => {
@@ -883,30 +991,27 @@ const removeRangeFromMultiplier = (configIndex: number, rangeIndex: number) => {
 }
 
 const addTimeBucketRange = () => {
-  editSettings.value.avgRugRateByTimeBucket.push({ min: 0, max: 120, score: 0 })
+  if (!editSettings.value.avgRugRateByTimeBucket.ranges) {
+    editSettings.value.avgRugRateByTimeBucket.ranges = []
+  }
+  editSettings.value.avgRugRateByTimeBucket.ranges.push({ min: 0, max: 120, score: 0 })
 }
 
 const removeTimeBucketRange = (index: number) => {
-  editSettings.value.avgRugRateByTimeBucket.splice(index, 1)
+  if (editSettings.value.avgRugRateByTimeBucket.ranges) {
+    editSettings.value.avgRugRateByTimeBucket.ranges.splice(index, 1)
+  }
 }
 
 const loadPreset = async () => {
   if (!selectedPresetId.value) {
-    settings.value = {
-      trackingTimeSeconds: 15,
-      winRate: [],
-      avgAthMcap: [],
-      medianAthMcap: [],
-      multiplierConfigs: [],
-      avgRugRate: [],
-      avgRugRateByTimeBucket: []
-    }
+    settings.value = getDefaultSettings()
     return
   }
 
   try {
     const preset = await getScoringPreset(selectedPresetId.value as number)
-    settings.value = { ...preset.settings }
+    settings.value = normalizeSettings(preset.settings)
     presetName.value = preset.name
     saveAsDefault.value = preset.isDefault
   } catch (error: any) {
@@ -921,15 +1026,7 @@ const handleNewPreset = () => {
   presetName.value = ''
   saveAsDefault.value = false
   // Open edit dialog with default/empty settings for the new preset
-  editSettings.value = {
-    trackingTimeSeconds: 15,
-    winRate: [],
-    avgAthMcap: [],
-    medianAthMcap: [],
-    multiplierConfigs: [],
-    avgRugRate: [],
-    avgRugRateByTimeBucket: []
-  }
+  editSettings.value = getDefaultSettings()
   showEditDialog.value = true
 }
 
@@ -1005,15 +1102,7 @@ const handleDeletePreset = async () => {
     await loadPresets()
     selectedPresetId.value = ''
     showDeleteDialog.value = false
-    settings.value = {
-      trackingTimeSeconds: 15,
-      winRate: [],
-      avgAthMcap: [],
-      medianAthMcap: [],
-      multiplierConfigs: [],
-      avgRugRate: [],
-      avgRugRateByTimeBucket: []
-    }
+    settings.value = getDefaultSettings()
     alert('Preset deleted successfully!')
   } catch (error: any) {
     alert(error.message || 'Failed to delete preset')
@@ -1035,7 +1124,7 @@ const loadAppliedSettings = async () => {
     const applied = await getAppliedSettings()
     appliedPresetId.value = applied.presetId
     if (applied.settings) {
-      settings.value = { ...applied.settings }
+      settings.value = normalizeSettings(applied.settings)
       if (applied.presetId) {
         selectedPresetId.value = applied.presetId
       }

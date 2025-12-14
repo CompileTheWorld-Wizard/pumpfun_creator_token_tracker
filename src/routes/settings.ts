@@ -428,15 +428,27 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
       }
     };
     
-    validateRanges(settings.winRate || [], 'Win Rate');
-    validateRanges(settings.avgAthMcap || [], 'Avg ATH MCap');
-    validateRanges(settings.medianAthMcap || [], 'Median ATH MCap');
-    validateRanges(settings.avgRugRate || [], 'Avg Rug Rate');
+    // Helper to get ranges from metric (supports both old and new structure)
+    const getRanges = (metric: any): any[] => {
+      if (Array.isArray(metric)) {
+        return metric; // Old structure
+      }
+      if (metric && typeof metric === 'object' && Array.isArray(metric.ranges)) {
+        return metric.ranges; // New structure
+      }
+      return [];
+    };
+    
+    validateRanges(getRanges(settings.winRate), 'Win Rate');
+    validateRanges(getRanges(settings.avgAthMcap), 'Avg ATH MCap');
+    validateRanges(getRanges(settings.medianAthMcap), 'Median ATH MCap');
+    validateRanges(getRanges(settings.avgRugRate), 'Avg Rug Rate');
     
     // Validate time bucket ranges
-    if (Array.isArray(settings.avgRugRateByTimeBucket)) {
-      for (let i = 0; i < settings.avgRugRateByTimeBucket.length; i++) {
-        const range = settings.avgRugRateByTimeBucket[i];
+    const timeBucketRanges = getRanges(settings.avgRugRateByTimeBucket);
+    if (timeBucketRanges.length > 0) {
+      for (let i = 0; i < timeBucketRanges.length; i++) {
+        const range = timeBucketRanges[i];
         if (typeof range.min !== 'number' || typeof range.max !== 'number' || typeof range.score !== 'number') {
           validationErrors.push(`Avg Rug Rate by Time Bucket range ${i + 1} must have valid min, max, and score`);
         }

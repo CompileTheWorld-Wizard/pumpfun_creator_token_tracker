@@ -303,27 +303,33 @@ async function startServer() {
     if (parseInt(scoringSettingsCheck.rows[0].count) === 0) {
       const defaultScoringSettings = {
         trackingTimeSeconds: 15,
-        winRate: [
-          { min: 0, max: 20, score: 1 },
-          { min: 21, max: 40, score: 2 },
-          { min: 41, max: 60, score: 3 },
-          { min: 61, max: 80, score: 4 },
-          { min: 81, max: 100, score: 5 }
-        ],
-        avgAthMcap: [
-          { min: 0, max: 20, score: 1 },
-          { min: 21, max: 40, score: 2 },
-          { min: 41, max: 60, score: 3 },
-          { min: 61, max: 80, score: 4 },
-          { min: 81, max: 100, score: 5 }
-        ],
-        medianAthMcap: [
-          { min: 0, max: 20, score: 1 },
-          { min: 21, max: 40, score: 2 },
-          { min: 41, max: 60, score: 3 },
-          { min: 61, max: 80, score: 4 },
-          { min: 81, max: 100, score: 5 }
-        ],
+        winRate: {
+          ranges: [
+            { min: 0, max: 20, score: 1 },
+            { min: 21, max: 40, score: 2 },
+            { min: 41, max: 60, score: 3 },
+            { min: 61, max: 80, score: 4 },
+            { min: 81, max: 100, score: 5 }
+          ]
+        },
+        avgAthMcap: {
+          ranges: [
+            { min: 0, max: 20, score: 1 },
+            { min: 21, max: 40, score: 2 },
+            { min: 41, max: 60, score: 3 },
+            { min: 61, max: 80, score: 4 },
+            { min: 81, max: 100, score: 5 }
+          ]
+        },
+        medianAthMcap: {
+          ranges: [
+            { min: 0, max: 20, score: 1 },
+            { min: 21, max: 40, score: 2 },
+            { min: 41, max: 60, score: 3 },
+            { min: 61, max: 80, score: 4 },
+            { min: 81, max: 100, score: 5 }
+          ]
+        },
         multiplierConfigs: [
           {
             multiplier: 1.5,
@@ -376,20 +382,24 @@ async function startServer() {
             ]
           }
         ],
-        avgRugRate: [
-          { min: 0, max: 20, score: -2 },
-          { min: 21, max: 40, score: -4 },
-          { min: 41, max: 60, score: -6 },
-          { min: 61, max: 80, score: -8 },
-          { min: 81, max: 100, score: -10 }
-        ],
-        avgRugRateByTimeBucket: [
-          { min: 1, max: 3, score: -10 },
-          { min: 3, max: 6, score: -8 },
-          { min: 6, max: 9, score: -6 },
-          { min: 9, max: 12, score: -4 },
-          { min: 12, max: 15, score: -2 }
-        ]
+        avgRugRate: {
+          ranges: [
+            { min: 0, max: 20, score: -2 },
+            { min: 21, max: 40, score: -4 },
+            { min: 41, max: 60, score: -6 },
+            { min: 61, max: 80, score: -8 },
+            { min: 81, max: 100, score: -10 }
+          ]
+        },
+        avgRugRateByTimeBucket: {
+          ranges: [
+            { min: 1, max: 3, score: -10 },
+            { min: 3, max: 6, score: -8 },
+            { min: 6, max: 9, score: -6 },
+            { min: 9, max: 12, score: -4 },
+            { min: 12, max: 15, score: -2 }
+          ]
+        }
       };
       
       await client.query(

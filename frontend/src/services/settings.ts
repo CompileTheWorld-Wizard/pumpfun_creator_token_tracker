@@ -8,6 +8,7 @@ export interface ScoreRange {
 
 export interface MultiplierConfig {
   multiplier: number; // e.g., 1.5, 2, 3
+  name?: string; // Optional name for analytics table
   ranges: ScoreRange[];
 }
 
@@ -19,12 +20,27 @@ export interface TimeBucketRange {
 
 export interface ScoringSettings {
   trackingTimeSeconds: number; // min 15, max 120
-  winRate: ScoreRange[];
-  avgAthMcap: ScoreRange[]; // percentile ranges
-  medianAthMcap: ScoreRange[]; // percentile ranges
+  winRate: {
+    name?: string; // Optional name for analytics table
+    ranges: ScoreRange[];
+  };
+  avgAthMcap: {
+    name?: string; // Optional name for analytics table
+    ranges: ScoreRange[];
+  };
+  medianAthMcap: {
+    name?: string; // Optional name for analytics table
+    ranges: ScoreRange[];
+  };
   multiplierConfigs: MultiplierConfig[]; // % of tokens that at least "a"x from starting MCAP
-  avgRugRate: ScoreRange[];
-  avgRugRateByTimeBucket: TimeBucketRange[];
+  avgRugRate: {
+    name?: string; // Optional name for analytics table
+    ranges: ScoreRange[];
+  };
+  avgRugRateByTimeBucket: {
+    name?: string; // Optional name for analytics table
+    ranges: TimeBucketRange[];
+  };
 }
 
 export interface ScoringPreset {
