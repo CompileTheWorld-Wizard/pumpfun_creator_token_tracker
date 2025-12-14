@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import MainBoard from '../views/MainBoard.vue'
+import Settings from '../views/Settings.vue'
 import { checkAuth } from '../services/auth'
 
 const router = createRouter({
@@ -20,6 +21,12 @@ const router = createRouter({
       path: '/board',
       name: 'MainBoard',
       component: MainBoard,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'Settings',
+      component: Settings,
       meta: { requiresAuth: true }
     }
   ]

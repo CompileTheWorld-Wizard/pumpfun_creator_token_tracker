@@ -10,6 +10,7 @@ import authRoutes from './routes/auth.js';
 import walletRoutes from './routes/wallets.js';
 import streamRoutes from './routes/stream.js';
 import tokenRoutes from './routes/tokens.js';
+import settingsRoutes from './routes/settings.js';
 import { initializeConsoleSanitizer } from './utils/consoleSanitizer.js';
 
 dotenv.config();
@@ -86,6 +87,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/wallets', walletRoutes);
 app.use('/api/stream', streamRoutes);
 app.use('/api/tokens', tokenRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -229,6 +231,39 @@ async function startServer() {
           WHERE table_name = 'tbl_soltrack_created_tokens' AND column_name = 'is_fetched'
         ) THEN
           ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN is_fetched BOOLEAN DEFAULT FALSE;
+        END IF;
+      END $$;
+    `);
+    
+    // Create scoring settings table if it doesn't exist
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS tbl_soltrack_scoring_settings (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL UNIQUE,
+        settings JSONB NOT NULL,
+        is_default BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    
+    // Create index for faster lookups
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_scoring_settings_default 
+      ON tbl_soltrack_scoring_settings(is_default)
+    `);
+    
+    // Ensure only one default setting exists (create unique partial index)
+    await client.query(`
+      DO $$ 
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes 
+          WHERE indexname = 'idx_tbl_soltrack_scoring_settings_single_default'
+        ) THEN
+          CREATE UNIQUE INDEX idx_tbl_soltrack_scoring_settings_single_default 
+          ON tbl_soltrack_scoring_settings(is_default) 
+          WHERE is_default = TRUE;
         END IF;
       END $$;
     `);
