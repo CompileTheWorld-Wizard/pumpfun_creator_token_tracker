@@ -919,6 +919,7 @@ const handleNewPreset = () => {
   selectedPresetId.value = ''
   presetName.value = ''
   saveAsDefault.value = false
+  // Clear the display settings
   settings.value = {
     trackingTimeSeconds: 15,
     winRate: [],
@@ -928,6 +929,17 @@ const handleNewPreset = () => {
     avgRugRate: [],
     avgRugRateByTimeBucket: []
   }
+  // Open edit dialog with default/empty settings
+  editSettings.value = {
+    trackingTimeSeconds: 15,
+    winRate: [],
+    avgAthMcap: [],
+    medianAthMcap: [],
+    multiplierConfigs: [],
+    avgRugRate: [],
+    avgRugRateByTimeBucket: []
+  }
+  showEditDialog.value = true
 }
 
 const openSaveDialog = () => {
@@ -958,18 +970,23 @@ const handleSavePreset = async () => {
   saving.value = true
   try {
     if (selectedPresetId.value && !isSelectedPresetDefault.value) {
+      // Update existing preset
       await updateScoringPreset(selectedPresetId.value as number, {
         name: presetName.value,
         settings: settings.value,
         isDefault: saveAsDefault.value
       })
+      await loadPresets()
+      await loadPreset()
     } else {
+      // Create new preset
       const newPreset = await createScoringPreset(presetName.value, settings.value, saveAsDefault.value)
+      await loadPresets()
       selectedPresetId.value = newPreset.id
+      // Load the preset to ensure display is updated
+      await loadPreset()
     }
     
-    await loadPresets()
-    await loadPreset()
     showSaveDialog.value = false
     alert('Preset saved successfully!')
   } catch (error: any) {
@@ -1075,8 +1092,16 @@ const saveEdit = () => {
     return
   }
 
+  // Update the display settings
   settings.value = JSON.parse(JSON.stringify(editSettings.value))
   showEditDialog.value = false
+  
+  // If it's a new preset (no selectedPresetId), open save dialog to save it
+  if (!selectedPresetId.value) {
+    presetName.value = ''
+    saveAsDefault.value = false
+    showSaveDialog.value = true
+  }
 }
 
 // Watch for edit dialog opening
