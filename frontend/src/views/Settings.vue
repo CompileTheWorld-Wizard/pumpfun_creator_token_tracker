@@ -566,7 +566,7 @@
           </div>
         </div>
 
-        <!-- Multiplier Configs (Full Width) -->
+        <!-- Multiplier Configs (2 columns) -->
         <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-bold text-gray-100">% of Tokens That At Least "X"x From Starting MCAP</h2>
@@ -577,7 +577,7 @@
               Add Multiplier
             </button>
           </div>
-          <div class="space-y-4">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div
               v-for="(config, configIndex) in editSettings.multiplierConfigs"
               :key="configIndex"
