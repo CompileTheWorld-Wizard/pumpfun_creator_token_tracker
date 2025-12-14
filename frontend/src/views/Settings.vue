@@ -40,10 +40,17 @@
               </option>
             </select>
             <button
-              @click="openSaveDialog"
-              class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition"
+              @click="handleNewPreset"
+              class="px-4 py-2 bg-blue-600/90 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition"
             >
-              {{ selectedPresetId ? 'Update Preset' : 'Save as Preset' }}
+              New Preset
+            </button>
+            <button
+              @click="openSaveDialog"
+              :disabled="isSelectedPresetDefault"
+              class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {{ selectedPresetId && !isSelectedPresetDefault ? 'Update Preset' : 'Save as Preset' }}
             </button>
             <button
               @click="showDeleteDialog = true"
@@ -685,9 +692,16 @@ const loadPreset = async () => {
   }
 }
 
+const handleNewPreset = () => {
+  selectedPresetId.value = ''
+  presetName.value = ''
+  saveAsDefault.value = false
+  // Keep current settings in the form, just clear the preset selection
+}
+
 const openSaveDialog = () => {
-  if (selectedPresetId.value) {
-    // If updating, preset name should already be loaded
+  if (selectedPresetId.value && !isSelectedPresetDefault.value) {
+    // If updating, preset name should already be loaded (only if not default)
     const preset = presets.value.find(p => p.id === selectedPresetId.value)
     if (preset) {
       presetName.value = preset.name
@@ -714,8 +728,8 @@ const handleSavePreset = async () => {
 
   saving.value = true
   try {
-    if (selectedPresetId.value) {
-      // Update existing preset
+    if (selectedPresetId.value && !isSelectedPresetDefault.value) {
+      // Update existing preset (only if not default)
       await updateScoringPreset(selectedPresetId.value as number, {
         name: presetName.value,
         settings: settings.value,

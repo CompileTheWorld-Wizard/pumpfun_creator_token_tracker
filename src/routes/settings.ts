@@ -172,14 +172,20 @@ router.put('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
     const { id } = req.params;
     const { name, settings, isDefault } = req.body;
     
-    // Check if preset exists
+    // Check if preset exists and if it's the default
     const checkResult = await pool.query(
-      'SELECT id FROM tbl_soltrack_scoring_settings WHERE id = $1',
+      'SELECT id, is_default FROM tbl_soltrack_scoring_settings WHERE id = $1',
       [id]
     );
     
     if (checkResult.rows.length === 0) {
       res.status(404).json({ error: 'Preset not found' });
+      return;
+    }
+    
+    // Prevent updating default preset
+    if (checkResult.rows[0].is_default) {
+      res.status(400).json({ error: 'Cannot update the default preset. Please create a new preset or set another preset as default first.' });
       return;
     }
     
