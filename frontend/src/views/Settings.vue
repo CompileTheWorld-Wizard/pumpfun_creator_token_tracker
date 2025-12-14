@@ -251,7 +251,7 @@
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       @click.self="showEditDialog = false"
     >
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-7xl max-h-[90vh] overflow-y-auto">
         <div class="flex items-center justify-between mb-6">
           <h3 class="text-xl font-bold text-gray-100">Edit Settings</h3>
           <button
@@ -916,20 +916,12 @@ const loadPreset = async () => {
 }
 
 const handleNewPreset = () => {
+  // Don't change the display - keep showing current preset
+  // Just clear the selectedPresetId so we know it's a new preset
   selectedPresetId.value = ''
   presetName.value = ''
   saveAsDefault.value = false
-  // Clear the display settings
-  settings.value = {
-    trackingTimeSeconds: 15,
-    winRate: [],
-    avgAthMcap: [],
-    medianAthMcap: [],
-    multiplierConfigs: [],
-    avgRugRate: [],
-    avgRugRateByTimeBucket: []
-  }
-  // Open edit dialog with default/empty settings
+  // Open edit dialog with default/empty settings for the new preset
   editSettings.value = {
     trackingTimeSeconds: 15,
     winRate: [],
@@ -979,12 +971,13 @@ const handleSavePreset = async () => {
       await loadPresets()
       await loadPreset()
     } else {
-      // Create new preset
-      const newPreset = await createScoringPreset(presetName.value, settings.value, saveAsDefault.value)
+      // Create new preset - use editSettings (from dialog)
+      const settingsToSave = editSettings.value
+      const newPreset = await createScoringPreset(presetName.value, settingsToSave, saveAsDefault.value)
       await loadPresets()
       selectedPresetId.value = newPreset.id
-      // Load the preset to ensure display is updated
-      await loadPreset()
+      // Update display settings to show the newly saved preset
+      settings.value = JSON.parse(JSON.stringify(settingsToSave))
     }
     
     showSaveDialog.value = false
@@ -1092,12 +1085,14 @@ const saveEdit = () => {
     return
   }
 
-  // Update the display settings
-  settings.value = JSON.parse(JSON.stringify(editSettings.value))
-  showEditDialog.value = false
-  
-  // If it's a new preset (no selectedPresetId), open save dialog to save it
-  if (!selectedPresetId.value) {
+  // If it's an existing preset, update the display immediately
+  if (selectedPresetId.value) {
+    settings.value = JSON.parse(JSON.stringify(editSettings.value))
+    showEditDialog.value = false
+  } else {
+    // If it's a new preset, don't update display yet - just close dialog and open save dialog
+    // The display will be updated after the preset is saved
+    showEditDialog.value = false
     presetName.value = ''
     saveAsDefault.value = false
     showSaveDialog.value = true
