@@ -1167,6 +1167,24 @@ const handleCancelSaveDialog = () => {
   showSaveDialog.value = false
 }
 
+// Helper function to check if two ranges overlap
+const rangesOverlap = (range1: { min: number; max: number }, range2: { min: number; max: number }): boolean => {
+  // Two ranges [a, b] and [c, d] overlap if max(a, c) < min(b, d)
+  return Math.max(range1.min, range2.min) < Math.min(range1.max, range2.max)
+}
+
+// Helper function to check for overlapping ranges in an array
+const checkRangeOverlaps = (ranges: { min: number; max: number }[], metricName: string): string | null => {
+  for (let i = 0; i < ranges.length; i++) {
+    for (let j = i + 1; j < ranges.length; j++) {
+      if (rangesOverlap(ranges[i], ranges[j])) {
+        return `${metricName} ranges overlap: ${ranges[i].min}-${ranges[i].max} and ${ranges[j].min}-${ranges[j].max} are overlapping`
+      }
+    }
+  }
+  return null
+}
+
 // Validate settings (reusable function)
 const validateSettings = (settingsToValidate: ScoringSettings): string | null => {
   // Validate tracking time
@@ -1192,6 +1210,42 @@ const validateSettings = (settingsToValidate: ScoringSettings): string | null =>
 
   if (!hasAnyScoringLogic) {
     return 'At least one data metric scoring logic must be configured (ranges must be added to at least one metric)'
+  }
+
+  // Check for overlapping ranges in each metric
+  if (settingsToValidate.winRate.ranges && settingsToValidate.winRate.ranges.length > 0) {
+    const overlapError = checkRangeOverlaps(settingsToValidate.winRate.ranges, 'Win Rate')
+    if (overlapError) return overlapError
+  }
+
+  if (settingsToValidate.avgAthMcap.ranges && settingsToValidate.avgAthMcap.ranges.length > 0) {
+    const overlapError = checkRangeOverlaps(settingsToValidate.avgAthMcap.ranges, 'Avg ATH MCap')
+    if (overlapError) return overlapError
+  }
+
+  if (settingsToValidate.medianAthMcap.ranges && settingsToValidate.medianAthMcap.ranges.length > 0) {
+    const overlapError = checkRangeOverlaps(settingsToValidate.medianAthMcap.ranges, 'Median ATH MCap')
+    if (overlapError) return overlapError
+  }
+
+  if (settingsToValidate.avgRugRate.ranges && settingsToValidate.avgRugRate.ranges.length > 0) {
+    const overlapError = checkRangeOverlaps(settingsToValidate.avgRugRate.ranges, 'Avg Rug Rate')
+    if (overlapError) return overlapError
+  }
+
+  if (settingsToValidate.avgRugRateByTimeBucket.ranges && settingsToValidate.avgRugRateByTimeBucket.ranges.length > 0) {
+    const overlapError = checkRangeOverlaps(settingsToValidate.avgRugRateByTimeBucket.ranges, 'Avg Rug Rate by Time Bucket')
+    if (overlapError) return overlapError
+  }
+
+  // Check multiplier configs
+  if (settingsToValidate.multiplierConfigs && settingsToValidate.multiplierConfigs.length > 0) {
+    for (const config of settingsToValidate.multiplierConfigs) {
+      if (config.ranges && config.ranges.length > 0) {
+        const overlapError = checkRangeOverlaps(config.ranges, `Multiplier ${config.multiplier}x`)
+        if (overlapError) return overlapError
+      }
+    }
   }
 
   return null

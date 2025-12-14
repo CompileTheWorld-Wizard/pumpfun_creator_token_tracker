@@ -410,6 +410,25 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
       validationErrors.push('Tracking time must be between 15 and 120 seconds');
     }
     
+    // Helper function to check if two ranges overlap
+    const rangesOverlap = (range1: any, range2: any): boolean => {
+      // Two ranges [a, b] and [c, d] overlap if max(a, c) < min(b, d)
+      return Math.max(range1.min, range2.min) < Math.min(range1.max, range2.max);
+    };
+
+    // Helper function to check for overlapping ranges in an array
+    const checkRangeOverlaps = (ranges: any[], name: string): void => {
+      for (let i = 0; i < ranges.length; i++) {
+        for (let j = i + 1; j < ranges.length; j++) {
+          if (rangesOverlap(ranges[i], ranges[j])) {
+            validationErrors.push(
+              `${name} ranges overlap: ${ranges[i].min}-${ranges[i].max} and ${ranges[j].min}-${ranges[j].max} are overlapping`
+            );
+          }
+        }
+      }
+    };
+
     // Validate ranges (check for overlaps, valid min/max, etc.)
     const validateRanges = (ranges: any[], name: string) => {
       if (!Array.isArray(ranges)) {
@@ -425,6 +444,11 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
         if (range.min < 0 || range.max > 100 || range.min >= range.max) {
           validationErrors.push(`${name} range ${i + 1} has invalid min/max values`);
         }
+      }
+
+      // Check for overlapping ranges
+      if (ranges.length > 1) {
+        checkRangeOverlaps(ranges, name);
       }
     };
     
@@ -456,6 +480,10 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
           validationErrors.push(`Avg Rug Rate by Time Bucket range ${i + 1} has invalid min/max values`);
         }
       }
+      // Check for overlapping time bucket ranges
+      if (timeBucketRanges.length > 1) {
+        checkRangeOverlaps(timeBucketRanges, 'Avg Rug Rate by Time Bucket');
+      }
     }
     
     // Validate multiplier configs
@@ -465,7 +493,9 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
         if (typeof config.multiplier !== 'number' || config.multiplier <= 0) {
           validationErrors.push(`Multiplier config ${i + 1} must have a valid multiplier`);
         }
-        validateRanges(config.ranges || [], `Multiplier ${config.multiplier}x`);
+        const configRanges = config.ranges || [];
+        validateRanges(configRanges, `Multiplier ${config.multiplier}x`);
+        // Overlap checking is already done in validateRanges
       }
     }
     
