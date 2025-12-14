@@ -52,13 +52,6 @@
               Edit Settings
             </button>
             <button
-              @click="openSaveDialog"
-              :disabled="isSelectedPresetDefault"
-              class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ selectedPresetId && !isSelectedPresetDefault ? 'Update Preset' : 'Save as Preset' }}
-            </button>
-            <button
               @click="showDeleteDialog = true"
               :disabled="!selectedPresetId || isSelectedPresetDefault"
               class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -763,13 +756,13 @@
     <div
       v-if="showSaveDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
-      @click.self="showSaveDialog = false"
+      @click.self="handleCancelSaveDialog"
     >
       <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-bold text-gray-100">Save Preset</h3>
           <button
-            @click="showSaveDialog = false"
+            @click="handleCancelSaveDialog"
             class="text-gray-400 hover:text-gray-200 transition"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -804,7 +797,7 @@
           <div class="flex gap-3">
             <button
               type="button"
-              @click="showSaveDialog = false"
+              @click="handleCancelSaveDialog"
               class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
             >
               Cancel
@@ -886,6 +879,7 @@ import {
 
 const presets = ref<ScoringPreset[]>([])
 const selectedPresetId = ref<number | ''>('')
+const previousSelectedPresetId = ref<number | ''>('') // Store previous value when creating new preset
 const appliedPresetId = ref<number | null>(null)
 const showSaveDialog = ref(false)
 const showDeleteDialog = ref(false)
@@ -1020,28 +1014,15 @@ const loadPreset = async () => {
 }
 
 const handleNewPreset = () => {
-  // Don't change the display - keep showing current preset
-  // Just clear the selectedPresetId so we know it's a new preset
+  // Store the current selectedPresetId so we can restore it if user cancels
+  previousSelectedPresetId.value = selectedPresetId.value
+  // Clear the selectedPresetId so we know it's a new preset
   selectedPresetId.value = ''
   presetName.value = ''
   saveAsDefault.value = false
   // Open edit dialog with default/empty settings for the new preset
   editSettings.value = getDefaultSettings()
   showEditDialog.value = true
-}
-
-const openSaveDialog = () => {
-  if (selectedPresetId.value && !isSelectedPresetDefault.value) {
-    const preset = presets.value.find(p => p.id === selectedPresetId.value)
-    if (preset) {
-      presetName.value = preset.name
-      saveAsDefault.value = preset.isDefault
-    }
-  } else {
-    presetName.value = ''
-    saveAsDefault.value = false
-  }
-  showSaveDialog.value = true
 }
 
 const handleSavePreset = async () => {
@@ -1072,6 +1053,8 @@ const handleSavePreset = async () => {
       const newPreset = await createScoringPreset(presetName.value, settingsToSave, saveAsDefault.value)
       await loadPresets()
       selectedPresetId.value = newPreset.id
+      // Clear the previous selectedPresetId since we successfully created a new preset
+      previousSelectedPresetId.value = ''
       // Update display settings to show the newly saved preset
       settings.value = JSON.parse(JSON.stringify(settingsToSave))
     }
@@ -1166,7 +1149,22 @@ const handleApplySettings = async () => {
 
 const cancelEdit = () => {
   editSettings.value = JSON.parse(JSON.stringify(settings.value))
+  // If this was a new preset (selectedPresetId is empty), restore the previous selection
+  if (!selectedPresetId.value && previousSelectedPresetId.value) {
+    selectedPresetId.value = previousSelectedPresetId.value
+    previousSelectedPresetId.value = ''
+  }
   showEditDialog.value = false
+}
+
+// Handle closing save dialog (cancel)
+const handleCancelSaveDialog = () => {
+  // If this was a new preset (selectedPresetId is empty), restore the previous selection
+  if (!selectedPresetId.value && previousSelectedPresetId.value) {
+    selectedPresetId.value = previousSelectedPresetId.value
+    previousSelectedPresetId.value = ''
+  }
+  showSaveDialog.value = false
 }
 
 // Validate settings (reusable function)
