@@ -1145,8 +1145,10 @@ const loadAppliedSettings = async () => {
 }
 
 const handleApplySettings = async () => {
-  if (settings.value.trackingTimeSeconds < 15 || settings.value.trackingTimeSeconds > 120) {
-    alert('Tracking time must be between 15 and 120 seconds')
+  // Validate settings
+  const validationError = validateSettings(settings.value)
+  if (validationError) {
+    alert(validationError)
     return
   }
 
@@ -1167,9 +1169,41 @@ const cancelEdit = () => {
   showEditDialog.value = false
 }
 
+// Validate settings (reusable function)
+const validateSettings = (settingsToValidate: ScoringSettings): string | null => {
+  // Validate tracking time
+  if (settingsToValidate.trackingTimeSeconds < 15 || settingsToValidate.trackingTimeSeconds > 120) {
+    return 'Tracking time must be between 15 and 120 seconds'
+  }
+
+  // Check if at least one data metric has scoring logic (ranges)
+  const hasWinRateRanges = settingsToValidate.winRate.ranges && settingsToValidate.winRate.ranges.length > 0
+  const hasAvgAthMcapRanges = settingsToValidate.avgAthMcap.ranges && settingsToValidate.avgAthMcap.ranges.length > 0
+  const hasMedianAthMcapRanges = settingsToValidate.medianAthMcap.ranges && settingsToValidate.medianAthMcap.ranges.length > 0
+  const hasAvgRugRateRanges = settingsToValidate.avgRugRate.ranges && settingsToValidate.avgRugRate.ranges.length > 0
+  const hasAvgRugRateByTimeBucketRanges = settingsToValidate.avgRugRateByTimeBucket.ranges && settingsToValidate.avgRugRateByTimeBucket.ranges.length > 0
+  const hasMultiplierConfigs = settingsToValidate.multiplierConfigs && settingsToValidate.multiplierConfigs.length > 0 && 
+    settingsToValidate.multiplierConfigs.some((config: any) => config.ranges && config.ranges.length > 0)
+
+  const hasAnyScoringLogic = hasWinRateRanges || 
+    hasAvgAthMcapRanges || 
+    hasMedianAthMcapRanges || 
+    hasAvgRugRateRanges || 
+    hasAvgRugRateByTimeBucketRanges || 
+    hasMultiplierConfigs
+
+  if (!hasAnyScoringLogic) {
+    return 'At least one data metric scoring logic must be configured (ranges must be added to at least one metric)'
+  }
+
+  return null
+}
+
 const saveEdit = () => {
-  if (editSettings.value.trackingTimeSeconds < 15 || editSettings.value.trackingTimeSeconds > 120) {
-    alert('Tracking time must be between 15 and 120 seconds')
+  // Validate settings before saving
+  const validationError = validateSettings(editSettings.value)
+  if (validationError) {
+    alert(validationError)
     return
   }
 
