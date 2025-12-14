@@ -46,6 +46,13 @@
               New Preset
             </button>
             <button
+              @click="showEditDialog = true"
+              :disabled="!selectedPresetId"
+              class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Edit Settings
+            </button>
+            <button
               @click="openSaveDialog"
               :disabled="isSelectedPresetDefault"
               class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -77,359 +84,220 @@
         </div>
       </div>
 
-      <!-- Tracking Time -->
-      <div class="mb-6 bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-        <h2 class="text-lg font-bold text-gray-100 mb-4">Tracking Time</h2>
-        <div class="flex items-center gap-4">
-          <label class="text-sm text-gray-300">New Token Tracking Duration (seconds):</label>
-          <input
-            v-model.number="settings.trackingTimeSeconds"
-            type="number"
-            min="15"
-            max="120"
-            class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 w-32"
-          />
-          <span class="text-xs text-gray-500">Min: 15s, Max: 120s</span>
-        </div>
-      </div>
-
-      <!-- Metrics Grid (2 columns) -->
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <!-- Win Rate -->
+      <!-- Display Settings (Read-Only) -->
+      <div v-if="selectedPresetId || appliedPresetId" class="space-y-6">
+        <!-- Tracking Time -->
         <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-gray-100">Win Rate (0-100%)</h2>
-          <button
-            @click="addRange('winRate')"
-            class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-          >
-            Add Range
-          </button>
-        </div>
-        <div class="space-y-2">
-          <div
-            v-for="(range, index) in settings.winRate"
-            :key="index"
-            class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg"
-          >
-            <input
-              v-model.number="range.min"
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              placeholder="Min %"
-              class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-            />
-            <span class="text-gray-400">-</span>
-            <input
-              v-model.number="range.max"
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              placeholder="Max %"
-              class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-            />
-            <span class="text-gray-400">:</span>
-            <input
-              v-model.number="range.score"
-              type="number"
-              step="0.1"
-              placeholder="Score"
-              class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-            />
-            <button
-              @click="removeRange('winRate', index)"
-              class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
-            >
-              Remove
-            </button>
+          <h2 class="text-lg font-bold text-gray-100 mb-4">Tracking Time</h2>
+          <div class="text-sm text-gray-300">
+            <span class="font-semibold">{{ displaySettings.trackingTimeSeconds }}</span> seconds
+            <span class="text-gray-500 ml-2">(Min: 15s, Max: 120s)</span>
           </div>
-          <p v-if="settings.winRate.length === 0" class="text-sm text-gray-500 text-center py-4">
-            No ranges configured. Click "Add Range" to add one.
-          </p>
         </div>
-      </div>
 
-        <!-- Avg ATH MCap -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
-            <button
-              @click="addRange('avgAthMcap')"
-              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-            >
-              Add Range
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div
-              v-for="(range, index) in settings.avgAthMcap"
-              :key="index"
-              class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg"
-            >
-              <input
-                v-model.number="range.min"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Min percentile"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">-</span>
-              <input
-                v-model.number="range.max"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Max percentile"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">:</span>
-              <input
-                v-model.number="range.score"
-                type="number"
-                step="0.1"
-                placeholder="Score"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <button
-                @click="removeRange('avgAthMcap', index)"
-                class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
-              >
-                Remove
-              </button>
+        <!-- Metrics Grid (2 columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Win Rate -->
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-lg font-bold text-gray-100 mb-4">Win Rate (0-100%)</h2>
+            <div v-if="displaySettings.winRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No ranges configured
             </div>
-            <p v-if="settings.avgAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
-              No ranges configured. Click "Add Range" to add one.
-            </p>
-          </div>
-        </div>
-
-        <!-- Median ATH MCap -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
-            <button
-              @click="addRange('medianAthMcap')"
-              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-            >
-              Add Range
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div
-              v-for="(range, index) in settings.medianAthMcap"
-              :key="index"
-              class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg"
-            >
-              <input
-                v-model.number="range.min"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Min percentile"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">-</span>
-              <input
-                v-model.number="range.max"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Max percentile"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">:</span>
-              <input
-                v-model.number="range.score"
-                type="number"
-                step="0.1"
-                placeholder="Score"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <button
-                @click="removeRange('medianAthMcap', index)"
-                class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+            <div v-else class="space-y-2">
+              <div
+                v-for="(range, index) in displaySettings.winRate"
+                :key="index"
+                class="p-3 bg-gray-800/50 rounded-lg text-sm"
               >
-                Remove
-              </button>
-            </div>
-            <p v-if="settings.medianAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
-              No ranges configured. Click "Add Range" to add one.
-            </p>
-          </div>
-        </div>
-
-        <!-- Avg Rug Rate -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-gray-100">Average Rug Rate (%)</h2>
-            <button
-              @click="addRange('avgRugRate')"
-              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-            >
-              Add Range
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div
-              v-for="(range, index) in settings.avgRugRate"
-              :key="index"
-              class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg"
-            >
-              <input
-                v-model.number="range.min"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Min %"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-              />
-              <span class="text-gray-400">-</span>
-              <input
-                v-model.number="range.max"
-                type="number"
-                min="0"
-                max="100"
-                step="0.1"
-                placeholder="Max %"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-              />
-              <span class="text-gray-400">:</span>
-              <input
-                v-model.number="range.score"
-                type="number"
-                step="0.1"
-                placeholder="Score"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <button
-                @click="removeRange('avgRugRate', index)"
-                class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
-              >
-                Remove
-              </button>
-            </div>
-            <p v-if="settings.avgRugRate.length === 0" class="text-sm text-gray-500 text-center py-4">
-              No ranges configured. Click "Add Range" to add one.
-            </p>
-          </div>
-        </div>
-
-        <!-- Avg Rug Rate by Time Bucket -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-gray-100">Average Rug Rate by Time Bucket (seconds)</h2>
-            <button
-              @click="addTimeBucketRange"
-              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-            >
-              Add Range
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div
-              v-for="(range, index) in settings.avgRugRateByTimeBucket"
-              :key="index"
-              class="flex items-center gap-2 p-3 bg-gray-800/50 rounded-lg"
-            >
-              <input
-                v-model.number="range.min"
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="Min seconds"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">-</span>
-              <input
-                v-model.number="range.max"
-                type="number"
-                min="0"
-                step="0.1"
-                placeholder="Max seconds"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <span class="text-gray-400">:</span>
-              <input
-                v-model.number="range.score"
-                type="number"
-                step="0.1"
-                placeholder="Score"
-                class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-              />
-              <button
-                @click="removeTimeBucketRange(index)"
-                class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
-              >
-                Remove
-              </button>
-            </div>
-            <p v-if="settings.avgRugRateByTimeBucket.length === 0" class="text-sm text-gray-500 text-center py-4">
-              No ranges configured. Click "Add Range" to add one.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Multiplier Configs (Full Width) -->
-      <div class="mt-6 bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-gray-100">% of Tokens That At Least "X"x From Starting MCAP</h2>
-          <button
-            @click="addMultiplierConfig"
-            class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
-          >
-            Add Multiplier
-          </button>
-        </div>
-        <div class="space-y-4">
-          <div
-            v-for="(config, configIndex) in settings.multiplierConfigs"
-            :key="configIndex"
-            class="p-4 bg-gray-800/50 rounded-lg border border-gray-700"
-          >
-            <div class="flex items-center justify-between mb-3">
-              <div class="flex items-center gap-3">
-                <label class="text-sm text-gray-300">Multiplier:</label>
-                <input
-                  v-model.number="config.multiplier"
-                  type="number"
-                  min="0.1"
-                  step="0.1"
-                  placeholder="e.g., 1.5, 2, 3"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
-                />
-                <span class="text-xs text-gray-500">x</span>
+                <span class="text-gray-300">{{ range.min }}%</span>
+                <span class="text-gray-500 mx-2">-</span>
+                <span class="text-gray-300">{{ range.max }}%</span>
+                <span class="text-gray-500 mx-2">:</span>
+                <span class="text-purple-400 font-semibold">Score {{ range.score }}</span>
               </div>
-              <button
-                @click="removeMultiplierConfig(configIndex)"
-                class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
-              >
-                Remove Multiplier
-              </button>
             </div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-sm text-gray-400">Ranges:</span>
+          </div>
+
+          <!-- Avg ATH MCap -->
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-lg font-bold text-gray-100 mb-4">Average ATH Market Cap (Percentile)</h2>
+            <div v-if="displaySettings.avgAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No ranges configured
+            </div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="(range, index) in displaySettings.avgAthMcap"
+                :key="index"
+                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+              >
+                <span class="text-gray-300">{{ range.min }}th</span>
+                <span class="text-gray-500 mx-2">-</span>
+                <span class="text-gray-300">{{ range.max }}th</span>
+                <span class="text-gray-500 mx-2">:</span>
+                <span class="text-purple-400 font-semibold">Score {{ range.score }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Median ATH MCap -->
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-lg font-bold text-gray-100 mb-4">Median ATH Market Cap (Percentile)</h2>
+            <div v-if="displaySettings.medianAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No ranges configured
+            </div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="(range, index) in displaySettings.medianAthMcap"
+                :key="index"
+                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+              >
+                <span class="text-gray-300">{{ range.min }}th</span>
+                <span class="text-gray-500 mx-2">-</span>
+                <span class="text-gray-300">{{ range.max }}th</span>
+                <span class="text-gray-500 mx-2">:</span>
+                <span class="text-purple-400 font-semibold">Score {{ range.score }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Avg Rug Rate -->
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-lg font-bold text-gray-100 mb-4">Average Rug Rate (%)</h2>
+            <div v-if="displaySettings.avgRugRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No ranges configured
+            </div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="(range, index) in displaySettings.avgRugRate"
+                :key="index"
+                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+              >
+                <span class="text-gray-300">{{ range.min }}%</span>
+                <span class="text-gray-500 mx-2">-</span>
+                <span class="text-gray-300">{{ range.max }}%</span>
+                <span class="text-gray-500 mx-2">:</span>
+                <span class="text-red-400 font-semibold">Score {{ range.score }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Avg Rug Rate by Time Bucket -->
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+            <h2 class="text-lg font-bold text-gray-100 mb-4">Average Rug Rate by Time Bucket (seconds)</h2>
+            <div v-if="displaySettings.avgRugRateByTimeBucket.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No ranges configured
+            </div>
+            <div v-else class="space-y-2">
+              <div
+                v-for="(range, index) in displaySettings.avgRugRateByTimeBucket"
+                :key="index"
+                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+              >
+                <span class="text-gray-300">{{ range.min }}s</span>
+                <span class="text-gray-500 mx-2">-</span>
+                <span class="text-gray-300">{{ range.max }}s</span>
+                <span class="text-gray-500 mx-2">:</span>
+                <span class="text-red-400 font-semibold">Score {{ range.score }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiplier Configs (Full Width) -->
+        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+          <h2 class="text-lg font-bold text-gray-100 mb-4">% of Tokens That At Least "X"x From Starting MCAP</h2>
+          <div v-if="displaySettings.multiplierConfigs.length === 0" class="text-sm text-gray-500 text-center py-4">
+            No multiplier configurations
+          </div>
+          <div v-else class="space-y-4">
+            <div
+              v-for="(config, configIndex) in displaySettings.multiplierConfigs"
+              :key="configIndex"
+              class="p-4 bg-gray-800/50 rounded-lg border border-gray-700"
+            >
+              <h3 class="text-md font-semibold text-gray-200 mb-3">
+                Multiplier: <span class="text-purple-400">{{ config.multiplier }}x</span>
+              </h3>
+              <div v-if="config.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
+                No ranges configured
+              </div>
+              <div v-else class="space-y-2">
+                <div
+                  v-for="(range, rangeIndex) in config.ranges"
+                  :key="rangeIndex"
+                  class="p-2 bg-gray-900/50 rounded text-xs"
+                >
+                  <span class="text-gray-300">{{ range.min }}%</span>
+                  <span class="text-gray-500 mx-1">-</span>
+                  <span class="text-gray-300">{{ range.max }}%</span>
+                  <span class="text-gray-500 mx-1">:</span>
+                  <span class="text-purple-400 font-semibold">Score {{ range.score }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else class="bg-gray-900/80 border border-gray-800 rounded-lg p-8 text-center">
+        <p class="text-gray-400 text-sm mb-4">No preset selected. Please select a preset or create a new one.</p>
+      </div>
+    </main>
+
+    <!-- Edit Settings Dialog -->
+    <div
+      v-if="showEditDialog"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      @click.self="showEditDialog = false"
+    >
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-xl font-bold text-gray-100">Edit Settings</h3>
+          <button
+            @click="showEditDialog = false"
+            class="text-gray-400 hover:text-gray-200 transition"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Tracking Time -->
+        <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+          <h2 class="text-lg font-bold text-gray-100 mb-4">Tracking Time</h2>
+          <div class="flex items-center gap-4">
+            <label class="text-sm text-gray-300">New Token Tracking Duration (seconds):</label>
+            <input
+              v-model.number="editSettings.trackingTimeSeconds"
+              type="number"
+              min="15"
+              max="120"
+              class="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 w-32"
+            />
+            <span class="text-xs text-gray-500">Min: 15s, Max: 120s</span>
+          </div>
+        </div>
+
+        <!-- Metrics Grid (2 columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          <!-- Win Rate -->
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Win Rate (0-100%)</h2>
               <button
-                @click="addRangeToMultiplier(configIndex)"
-                class="px-2 py-1 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded transition"
+                @click="addRange('winRate')"
+                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
               >
                 Add Range
               </button>
             </div>
             <div class="space-y-2">
               <div
-                v-for="(range, rangeIndex) in config.ranges"
-                :key="rangeIndex"
-                class="flex items-center gap-2 p-2 bg-gray-900/50 rounded"
+                v-for="(range, index) in editSettings.winRate"
+                :key="index"
+                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
               >
                 <input
                   v-model.number="range.min"
@@ -438,9 +306,9 @@
                   max="100"
                   step="0.1"
                   placeholder="Min %"
-                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
                 />
-                <span class="text-gray-500 text-xs">-</span>
+                <span class="text-gray-400">-</span>
                 <input
                   v-model.number="range.max"
                   type="number"
@@ -448,35 +316,370 @@
                   max="100"
                   step="0.1"
                   placeholder="Max %"
-                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
                 />
-                <span class="text-gray-500 text-xs">:</span>
+                <span class="text-gray-400">:</span>
                 <input
                   v-model.number="range.score"
                   type="number"
                   step="0.1"
                   placeholder="Score"
-                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
                 />
                 <button
-                  @click="removeRangeFromMultiplier(configIndex, rangeIndex)"
-                  class="px-2 py-1 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition"
+                  @click="removeRange('winRate', index)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
                 >
                   Remove
                 </button>
               </div>
-              <p v-if="config.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
+              <p v-if="editSettings.winRate.length === 0" class="text-sm text-gray-500 text-center py-4">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
           </div>
-          <p v-if="settings.multiplierConfigs.length === 0" class="text-sm text-gray-500 text-center py-4">
-            No multiplier configurations. Click "Add Multiplier" to add one.
-          </p>
+
+          <!-- Avg ATH MCap -->
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
+              <button
+                @click="addRange('avgAthMcap')"
+                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Add Range
+              </button>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(range, index) in editSettings.avgAthMcap"
+                :key="index"
+                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+              >
+                <input
+                  v-model.number="range.min"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Min percentile"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">-</span>
+                <input
+                  v-model.number="range.max"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Max percentile"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">:</span>
+                <input
+                  v-model.number="range.score"
+                  type="number"
+                  step="0.1"
+                  placeholder="Score"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <button
+                  @click="removeRange('avgAthMcap', index)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                >
+                  Remove
+                </button>
+              </div>
+              <p v-if="editSettings.avgAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+                No ranges configured. Click "Add Range" to add one.
+              </p>
+            </div>
+          </div>
+
+          <!-- Median ATH MCap -->
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
+              <button
+                @click="addRange('medianAthMcap')"
+                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Add Range
+              </button>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(range, index) in editSettings.medianAthMcap"
+                :key="index"
+                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+              >
+                <input
+                  v-model.number="range.min"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Min percentile"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">-</span>
+                <input
+                  v-model.number="range.max"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Max percentile"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">:</span>
+                <input
+                  v-model.number="range.score"
+                  type="number"
+                  step="0.1"
+                  placeholder="Score"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <button
+                  @click="removeRange('medianAthMcap', index)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                >
+                  Remove
+                </button>
+              </div>
+              <p v-if="editSettings.medianAthMcap.length === 0" class="text-sm text-gray-500 text-center py-4">
+                No ranges configured. Click "Add Range" to add one.
+              </p>
+            </div>
+          </div>
+
+          <!-- Avg Rug Rate -->
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate (%)</h2>
+              <button
+                @click="addRange('avgRugRate')"
+                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Add Range
+              </button>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(range, index) in editSettings.avgRugRate"
+                :key="index"
+                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+              >
+                <input
+                  v-model.number="range.min"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Min %"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                />
+                <span class="text-gray-400">-</span>
+                <input
+                  v-model.number="range.max"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Max %"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                />
+                <span class="text-gray-400">:</span>
+                <input
+                  v-model.number="range.score"
+                  type="number"
+                  step="0.1"
+                  placeholder="Score"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <button
+                  @click="removeRange('avgRugRate', index)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                >
+                  Remove
+                </button>
+              </div>
+              <p v-if="editSettings.avgRugRate.length === 0" class="text-sm text-gray-500 text-center py-4">
+                No ranges configured. Click "Add Range" to add one.
+              </p>
+            </div>
+          </div>
+
+          <!-- Avg Rug Rate by Time Bucket -->
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate by Time Bucket (seconds)</h2>
+              <button
+                @click="addTimeBucketRange"
+                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+              >
+                Add Range
+              </button>
+            </div>
+            <div class="space-y-2">
+              <div
+                v-for="(range, index) in editSettings.avgRugRateByTimeBucket"
+                :key="index"
+                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+              >
+                <input
+                  v-model.number="range.min"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  placeholder="Min seconds"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">-</span>
+                <input
+                  v-model.number="range.max"
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  placeholder="Max seconds"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <span class="text-gray-400">:</span>
+                <input
+                  v-model.number="range.score"
+                  type="number"
+                  step="0.1"
+                  placeholder="Score"
+                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                />
+                <button
+                  @click="removeTimeBucketRange(index)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                >
+                  Remove
+                </button>
+              </div>
+              <p v-if="editSettings.avgRugRateByTimeBucket.length === 0" class="text-sm text-gray-500 text-center py-4">
+                No ranges configured. Click "Add Range" to add one.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Multiplier Configs (Full Width) -->
+        <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold text-gray-100">% of Tokens That At Least "X"x From Starting MCAP</h2>
+            <button
+              @click="addMultiplierConfig"
+              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+            >
+              Add Multiplier
+            </button>
+          </div>
+          <div class="space-y-4">
+            <div
+              v-for="(config, configIndex) in editSettings.multiplierConfigs"
+              :key="configIndex"
+              class="p-4 bg-gray-900/50 rounded-lg border border-gray-700"
+            >
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-3">
+                  <label class="text-sm text-gray-300">Multiplier:</label>
+                  <input
+                    v-model.number="config.multiplier"
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    placeholder="e.g., 1.5, 2, 3"
+                    class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  />
+                  <span class="text-xs text-gray-500">x</span>
+                </div>
+                <button
+                  @click="removeMultiplierConfig(configIndex)"
+                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                >
+                  Remove Multiplier
+                </button>
+              </div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm text-gray-400">Ranges:</span>
+                <button
+                  @click="addRangeToMultiplier(configIndex)"
+                  class="px-2 py-1 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded transition"
+                >
+                  Add Range
+                </button>
+              </div>
+              <div class="space-y-2">
+                <div
+                  v-for="(range, rangeIndex) in config.ranges"
+                  :key="rangeIndex"
+                  class="flex items-center gap-2 p-2 bg-gray-800/50 rounded"
+                >
+                  <input
+                    v-model.number="range.min"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="Min %"
+                    class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+                  />
+                  <span class="text-gray-500 text-xs">-</span>
+                  <input
+                    v-model.number="range.max"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="Max %"
+                    class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+                  />
+                  <span class="text-gray-500 text-xs">:</span>
+                  <input
+                    v-model.number="range.score"
+                    type="number"
+                    step="0.1"
+                    placeholder="Score"
+                    class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                  />
+                  <button
+                    @click="removeRangeFromMultiplier(configIndex, rangeIndex)"
+                    class="px-2 py-1 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <p v-if="config.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
+                  No ranges configured. Click "Add Range" to add one.
+                </p>
+              </div>
+            </div>
+            <p v-if="editSettings.multiplierConfigs.length === 0" class="text-sm text-gray-500 text-center py-4">
+              No multiplier configurations. Click "Add Multiplier" to add one.
+            </p>
+          </div>
+        </div>
+
+        <!-- Dialog Actions -->
+        <div class="flex gap-3 pt-4 border-t border-gray-700">
+          <button
+            @click="cancelEdit"
+            class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
+          >
+            Cancel
+          </button>
+          <button
+            @click="saveEdit"
+            class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition"
+          >
+            Save Changes
+          </button>
         </div>
       </div>
-
-    </main>
+    </div>
 
     <!-- Save Preset Dialog -->
     <div
@@ -590,7 +793,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import {
   getScoringPresets,
   getScoringPreset,
@@ -608,17 +811,12 @@ const selectedPresetId = ref<number | ''>('')
 const appliedPresetId = ref<number | null>(null)
 const showSaveDialog = ref(false)
 const showDeleteDialog = ref(false)
+const showEditDialog = ref(false)
 const presetName = ref('')
 const saveAsDefault = ref(false)
 const saving = ref(false)
 const deleting = ref(false)
 const applying = ref(false)
-
-const isSelectedPresetDefault = computed(() => {
-  if (!selectedPresetId.value) return false
-  const preset = presets.value.find(p => p.id === selectedPresetId.value)
-  return preset?.isDefault || false
-})
 
 const settings = ref<ScoringSettings>({
   trackingTimeSeconds: 15,
@@ -630,44 +828,71 @@ const settings = ref<ScoringSettings>({
   avgRugRateByTimeBucket: []
 })
 
+const editSettings = ref<ScoringSettings>({
+  trackingTimeSeconds: 15,
+  winRate: [],
+  avgAthMcap: [],
+  medianAthMcap: [],
+  multiplierConfigs: [],
+  avgRugRate: [],
+  avgRugRateByTimeBucket: []
+})
+
+const displaySettings = computed(() => {
+  return selectedPresetId.value ? settings.value : (appliedPresetId.value ? settings.value : {
+    trackingTimeSeconds: 15,
+    winRate: [],
+    avgAthMcap: [],
+    medianAthMcap: [],
+    multiplierConfigs: [],
+    avgRugRate: [],
+    avgRugRateByTimeBucket: []
+  })
+})
+
+const isSelectedPresetDefault = computed(() => {
+  if (!selectedPresetId.value) return false
+  const preset = presets.value.find(p => p.id === selectedPresetId.value)
+  return preset?.isDefault || false
+})
+
 const addRange = (type: 'winRate' | 'avgAthMcap' | 'medianAthMcap' | 'avgRugRate') => {
-  settings.value[type].push({ min: 0, max: 100, score: 0 })
+  editSettings.value[type].push({ min: 0, max: 100, score: 0 })
 }
 
 const removeRange = (type: 'winRate' | 'avgAthMcap' | 'medianAthMcap' | 'avgRugRate', index: number) => {
-  settings.value[type].splice(index, 1)
+  editSettings.value[type].splice(index, 1)
 }
 
 const addMultiplierConfig = () => {
-  settings.value.multiplierConfigs.push({
+  editSettings.value.multiplierConfigs.push({
     multiplier: 1.5,
     ranges: []
   })
 }
 
 const removeMultiplierConfig = (index: number) => {
-  settings.value.multiplierConfigs.splice(index, 1)
+  editSettings.value.multiplierConfigs.splice(index, 1)
 }
 
 const addRangeToMultiplier = (configIndex: number) => {
-  settings.value.multiplierConfigs[configIndex].ranges.push({ min: 0, max: 100, score: 0 })
+  editSettings.value.multiplierConfigs[configIndex].ranges.push({ min: 0, max: 100, score: 0 })
 }
 
 const removeRangeFromMultiplier = (configIndex: number, rangeIndex: number) => {
-  settings.value.multiplierConfigs[configIndex].ranges.splice(rangeIndex, 1)
+  editSettings.value.multiplierConfigs[configIndex].ranges.splice(rangeIndex, 1)
 }
 
 const addTimeBucketRange = () => {
-  settings.value.avgRugRateByTimeBucket.push({ min: 0, max: 120, score: 0 })
+  editSettings.value.avgRugRateByTimeBucket.push({ min: 0, max: 120, score: 0 })
 }
 
 const removeTimeBucketRange = (index: number) => {
-  settings.value.avgRugRateByTimeBucket.splice(index, 1)
+  editSettings.value.avgRugRateByTimeBucket.splice(index, 1)
 }
 
 const loadPreset = async () => {
   if (!selectedPresetId.value) {
-    // Reset to default settings when no preset is selected
     settings.value = {
       trackingTimeSeconds: 15,
       winRate: [],
@@ -677,8 +902,6 @@ const loadPreset = async () => {
       avgRugRate: [],
       avgRugRateByTimeBucket: []
     }
-    presetName.value = ''
-    saveAsDefault.value = false
     return
   }
 
@@ -696,12 +919,19 @@ const handleNewPreset = () => {
   selectedPresetId.value = ''
   presetName.value = ''
   saveAsDefault.value = false
-  // Keep current settings in the form, just clear the preset selection
+  settings.value = {
+    trackingTimeSeconds: 15,
+    winRate: [],
+    avgAthMcap: [],
+    medianAthMcap: [],
+    multiplierConfigs: [],
+    avgRugRate: [],
+    avgRugRateByTimeBucket: []
+  }
 }
 
 const openSaveDialog = () => {
   if (selectedPresetId.value && !isSelectedPresetDefault.value) {
-    // If updating, preset name should already be loaded (only if not default)
     const preset = presets.value.find(p => p.id === selectedPresetId.value)
     if (preset) {
       presetName.value = preset.name
@@ -720,7 +950,6 @@ const handleSavePreset = async () => {
     return
   }
 
-  // Validate tracking time
   if (settings.value.trackingTimeSeconds < 15 || settings.value.trackingTimeSeconds > 120) {
     alert('Tracking time must be between 15 and 120 seconds')
     return
@@ -729,19 +958,18 @@ const handleSavePreset = async () => {
   saving.value = true
   try {
     if (selectedPresetId.value && !isSelectedPresetDefault.value) {
-      // Update existing preset (only if not default)
       await updateScoringPreset(selectedPresetId.value as number, {
         name: presetName.value,
         settings: settings.value,
         isDefault: saveAsDefault.value
       })
     } else {
-      // Create new preset
       const newPreset = await createScoringPreset(presetName.value, settings.value, saveAsDefault.value)
       selectedPresetId.value = newPreset.id
     }
     
     await loadPresets()
+    await loadPreset()
     showSaveDialog.value = false
     alert('Preset saved successfully!')
   } catch (error: any) {
@@ -756,7 +984,6 @@ const handleDeletePreset = async () => {
     return
   }
 
-  // Prevent deletion of default preset
   if (isSelectedPresetDefault.value) {
     alert('Cannot delete the default preset. Please set another preset as default first.')
     showDeleteDialog.value = false
@@ -769,7 +996,6 @@ const handleDeletePreset = async () => {
     await loadPresets()
     selectedPresetId.value = ''
     showDeleteDialog.value = false
-    // Reset to default settings
     settings.value = {
       trackingTimeSeconds: 15,
       winRate: [],
@@ -799,7 +1025,6 @@ const loadAppliedSettings = async () => {
   try {
     const applied = await getAppliedSettings()
     appliedPresetId.value = applied.presetId
-    // If there are applied settings, load them into the form
     if (applied.settings) {
       settings.value = { ...applied.settings }
       if (applied.presetId) {
@@ -808,13 +1033,11 @@ const loadAppliedSettings = async () => {
     }
   } catch (error: any) {
     console.error('Error loading applied settings:', error)
-    // If no applied settings, load default preset
     try {
       const defaultPresetItem = presets.value.find(p => p.isDefault)
       if (defaultPresetItem) {
         selectedPresetId.value = defaultPresetItem.id
         await loadPreset()
-        // Auto-apply default preset on first load
         await handleApplySettings()
       }
     } catch (err: any) {
@@ -824,7 +1047,6 @@ const loadAppliedSettings = async () => {
 }
 
 const handleApplySettings = async () => {
-  // Validate tracking time
   if (settings.value.trackingTimeSeconds < 15 || settings.value.trackingTimeSeconds > 120) {
     alert('Tracking time must be between 15 and 120 seconds')
     return
@@ -842,9 +1064,30 @@ const handleApplySettings = async () => {
   }
 }
 
+const cancelEdit = () => {
+  editSettings.value = JSON.parse(JSON.stringify(settings.value))
+  showEditDialog.value = false
+}
+
+const saveEdit = () => {
+  if (editSettings.value.trackingTimeSeconds < 15 || editSettings.value.trackingTimeSeconds > 120) {
+    alert('Tracking time must be between 15 and 120 seconds')
+    return
+  }
+
+  settings.value = JSON.parse(JSON.stringify(editSettings.value))
+  showEditDialog.value = false
+}
+
+// Watch for edit dialog opening
+watch(showEditDialog, (isOpen) => {
+  if (isOpen) {
+    editSettings.value = JSON.parse(JSON.stringify(settings.value))
+  }
+})
+
 onMounted(async () => {
   await loadPresets()
   await loadAppliedSettings()
 })
 </script>
-
