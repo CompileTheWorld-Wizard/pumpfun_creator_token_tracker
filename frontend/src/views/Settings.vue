@@ -880,6 +880,7 @@ import {
 const presets = ref<ScoringPreset[]>([])
 const selectedPresetId = ref<number | ''>('')
 const previousSelectedPresetId = ref<number | ''>('') // Store previous value when creating new preset
+const isCreatingNewPreset = ref(false) // Flag to track if we're creating a new preset
 const appliedPresetId = ref<number | null>(null)
 const showSaveDialog = ref(false)
 const showDeleteDialog = ref(false)
@@ -1016,6 +1017,10 @@ const loadPreset = async () => {
 const handleNewPreset = () => {
   // Store the current selectedPresetId so we can restore it if user cancels
   previousSelectedPresetId.value = selectedPresetId.value
+  // Set flag to indicate we're creating a new preset (but keep selectedPresetId unchanged)
+  isCreatingNewPreset.value = true
+  presetName.value = ''
+  saveAsDefault.value = false
   // Open edit dialog with default/empty settings for the new preset
   editSettings.value = getDefaultSettings()
   showEditDialog.value = true
@@ -1034,7 +1039,18 @@ const handleSavePreset = async () => {
 
   saving.value = true
   try {
-    if (selectedPresetId.value && !isSelectedPresetDefault.value) {
+    if (isCreatingNewPreset.value) {
+      // Create new preset - use editSettings (from dialog)
+      const settingsToSave = editSettings.value
+      const newPreset = await createScoringPreset(presetName.value, settingsToSave, saveAsDefault.value)
+      await loadPresets()
+      selectedPresetId.value = newPreset.id
+      // Clear the flag and previous selectedPresetId since we successfully created a new preset
+      isCreatingNewPreset.value = false
+      previousSelectedPresetId.value = ''
+      // Update display settings to show the newly saved preset
+      settings.value = JSON.parse(JSON.stringify(settingsToSave))
+    } else if (selectedPresetId.value && !isSelectedPresetDefault.value) {
       // Update existing preset
       await updateScoringPreset(selectedPresetId.value as number, {
         name: presetName.value,
@@ -1043,16 +1059,6 @@ const handleSavePreset = async () => {
       })
       await loadPresets()
       await loadPreset()
-    } else {
-      // Create new preset - use editSettings (from dialog)
-      const settingsToSave = editSettings.value
-      const newPreset = await createScoringPreset(presetName.value, settingsToSave, saveAsDefault.value)
-      await loadPresets()
-      selectedPresetId.value = newPreset.id
-      // Clear the previous selectedPresetId since we successfully created a new preset
-      previousSelectedPresetId.value = ''
-      // Update display settings to show the newly saved preset
-      settings.value = JSON.parse(JSON.stringify(settingsToSave))
     }
     
     showSaveDialog.value = false
@@ -1145,9 +1151,10 @@ const handleApplySettings = async () => {
 
 const cancelEdit = () => {
   editSettings.value = JSON.parse(JSON.stringify(settings.value))
-  // If this was a new preset (selectedPresetId is empty), restore the previous selection
-  if (!selectedPresetId.value && previousSelectedPresetId.value) {
-    selectedPresetId.value = previousSelectedPresetId.value
+  // If this was a new preset, clear the flag and restore the previous selection if needed
+  if (isCreatingNewPreset.value) {
+    isCreatingNewPreset.value = false
+    // Note: selectedPresetId was never changed, so no need to restore it
     previousSelectedPresetId.value = ''
   }
   showEditDialog.value = false
@@ -1155,9 +1162,10 @@ const cancelEdit = () => {
 
 // Handle closing save dialog (cancel)
 const handleCancelSaveDialog = () => {
-  // If this was a new preset (selectedPresetId is empty), restore the previous selection
-  if (!selectedPresetId.value && previousSelectedPresetId.value) {
-    selectedPresetId.value = previousSelectedPresetId.value
+  // If this was a new preset, clear the flag
+  if (isCreatingNewPreset.value) {
+    isCreatingNewPreset.value = false
+    // Note: selectedPresetId was never changed, so no need to restore it
     previousSelectedPresetId.value = ''
   }
   showSaveDialog.value = false
@@ -1256,7 +1264,7 @@ const saveEdit = () => {
   }
 
   // If it's an existing preset, update the display immediately
-  if (selectedPresetId.value) {
+  if (!isCreatingNewPreset.value && selectedPresetId.value) {
     settings.value = JSON.parse(JSON.stringify(editSettings.value))
     showEditDialog.value = false
   } else {
@@ -1272,18 +1280,18 @@ const saveEdit = () => {
 // Watch for edit dialog opening
 watch(showEditDialog, (isOpen) => {
   if (isOpen) {
-    // Prevent opening edit dialog for default preset
-    if (isSelectedPresetDefault.value) {
+    // Prevent opening edit dialog for default preset (unless creating new)
+    if (!isCreatingNewPreset.value && isSelectedPresetDefault.value) {
       showEditDialog.value = false
       alert('Cannot edit the default preset. Please create a new preset or set another preset as default first.')
       return
     }
     // Only copy settings if editing an existing preset (not a new preset)
     // For new presets, editSettings is already initialized with defaults in handleNewPreset()
-    if (selectedPresetId.value) {
+    if (!isCreatingNewPreset.value && selectedPresetId.value) {
       editSettings.value = JSON.parse(JSON.stringify(settings.value))
     }
-    // If selectedPresetId is empty, it's a new preset and editSettings already has defaults
+    // If isCreatingNewPreset is true, it's a new preset and editSettings already has defaults
   }
 })
 
