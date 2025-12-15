@@ -1,11 +1,20 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 
+export interface CreatorWalletScores {
+  winRateScore: number;
+  avgAthMcapScore: number;
+  medianAthMcapScore: number;
+  finalScore: number;
+}
+
 export interface CreatorWallet {
   address: string;
   totalTokens: number;
   bondedTokens: number;
   winRate: number; // % bonded (win rate)
-  score: number; // Calculated score from scoring system
+  avgAthMcap: number | null;
+  medianAthMcap: number | null;
+  scores: CreatorWalletScores;
 }
 
 export interface PaginationInfo {

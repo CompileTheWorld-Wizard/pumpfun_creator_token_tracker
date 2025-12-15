@@ -271,49 +271,85 @@ function getRanges(metric: any): Array<{ min: number; max: number; score: number
   return [];
 }
 
-// Calculate score for a creator wallet
-function calculateCreatorWalletScore(
+// Calculate scores for each metric for a creator wallet
+function calculateCreatorWalletScores(
   winRate: number,
   avgAthMcap: number | null,
   medianAthMcap: number | null,
-  settings: any
-): number {
-  let totalScore = 0;
+  settings: any,
+  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
+): {
+  winRateScore: number;
+  avgAthMcapScore: number;
+  medianAthMcapScore: number;
+  finalScore: number;
+} {
+  let winRateScore = 0;
+  let avgAthMcapScore = 0;
+  let medianAthMcapScore = 0;
   
   // Win Rate score
   const winRateRanges = getRanges(settings.winRate);
   if (winRateRanges.length > 0) {
-    totalScore += getScoreFromRanges(winRate, winRateRanges);
+    winRateScore = getScoreFromRanges(winRate, winRateRanges);
   }
   
-  // Average ATH MCap score (normalized to 0-100 percentile)
-  if (avgAthMcap !== null && settings.avgAthMcap) {
+  // Calculate percentiles for ATH MCap metrics
+  const avgAthMcapValues = allWalletsData
+    .map(w => w.avgAthMcap)
+    .filter((v): v is number => v !== null && v > 0)
+    .sort((a, b) => a - b);
+  
+  const medianAthMcapValues = allWalletsData
+    .map(w => w.medianAthMcap)
+    .filter((v): v is number => v !== null && v > 0)
+    .sort((a, b) => a - b);
+  
+  // Average ATH MCap score
+  if (avgAthMcap !== null && avgAthMcap > 0 && settings.avgAthMcap && avgAthMcapValues.length > 0) {
     const avgAthMcapRanges = getRanges(settings.avgAthMcap);
-    // For now, we'll use a simple percentile approach
-    // In a real implementation, you'd need to calculate percentiles across all wallets
-    // For now, we'll use the raw value and map it to ranges
-    // This is a simplified version - you may need to adjust based on actual data distribution
     if (avgAthMcapRanges.length > 0) {
-      // Convert ATH MCap to a percentile-like value (0-100)
-      // This is a placeholder - you should calculate actual percentiles
-      const percentile = Math.min(100, Math.max(0, (Math.log10(avgAthMcap + 1) / 10) * 100));
-      totalScore += getScoreFromRanges(percentile, avgAthMcapRanges);
+      // Calculate percentile
+      const percentile = calculatePercentile(avgAthMcap, avgAthMcapValues);
+      avgAthMcapScore = getScoreFromRanges(percentile, avgAthMcapRanges);
     }
   }
   
   // Median ATH MCap score
-  if (medianAthMcap !== null && settings.medianAthMcap) {
+  if (medianAthMcap !== null && medianAthMcap > 0 && settings.medianAthMcap && medianAthMcapValues.length > 0) {
     const medianAthMcapRanges = getRanges(settings.medianAthMcap);
     if (medianAthMcapRanges.length > 0) {
-      const percentile = Math.min(100, Math.max(0, (Math.log10(medianAthMcap + 1) / 10) * 100));
-      totalScore += getScoreFromRanges(percentile, medianAthMcapRanges);
+      // Calculate percentile
+      const percentile = calculatePercentile(medianAthMcap, medianAthMcapValues);
+      medianAthMcapScore = getScoreFromRanges(percentile, medianAthMcapRanges);
     }
   }
   
-  // Note: Multiplier configs, rug rates, etc. would require additional data
-  // For now, we'll focus on win rate and ATH mcap
+  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore;
   
-  return totalScore;
+  return {
+    winRateScore,
+    avgAthMcapScore,
+    medianAthMcapScore,
+    finalScore
+  };
+}
+
+// Calculate percentile for a value in a sorted array
+function calculatePercentile(value: number, sortedArray: number[]): number {
+  if (sortedArray.length === 0) return 0;
+  if (sortedArray.length === 1) return value >= sortedArray[0] ? 100 : 0;
+  
+  let countBelow = 0;
+  for (const item of sortedArray) {
+    if (item < value) {
+      countBelow++;
+    } else {
+      break;
+    }
+  }
+  
+  return (countBelow / sortedArray.length) * 100;
 }
 
 // Get creator wallets analytics with pagination
@@ -368,6 +404,21 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     );
     const total = parseInt(countResult.rows[0].total);
     
+    // First, get ALL wallets data to calculate percentiles (not just paginated ones)
+    const allWalletsResult = await pool.query(
+      `SELECT 
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as median_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}
+      GROUP BY ct.creator`
+    );
+    
+    const allWalletsData = allWalletsResult.rows.map(row => ({
+      avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
+      medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
+    }));
+    
     // Get paginated creator wallets with statistics
     const result = await pool.query(
       `SELECT 
@@ -395,10 +446,16 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
       const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
       
-      // Calculate score if settings are available
-      let score = 0;
+      // Calculate scores if settings are available
+      let scores = {
+        winRateScore: 0,
+        avgAthMcapScore: 0,
+        medianAthMcapScore: 0,
+        finalScore: 0
+      };
+      
       if (scoringSettings) {
-        score = calculateCreatorWalletScore(winRate, avgAthMcap, medianAthMcap, scoringSettings);
+        scores = calculateCreatorWalletScores(winRate, avgAthMcap, medianAthMcap, scoringSettings, allWalletsData);
       }
       
       return {
@@ -406,13 +463,20 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         totalTokens: parseInt(row.total_tokens) || 0,
         bondedTokens: parseInt(row.bonded_tokens) || 0,
         winRate,
-        score: Math.round(score * 100) / 100 // Round to 2 decimal places
+        avgAthMcap,
+        medianAthMcap,
+        scores: {
+          winRateScore: Math.round(scores.winRateScore * 100) / 100,
+          avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,
+          medianAthMcapScore: Math.round(scores.medianAthMcapScore * 100) / 100,
+          finalScore: Math.round(scores.finalScore * 100) / 100
+        }
       };
     });
     
-    // Sort by score if scoring settings are available, otherwise keep original order
+    // Sort by final score if scoring settings are available, otherwise keep original order
     const wallets = scoringSettings
-      ? walletsWithScores.sort((a, b) => b.score - a.score)
+      ? walletsWithScores.sort((a, b) => b.scores.finalScore - a.scores.finalScore)
       : walletsWithScores;
     
     res.json({
@@ -433,4 +497,5 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
 });
 
 export default router;
+
 
