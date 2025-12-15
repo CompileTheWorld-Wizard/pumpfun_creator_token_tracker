@@ -605,7 +605,7 @@ import logoutIconSvg from '../icons/logout.svg?raw'
 
 const router = useRouter()
 
-const activeTab = ref<'creator-wallets' | 'tokens'>('tokens')
+const activeTab = ref<'creator-wallets' | 'tokens'>('creator-wallets')
 const tokensTotalCount = ref<number>(0)
 
 // Helper function to process SVG for inline rendering
