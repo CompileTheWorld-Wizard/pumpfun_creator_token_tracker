@@ -273,19 +273,37 @@
     <div
       v-if="showEditDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      @click.self="showEditDialog = false"
+      @click.self="cancelEdit"
     >
-      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-7xl max-h-[90vh] overflow-y-auto">
-        <div class="flex items-center justify-between mb-6">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-7xl max-h-[90vh] flex flex-col">
+        <!-- Header (Fixed) -->
+        <div class="flex items-center justify-between p-6 pb-4 flex-shrink-0 border-b border-gray-800">
           <h3 class="text-xl font-bold text-gray-100">Edit Settings</h3>
           <button
-            @click="showEditDialog = false"
+            @click="cancelEdit"
             class="text-gray-400 hover:text-gray-200 transition"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
             </svg>
           </button>
+        </div>
+
+        <!-- Content Area (Scrollable) -->
+        <div class="flex-1 overflow-y-auto p-6">
+          <!-- Preset Name -->
+        <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+          <h2 class="text-lg font-bold text-gray-100 mb-4">Preset Name</h2>
+          <input
+            v-model="editPresetName"
+            type="text"
+            :disabled="isCreatingNewPreset"
+            class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            placeholder="Enter preset name"
+          />
+          <p v-if="isCreatingNewPreset" class="text-xs text-gray-500 mt-2">
+            Preset name will be set when saving the new preset
+          </p>
         </div>
 
         <!-- Tracking Time -->
@@ -740,9 +758,10 @@
             </p>
           </div>
         </div>
+        </div>
 
-        <!-- Dialog Actions -->
-        <div class="flex gap-3 pt-4 border-t border-gray-700">
+        <!-- Footer with Actions (Fixed) -->
+        <div class="flex gap-3 p-6 pt-4 border-t border-gray-800 flex-shrink-0">
           <button
             @click="cancelEdit"
             class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
@@ -751,9 +770,12 @@
           </button>
           <button
             @click="saveEdit"
-            class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition"
+            :disabled="saving"
+            class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Save Changes
+            <span v-if="saving" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+            <span v-if="saving">Saving...</span>
+            <span v-else>Save Changes</span>
           </button>
         </div>
       </div>
@@ -957,6 +979,7 @@ const showDeleteDialog = ref(false)
 const showEditDialog = ref(false)
 const showDuplicateDialog = ref(false)
 const presetName = ref('')
+const editPresetName = ref('')
 const duplicatePresetName = ref('')
 const saveAsDefault = ref(false)
 const duplicateAsDefault = ref(false)
@@ -1094,6 +1117,7 @@ const handleNewPreset = () => {
   // Set flag to indicate we're creating a new preset (but keep selectedPresetId unchanged)
   isCreatingNewPreset.value = true
   presetName.value = ''
+  editPresetName.value = ''
   saveAsDefault.value = false
   // Open edit dialog with default/empty settings for the new preset
   editSettings.value = getDefaultSettings()
@@ -1285,6 +1309,13 @@ const handleApplySettings = async () => {
 
 const cancelEdit = () => {
   editSettings.value = JSON.parse(JSON.stringify(settings.value))
+  // Reset preset name to current preset name
+  if (selectedPresetId.value) {
+    const currentPreset = presets.value.find(p => p.id === selectedPresetId.value)
+    editPresetName.value = currentPreset?.name || ''
+  } else {
+    editPresetName.value = ''
+  }
   // If this was a new preset, clear the flag and restore the previous selection if needed
   if (isCreatingNewPreset.value) {
     isCreatingNewPreset.value = false
@@ -1389,7 +1420,7 @@ const validateSettings = (settingsToValidate: ScoringSettings): string | null =>
   return null
 }
 
-const saveEdit = () => {
+const saveEdit = async () => {
   // Validate settings before saving
   const validationError = validateSettings(editSettings.value)
   if (validationError) {
@@ -1397,10 +1428,33 @@ const saveEdit = () => {
     return
   }
 
-  // If it's an existing preset, update the display immediately
+  // If it's an existing preset, update it in the database
   if (!isCreatingNewPreset.value && selectedPresetId.value) {
-    settings.value = JSON.parse(JSON.stringify(editSettings.value))
-    showEditDialog.value = false
+    // Validate preset name
+    if (!editPresetName.value.trim()) {
+      alert('Please enter a preset name')
+      return
+    }
+
+    saving.value = true
+    try {
+      await updateScoringPreset(selectedPresetId.value as number, {
+        name: editPresetName.value.trim(),
+        settings: editSettings.value
+      })
+      // Reload presets to get updated name
+      await loadPresets()
+      // Update display settings
+      settings.value = JSON.parse(JSON.stringify(editSettings.value))
+      // Reload preset to get updated name in the dropdown
+      await loadPreset()
+      showEditDialog.value = false
+      alert('Preset updated successfully!')
+    } catch (error: any) {
+      alert(error.message || 'Failed to update preset')
+    } finally {
+      saving.value = false
+    }
   } else {
     // If it's a new preset, don't update display yet - just close dialog and open save dialog
     // The display will be updated after the preset is saved
@@ -1424,6 +1478,12 @@ watch(showEditDialog, (isOpen) => {
     // For new presets, editSettings is already initialized with defaults in handleNewPreset()
     if (!isCreatingNewPreset.value && selectedPresetId.value) {
       editSettings.value = JSON.parse(JSON.stringify(settings.value))
+      // Load the current preset name
+      const currentPreset = presets.value.find(p => p.id === selectedPresetId.value)
+      editPresetName.value = currentPreset?.name || ''
+    } else {
+      // For new presets, clear the name
+      editPresetName.value = ''
     }
     // If isCreatingNewPreset is true, it's a new preset and editSettings already has defaults
   }
