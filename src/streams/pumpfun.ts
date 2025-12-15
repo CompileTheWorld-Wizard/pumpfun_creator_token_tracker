@@ -5,7 +5,7 @@ import { PublicKey } from '@solana/web3.js';
 import pumpIdl from '../IdlFiles/pump_0.1.0.json' with { type: 'json' };
 import pumpAmmIdl from '../IdlFiles/pump_amm_0.1.0.json' with { type: 'json' };
 import { storeTransactionEvent, type EventType } from '../redis.js';
-import { handleCreateEvent, initializeTokenTracker, cleanup as cleanupTokenTracker, isBlacklistedCreator } from '../services/tokenTracker.js';
+import { handleCreateEvent, initializeTokenTracker, cleanup as cleanupTokenTracker, waitForPendingTrackingJobs, isBlacklistedCreator } from '../services/tokenTracker.js';
 import { 
   initializeAthTracker, 
   cleanupAthTracker, 
@@ -31,6 +31,7 @@ const ADDRESSES_TO_STREAM_FROM = [
 
 // Stream control state
 let isStreaming = false;
+let isStopping = false; // Flag to indicate graceful shutdown in progress
 let txnStreamer: TransactionStreamer | null = null;
 
 /**
@@ -199,6 +200,11 @@ async function processData(processed: any) {
         // Send CreateEvent to token tracker (15-second tracking)
         // Token tracker will handle fetching creator's latest 100 tokens
         if (eventType === 'CreateEvent' && event?.data) {
+          // During graceful shutdown, don't accept new tokens
+          if (isStopping) {
+            continue;
+          }
+          
           const createData = event.data as CreateEventData;
           const creator = createData.creator || createData.user;
           
@@ -267,6 +273,8 @@ async function startStreaming(): Promise<void> {
       throw new Error('ENDPOINT and X_TOKEN environment variables are required');
     }
 
+    // Reset stopping flag when starting
+    isStopping = false;
 
     // Initialize token tracker (15-second tracking)
     await initializeTokenTracker();
@@ -299,38 +307,62 @@ async function startStreaming(): Promise<void> {
   } catch (error) {
     console.error('Error starting stream:', error);
     isStreaming = false;
+    isStopping = false;
     txnStreamer = null;
     throw error;
   }
 }
 
 /**
- * Stop the currently running stream
+ * Stop the currently running stream gracefully
+ * - Stops accepting new tokens immediately
+ * - Continues processing buy/sell trading events (TradeEvent, BuyEvent, SellEvent)
+ * - Keeps ATH tracker and bonding tracker running
+ * - Waits for all pending 15-second monitoring jobs to complete
+ * - Then stops the streamer and cleans up
  */
 async function stopStreaming(): Promise<void> {
   if (!isStreaming || !txnStreamer) {
     return;
   }
 
+  console.log('[PumpFun] Initiating graceful shutdown...');
+  
+  // Set stopping flag to prevent new token acceptance
+  // The streamer will continue running to process buy/sell events
+  isStopping = true;
+  console.log('[PumpFun] Stopped accepting new tokens. Continuing to process buy/sell trading events...');
 
+  // Wait for all pending 15-second monitoring jobs to complete
+  // This allows current tokens to finish their monitoring period
+  // During this time, the streamer continues running to process TradeEvent, BuyEvent, SellEvent
+  console.log('[PumpFun] Waiting for pending token tracking jobs to complete...');
+  await waitForPendingTrackingJobs();
+
+  // Now stop the transaction streamer (all monitoring is complete)
   try {
-    // Ladysbug TransactionStreamer has a stop() method
     txnStreamer.stop();
+    console.log('[PumpFun] Transaction streamer stopped');
   } catch (error) {
     console.error("Error stopping stream:", error);
   }
 
-  // Cleanup token tracker
+  // Now cleanup token tracker (all jobs should be done)
+  console.log('[PumpFun] Cleaning up token tracker...');
   cleanupTokenTracker();
 
-  // Cleanup ATH tracker
+  // Cleanup ATH tracker (final save)
+  console.log('[PumpFun] Cleaning up ATH tracker...');
   await cleanupAthTracker();
 
   // Cleanup bonding tracker
+  console.log('[PumpFun] Cleaning up bonding tracker...');
   await cleanupBondingTracker();
 
   isStreaming = false;
+  isStopping = false;
   txnStreamer = null;
+  console.log('[PumpFun] Graceful shutdown complete');
 }
 
 /**

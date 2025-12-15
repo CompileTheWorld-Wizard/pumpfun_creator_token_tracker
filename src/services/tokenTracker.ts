@@ -535,6 +535,32 @@ export function getTrackingStats(): { pendingJobs: number; blacklistedWallets: n
 }
 
 /**
+ * Wait for all pending tracking jobs to complete
+ * Used during graceful shutdown to ensure all 15-second monitoring completes
+ */
+export async function waitForPendingTrackingJobs(): Promise<void> {
+  const MAX_WAIT_TIME_MS = 60000; // Maximum 60 seconds wait time
+  const CHECK_INTERVAL_MS = 500; // Check every 500ms
+  const startTime = Date.now();
+
+  while (pendingTrackingJobs.size > 0) {
+    const elapsed = Date.now() - startTime;
+    
+    if (elapsed >= MAX_WAIT_TIME_MS) {
+      console.warn(`[TokenTracker] Timeout waiting for ${pendingTrackingJobs.size} pending jobs. Proceeding with cleanup.`);
+      break;
+    }
+
+    console.log(`[TokenTracker] Waiting for ${pendingTrackingJobs.size} pending tracking jobs to complete...`);
+    await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL_MS));
+  }
+
+  if (pendingTrackingJobs.size === 0) {
+    console.log('[TokenTracker] All pending tracking jobs completed');
+  }
+}
+
+/**
  * Cleanup pending tracking jobs (call on shutdown)
  */
 export function cleanup(): void {
