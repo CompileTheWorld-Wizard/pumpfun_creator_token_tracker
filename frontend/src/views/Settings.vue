@@ -1016,10 +1016,6 @@ const loadPreset = async () => {
 const handleNewPreset = () => {
   // Store the current selectedPresetId so we can restore it if user cancels
   previousSelectedPresetId.value = selectedPresetId.value
-  // Clear the selectedPresetId so we know it's a new preset
-  selectedPresetId.value = ''
-  presetName.value = ''
-  saveAsDefault.value = false
   // Open edit dialog with default/empty settings for the new preset
   editSettings.value = getDefaultSettings()
   showEditDialog.value = true
