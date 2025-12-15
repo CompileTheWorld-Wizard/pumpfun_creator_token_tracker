@@ -5,6 +5,7 @@ export interface CreatorWallet {
   totalTokens: number;
   bondedTokens: number;
   winRate: number; // % bonded (win rate)
+  score: number; // Calculated score from scoring system
 }
 
 export interface PaginationInfo {

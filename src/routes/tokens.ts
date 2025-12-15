@@ -250,6 +250,72 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
   }
 });
 
+// Helper function to get score from ranges
+function getScoreFromRanges(value: number, ranges: Array<{ min: number; max: number; score: number }>): number {
+  for (const range of ranges) {
+    if (value >= range.min && value <= range.max) {
+      return range.score;
+    }
+  }
+  return 0;
+}
+
+// Helper function to get ranges from metric (supports both old and new structure)
+function getRanges(metric: any): Array<{ min: number; max: number; score: number }> {
+  if (Array.isArray(metric)) {
+    return metric; // Old structure
+  }
+  if (metric && typeof metric === 'object' && Array.isArray(metric.ranges)) {
+    return metric.ranges; // New structure
+  }
+  return [];
+}
+
+// Calculate score for a creator wallet
+function calculateCreatorWalletScore(
+  winRate: number,
+  avgAthMcap: number | null,
+  medianAthMcap: number | null,
+  settings: any
+): number {
+  let totalScore = 0;
+  
+  // Win Rate score
+  const winRateRanges = getRanges(settings.winRate);
+  if (winRateRanges.length > 0) {
+    totalScore += getScoreFromRanges(winRate, winRateRanges);
+  }
+  
+  // Average ATH MCap score (normalized to 0-100 percentile)
+  if (avgAthMcap !== null && settings.avgAthMcap) {
+    const avgAthMcapRanges = getRanges(settings.avgAthMcap);
+    // For now, we'll use a simple percentile approach
+    // In a real implementation, you'd need to calculate percentiles across all wallets
+    // For now, we'll use the raw value and map it to ranges
+    // This is a simplified version - you may need to adjust based on actual data distribution
+    if (avgAthMcapRanges.length > 0) {
+      // Convert ATH MCap to a percentile-like value (0-100)
+      // This is a placeholder - you should calculate actual percentiles
+      const percentile = Math.min(100, Math.max(0, (Math.log10(avgAthMcap + 1) / 10) * 100));
+      totalScore += getScoreFromRanges(percentile, avgAthMcapRanges);
+    }
+  }
+  
+  // Median ATH MCap score
+  if (medianAthMcap !== null && settings.medianAthMcap) {
+    const medianAthMcapRanges = getRanges(settings.medianAthMcap);
+    if (medianAthMcapRanges.length > 0) {
+      const percentile = Math.min(100, Math.max(0, (Math.log10(medianAthMcap + 1) / 10) * 100));
+      totalScore += getScoreFromRanges(percentile, medianAthMcapRanges);
+    }
+  }
+  
+  // Note: Multiplier configs, rug rates, etc. would require additional data
+  // For now, we'll focus on win rate and ATH mcap
+  
+  return totalScore;
+}
+
 // Get creator wallets analytics with pagination
 router.get('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -258,6 +324,35 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
     const offset = (page - 1) * limit;
+    
+    // Get applied scoring settings
+    let scoringSettings: any = null;
+    try {
+      const settingsResult = await pool.query(
+        `SELECT settings
+         FROM tbl_soltrack_applied_settings
+         ORDER BY applied_at DESC
+         LIMIT 1`
+      );
+      
+      if (settingsResult.rows.length === 0) {
+        // Get default preset
+        const defaultResult = await pool.query(
+          `SELECT settings
+           FROM tbl_soltrack_scoring_settings
+           WHERE is_default = TRUE
+           LIMIT 1`
+        );
+        if (defaultResult.rows.length > 0) {
+          scoringSettings = defaultResult.rows[0].settings;
+        }
+      } else {
+        scoringSettings = settingsResult.rows[0].settings;
+      }
+    } catch (settingsError) {
+      console.error('Error fetching scoring settings:', settingsError);
+      // Continue without scoring if settings can't be loaded
+    }
     
     // Build WHERE clause
     let whereClause = '';
@@ -283,7 +378,9 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           WHEN COUNT(*) > 0 THEN 
             ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
           ELSE 0
-        END as win_rate
+        END as win_rate,
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator
@@ -292,12 +389,31 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       [limit, offset]
     );
     
-    const wallets = result.rows.map(row => ({
-      address: row.address,
-      totalTokens: parseInt(row.total_tokens) || 0,
-      bondedTokens: parseInt(row.bonded_tokens) || 0,
-      winRate: parseFloat(row.win_rate) || 0
-    }));
+    // Calculate scores and create wallet objects
+    const walletsWithScores = result.rows.map(row => {
+      const winRate = parseFloat(row.win_rate) || 0;
+      const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
+      const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
+      
+      // Calculate score if settings are available
+      let score = 0;
+      if (scoringSettings) {
+        score = calculateCreatorWalletScore(winRate, avgAthMcap, medianAthMcap, scoringSettings);
+      }
+      
+      return {
+        address: row.address,
+        totalTokens: parseInt(row.total_tokens) || 0,
+        bondedTokens: parseInt(row.bonded_tokens) || 0,
+        winRate,
+        score: Math.round(score * 100) / 100 // Round to 2 decimal places
+      };
+    });
+    
+    // Sort by score if scoring settings are available, otherwise keep original order
+    const wallets = scoringSettings
+      ? walletsWithScores.sort((a, b) => b.score - a.score)
+      : walletsWithScores;
     
     res.json({
       wallets,
