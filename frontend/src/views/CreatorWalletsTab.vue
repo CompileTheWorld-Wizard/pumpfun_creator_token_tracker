@@ -74,15 +74,15 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Tokens</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bonded Tokens</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
-              <th v-if="viewMode === 'score'" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
-              <th v-if="viewMode === 'score'" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
-              <th v-if="viewMode === 'score'" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td :colspan="viewMode === 'score' ? 7 : 4" class="px-2 py-8 text-center">
+              <td colspan="7" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -117,23 +117,23 @@
                   {{ wallet.winRate.toFixed(2) }}%<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.winRateScore.toFixed(0) }})</span>
                 </div>
               </td>
-              <td v-if="viewMode === 'score'" class="px-2 py-1.5 whitespace-nowrap text-right">
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.avgAthMcap !== null">
-                    ${{ formatCurrency(wallet.avgAthMcap) }}<span class="text-gray-500 ml-1">({{ wallet.scores.avgAthMcapScore.toFixed(0) }})</span>
+                    ${{ formatCurrency(wallet.avgAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.avgAthMcapScore.toFixed(0) }})</span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
-              <td v-if="viewMode === 'score'" class="px-2 py-1.5 whitespace-nowrap text-right">
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.medianAthMcap !== null">
-                    ${{ formatCurrency(wallet.medianAthMcap) }}<span class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
+                    ${{ formatCurrency(wallet.medianAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
-              <td v-if="viewMode === 'score'" class="px-2 py-1.5 whitespace-nowrap text-right">
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold" :class="getScoreColor(wallet.scores.finalScore)">
                   {{ wallet.scores.finalScore.toFixed(2) }}
                 </div>
