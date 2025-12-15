@@ -23,12 +23,12 @@
     </header>
 
     <!-- Main Content -->
-    <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Preset Management -->
-      <div class="mb-6 bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-bold text-gray-100">Preset Management</h2>
-          <div class="flex items-center gap-2">
+      <div class="mb-3 bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-base font-bold text-gray-100">Preset Management</h2>
+          <div class="flex items-center gap-1.5">
             <select
               v-model="selectedPresetId"
               @change="loadPreset"
@@ -40,42 +40,42 @@
             </select>
             <button
               @click="handleNewPreset"
-              class="px-4 py-2 bg-blue-600/90 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition"
+              class="px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded transition"
             >
               New Preset
             </button>
             <button
               @click="handleDuplicatePreset"
               :disabled="!selectedPresetId"
-              class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-green-600/90 hover:bg-green-600 text-white text-xs font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Duplicate Preset
             </button>
             <button
               @click="showEditDialog = true"
               :disabled="!selectedPresetId || isSelectedPresetDefault"
-              class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-xs font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Edit Settings
             </button>
             <button
               @click="showDeleteDialog = true"
               :disabled="!selectedPresetId || isSelectedPresetDefault"
-              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+              class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Delete
             </button>
             <button
               @click="handleApplySettings"
               :disabled="applying"
-              class="px-4 py-2 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              class="px-3 py-1.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 text-white text-xs font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               <span v-if="applying" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
               <span v-else>Apply Settings</span>
             </button>
           </div>
         </div>
-        <div v-if="appliedPresetId" class="mt-3 text-sm">
+        <div v-if="appliedPresetId" class="mt-2 text-xs">
           <span class="text-gray-400">Currently Applied: </span>
           <span class="text-green-400 font-semibold">
             {{ presets.find(p => p.id === appliedPresetId)?.name || 'Custom Settings' }}
@@ -84,34 +84,34 @@
       </div>
 
       <!-- Display Settings (Read-Only) -->
-      <div v-if="selectedPresetId || appliedPresetId" class="space-y-6">
+      <div v-if="selectedPresetId || appliedPresetId" class="space-y-3">
         <!-- Tracking Time -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <h2 class="text-lg font-bold text-gray-100 mb-4">Tracking Time</h2>
-          <div class="text-sm text-gray-300">
+        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+          <h2 class="text-base font-bold text-gray-100 mb-2">Tracking Time</h2>
+          <div class="text-xs text-gray-300">
             <span class="font-semibold">{{ displaySettings.trackingTimeSeconds }}</span> seconds
             <span class="text-gray-500 ml-2">(Min: 15s, Max: 120s)</span>
           </div>
         </div>
 
         <!-- Metrics Grid (2 columns) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
           <!-- Win Rate -->
-          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Win Rate (0-100%)</h2>
-              <span v-if="displaySettings.winRate.name" class="text-sm text-purple-400 font-semibold">
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Win Rate (0-100%)</h2>
+              <span v-if="displaySettings.winRate.name" class="text-xs text-purple-400 font-semibold">
                 Name: {{ displaySettings.winRate.name }}
               </span>
             </div>
-            <div v-if="displaySettings.winRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div v-if="displaySettings.winRate.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
               No ranges configured
             </div>
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(range, index) in displaySettings.winRate.ranges"
                 :key="index"
-                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+                class="p-2 bg-gray-800/50 rounded text-xs"
               >
                 <span class="text-gray-300">{{ range.min }}%</span>
                 <span class="text-gray-500 mx-2">-</span>
@@ -123,21 +123,21 @@
           </div>
 
           <!-- Avg ATH MCap -->
-          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
-              <span v-if="displaySettings.avgAthMcap.name" class="text-sm text-purple-400 font-semibold">
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
+              <span v-if="displaySettings.avgAthMcap.name" class="text-xs text-purple-400 font-semibold">
                 Name: {{ displaySettings.avgAthMcap.name }}
               </span>
             </div>
-            <div v-if="displaySettings.avgAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div v-if="displaySettings.avgAthMcap.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
               No ranges configured
             </div>
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(range, index) in displaySettings.avgAthMcap.ranges"
                 :key="index"
-                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+                class="p-2 bg-gray-800/50 rounded text-xs"
               >
                 <span class="text-gray-300">{{ range.min }}th</span>
                 <span class="text-gray-500 mx-2">-</span>
@@ -149,21 +149,21 @@
           </div>
 
           <!-- Median ATH MCap -->
-          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
-              <span v-if="displaySettings.medianAthMcap.name" class="text-sm text-purple-400 font-semibold">
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
+              <span v-if="displaySettings.medianAthMcap.name" class="text-xs text-purple-400 font-semibold">
                 Name: {{ displaySettings.medianAthMcap.name }}
               </span>
             </div>
-            <div v-if="displaySettings.medianAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div v-if="displaySettings.medianAthMcap.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
               No ranges configured
             </div>
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(range, index) in displaySettings.medianAthMcap.ranges"
                 :key="index"
-                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+                class="p-2 bg-gray-800/50 rounded text-xs"
               >
                 <span class="text-gray-300">{{ range.min }}th</span>
                 <span class="text-gray-500 mx-2">-</span>
@@ -175,21 +175,21 @@
           </div>
 
           <!-- Avg Rug Rate -->
-          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate (%)</h2>
-              <span v-if="displaySettings.avgRugRate.name" class="text-sm text-purple-400 font-semibold">
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Average Rug Rate (%)</h2>
+              <span v-if="displaySettings.avgRugRate.name" class="text-xs text-purple-400 font-semibold">
                 Name: {{ displaySettings.avgRugRate.name }}
               </span>
             </div>
-            <div v-if="displaySettings.avgRugRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div v-if="displaySettings.avgRugRate.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
               No ranges configured
             </div>
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(range, index) in displaySettings.avgRugRate.ranges"
                 :key="index"
-                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+                class="p-2 bg-gray-800/50 rounded text-xs"
               >
                 <span class="text-gray-300">{{ range.min }}%</span>
                 <span class="text-gray-500 mx-2">-</span>
@@ -201,21 +201,21 @@
           </div>
 
           <!-- Avg Rug Rate by Time Bucket -->
-          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Average Rug Rate by Time Bucket (seconds)</h2>
-              <span v-if="displaySettings.avgRugRateByTimeBucket.name" class="text-sm text-purple-400 font-semibold">
+          <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Average Rug Rate by Time Bucket (seconds)</h2>
+              <span v-if="displaySettings.avgRugRateByTimeBucket.name" class="text-xs text-purple-400 font-semibold">
                 Name: {{ displaySettings.avgRugRateByTimeBucket.name }}
               </span>
             </div>
-            <div v-if="displaySettings.avgRugRateByTimeBucket.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+            <div v-if="displaySettings.avgRugRateByTimeBucket.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
               No ranges configured
             </div>
-            <div v-else class="space-y-2">
+            <div v-else class="space-y-1.5">
               <div
                 v-for="(range, index) in displaySettings.avgRugRateByTimeBucket.ranges"
                 :key="index"
-                class="p-3 bg-gray-800/50 rounded-lg text-sm"
+                class="p-2 bg-gray-800/50 rounded text-xs"
               >
                 <span class="text-gray-300">{{ range.min }}s</span>
                 <span class="text-gray-500 mx-2">-</span>
@@ -228,28 +228,28 @@
         </div>
 
         <!-- Multiplier Configs (Full Width) -->
-        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-4">
-          <h2 class="text-lg font-bold text-gray-100 mb-4">% of Tokens That At Least "X"x From Starting MCAP</h2>
-          <div v-if="displaySettings.multiplierConfigs.length === 0" class="text-sm text-gray-500 text-center py-4">
+        <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
+          <h2 class="text-base font-bold text-gray-100 mb-2">% of Tokens That At Least "X"x From Starting MCAP</h2>
+          <div v-if="displaySettings.multiplierConfigs.length === 0" class="text-xs text-gray-500 text-center py-2">
             No multiplier configurations
           </div>
-          <div v-else class="space-y-4">
+          <div v-else class="space-y-2">
             <div
               v-for="(config, configIndex) in displaySettings.multiplierConfigs"
               :key="configIndex"
-              class="p-4 bg-gray-800/50 rounded-lg border border-gray-700"
+              class="p-2 bg-gray-800/50 rounded border border-gray-700"
             >
-              <h3 class="text-md font-semibold text-gray-200 mb-3">
+              <h3 class="text-sm font-semibold text-gray-200 mb-2">
                 Multiplier: <span class="text-purple-400">{{ config.multiplier }}x</span>
               </h3>
-              <div v-if="config.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
+              <div v-if="config.ranges.length === 0" class="text-xs text-gray-500 text-center py-1">
                 No ranges configured
               </div>
-              <div v-else class="space-y-2">
+              <div v-else class="space-y-1">
                 <div
                   v-for="(range, rangeIndex) in config.ranges"
                   :key="rangeIndex"
-                  class="p-2 bg-gray-900/50 rounded text-xs"
+                  class="p-1.5 bg-gray-900/50 rounded text-xs"
                 >
                   <span class="text-gray-300">{{ range.min }}%</span>
                   <span class="text-gray-500 mx-1">-</span>
@@ -264,8 +264,8 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else class="bg-gray-900/80 border border-gray-800 rounded-lg p-8 text-center">
-        <p class="text-gray-400 text-sm mb-4">No preset selected. Please select a preset or create a new one.</p>
+      <div v-else class="bg-gray-900/80 border border-gray-800 rounded-lg p-4 text-center">
+        <p class="text-gray-400 text-xs mb-2">No preset selected. Please select a preset or create a new one.</p>
       </div>
     </main>
 
@@ -277,8 +277,8 @@
     >
       <div class="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-7xl max-h-[90vh] flex flex-col">
         <!-- Header (Fixed) -->
-        <div class="flex items-center justify-between p-6 pb-4 flex-shrink-0 border-b border-gray-800">
-          <h3 class="text-xl font-bold text-gray-100">Edit Settings</h3>
+        <div class="flex items-center justify-between p-4 pb-3 flex-shrink-0 border-b border-gray-800">
+          <h3 class="text-lg font-bold text-gray-100">Edit Settings</h3>
           <button
             @click="cancelEdit"
             class="text-gray-400 hover:text-gray-200 transition"
@@ -290,10 +290,10 @@
         </div>
 
         <!-- Content Area (Scrollable) -->
-        <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex-1 overflow-y-auto p-4">
           <!-- Preset Name -->
-        <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-          <h2 class="text-lg font-bold text-gray-100 mb-4">Preset Name</h2>
+        <div class="mb-3 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <h2 class="text-base font-bold text-gray-100 mb-2">Preset Name</h2>
           <input
             v-model="editPresetName"
             type="text"
@@ -307,10 +307,10 @@
         </div>
 
         <!-- Tracking Time -->
-        <div class="mb-6 bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-          <h2 class="text-lg font-bold text-gray-100 mb-4">Tracking Time</h2>
-          <div class="flex items-center gap-4">
-            <label class="text-sm text-gray-300">New Token Tracking Duration (seconds):</label>
+        <div class="mb-3 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <h2 class="text-base font-bold text-gray-100 mb-2">Tracking Time</h2>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-gray-300">New Token Tracking Duration (seconds):</label>
             <input
               v-model.number="editSettings.trackingTimeSeconds"
               type="number"
@@ -323,20 +323,20 @@
         </div>
 
         <!-- Metrics Grid (2 columns) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
           <!-- Win Rate -->
-          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Win Rate (0-100%)</h2>
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Win Rate (0-100%)</h2>
               <button
                 @click="addRange('winRate')"
-                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+                class="px-2 py-1 bg-purple-600/90 hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
               >
                 Add Range
               </button>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+            <div class="mb-2">
+              <label class="block text-xs text-gray-300 mb-1">Name (for analytics table, optional):</label>
               <input
                 v-model="editSettings.winRate.name"
                 type="text"
@@ -344,11 +344,11 @@
                 class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <div
                 v-for="(range, index) in editSettings.winRate.ranges"
                 :key="index"
-                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+                class="flex items-center gap-1.5 p-2 bg-gray-900/50 rounded"
               >
                 <input
                   v-model.number="range.min"
@@ -357,9 +357,9 @@
                   max="100"
                   step="0.1"
                   placeholder="Min %"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
                 />
-                <span class="text-gray-400">-</span>
+                <span class="text-gray-400 text-xs">-</span>
                 <input
                   v-model.number="range.max"
                   type="number"
@@ -367,54 +367,54 @@
                   max="100"
                   step="0.1"
                   placeholder="Max %"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
                 />
-                <span class="text-gray-400">:</span>
+                <span class="text-gray-400 text-xs">:</span>
                 <input
                   v-model.number="range.score"
                   type="number"
                   step="0.1"
                   placeholder="Score"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
                 />
                 <button
                   @click="removeRange('winRate', index)"
-                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                  class="px-2 py-1 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition"
                 >
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.winRate.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.winRate.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
           </div>
 
           <!-- Avg ATH MCap -->
-          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Average ATH Market Cap (Percentile)</h2>
               <button
                 @click="addRange('avgAthMcap')"
-                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+                class="px-2 py-1 bg-purple-600/90 hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
               >
                 Add Range
               </button>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+            <div class="mb-2">
+              <label class="block text-xs text-gray-300 mb-1">Name (for analytics table, optional):</label>
               <input
                 v-model="editSettings.avgAthMcap.name"
                 type="text"
                 placeholder="Enter name..."
-                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <div
                 v-for="(range, index) in editSettings.avgAthMcap.ranges"
                 :key="index"
-                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+                class="flex items-center gap-1.5 p-2 bg-gray-900/50 rounded"
               >
                 <input
                   v-model.number="range.min"
@@ -423,9 +423,9 @@
                   max="100"
                   step="0.1"
                   placeholder="Min percentile"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
                 />
-                <span class="text-gray-400">-</span>
+                <span class="text-gray-400 text-xs">-</span>
                 <input
                   v-model.number="range.max"
                   type="number"
@@ -433,54 +433,54 @@
                   max="100"
                   step="0.1"
                   placeholder="Max percentile"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
                 />
-                <span class="text-gray-400">:</span>
+                <span class="text-gray-400 text-xs">:</span>
                 <input
                   v-model.number="range.score"
                   type="number"
                   step="0.1"
                   placeholder="Score"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
                 />
                 <button
                   @click="removeRange('avgAthMcap', index)"
-                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                  class="px-2 py-1 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition"
                 >
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.avgAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.avgAthMcap.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
           </div>
 
           <!-- Median ATH MCap -->
-          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-            <div class="flex items-center justify-between mb-4">
-              <h2 class="text-lg font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
+          <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <h2 class="text-base font-bold text-gray-100">Median ATH Market Cap (Percentile)</h2>
               <button
                 @click="addRange('medianAthMcap')"
-                class="px-3 py-1.5 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
+                class="px-2 py-1 bg-purple-600/90 hover:bg-purple-600 text-white text-xs font-semibold rounded transition"
               >
                 Add Range
               </button>
             </div>
-            <div class="mb-4">
-              <label class="block text-sm text-gray-300 mb-2">Name (for analytics table, optional):</label>
+            <div class="mb-2">
+              <label class="block text-xs text-gray-300 mb-1">Name (for analytics table, optional):</label>
               <input
                 v-model="editSettings.medianAthMcap.name"
                 type="text"
                 placeholder="Enter name..."
-                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
-            <div class="space-y-2">
+            <div class="space-y-1.5">
               <div
                 v-for="(range, index) in editSettings.medianAthMcap.ranges"
                 :key="index"
-                class="flex items-center gap-2 p-3 bg-gray-900/50 rounded-lg"
+                class="flex items-center gap-1.5 p-2 bg-gray-900/50 rounded"
               >
                 <input
                   v-model.number="range.min"
@@ -489,9 +489,9 @@
                   max="100"
                   step="0.1"
                   placeholder="Min percentile"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
                 />
-                <span class="text-gray-400">-</span>
+                <span class="text-gray-400 text-xs">-</span>
                 <input
                   v-model.number="range.max"
                   type="number"
@@ -499,24 +499,24 @@
                   max="100"
                   step="0.1"
                   placeholder="Max percentile"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-28"
                 />
-                <span class="text-gray-400">:</span>
+                <span class="text-gray-400 text-xs">:</span>
                 <input
                   v-model.number="range.score"
                   type="number"
                   step="0.1"
                   placeholder="Score"
-                  class="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded text-gray-200 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 w-32"
+                  class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-200 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
                 />
                 <button
                   @click="removeRange('medianAthMcap', index)"
-                  class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded transition"
+                  class="px-2 py-1 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition"
                 >
                   Remove
                 </button>
               </div>
-              <p v-if="editSettings.medianAthMcap.ranges.length === 0" class="text-sm text-gray-500 text-center py-4">
+              <p v-if="editSettings.medianAthMcap.ranges.length === 0" class="text-xs text-gray-500 text-center py-2">
                 No ranges configured. Click "Add Range" to add one.
               </p>
             </div>
