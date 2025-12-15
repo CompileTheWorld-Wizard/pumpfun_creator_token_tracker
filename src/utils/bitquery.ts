@@ -44,10 +44,11 @@ export async function fetchAthMarketCap(
     query GetAthMarketCap($tokens: [String!]!, $since: DateTime!) {
       Solana(dataset: combined) {
         DEXTradeByTokens(
-          limitBy: {by: Trade_Currency_MintAddress, count: 100}
+          limitBy: {by: Trade_Currency_MintAddress, count: 1}
           where: {
             Trade: {
               Currency: {MintAddress: {in: $tokens}}
+              PriceInUSD:{gt:0}
             },
             Block: {Time: {since: $since}}
           }
@@ -59,6 +60,13 @@ export async function fetchAthMarketCap(
               Symbol
             }
             PriceInUSD(maximum: Trade_PriceInUSD)
+            Side{
+              Currency{
+                Name
+                Symbol
+                MintAddress
+              }
+            }
           }
           max: quantile(of: Trade_PriceInUSD, level: 0.98)
           ATH_Marketcap: calculate(expression: "$max * 1000000000")
@@ -113,7 +121,10 @@ export async function fetchAthMarketCap(
       console.log(`[Bitquery] No trades found. Full response data:`, JSON.stringify(result.data, null, 2));
     }
     
-    const athDataList: TokenAthData[] = trades.map((trade: any) => {
+    // Map trades to TokenAthData and group by mintAddress to get maximum values
+    const tokenMap = new Map<string, TokenAthData>();
+    
+    trades.forEach((trade: any) => {
       const mintAddress = trade.Trade?.Currency?.MintAddress || '';
       const maxPrice = trade.max;
       const athMarketcap = trade.ATH_Marketcap;
@@ -128,14 +139,33 @@ export async function fetchAthMarketCap(
         });
       }
       
-      return {
-        mintAddress,
-        name: trade.Trade?.Currency?.Name || '',
-        symbol: trade.Trade?.Currency?.Symbol || '',
-        athPriceUsd: maxPrice ? parseFloat(maxPrice) : 0,
-        athMarketCapUsd: athMarketcap ? parseFloat(athMarketcap) : 0,
-      };
-    }).filter((data: TokenAthData) => data.mintAddress);
+      if (!mintAddress) return;
+      
+      const athPriceUsd = maxPrice ? parseFloat(maxPrice) : 0;
+      const athMarketCapUsd = athMarketcap ? parseFloat(athMarketcap) : 0;
+      
+      const existing = tokenMap.get(mintAddress);
+      
+      if (!existing) {
+        // First entry for this token
+        tokenMap.set(mintAddress, {
+          mintAddress,
+          name: trade.Trade?.Currency?.Name || '',
+          symbol: trade.Trade?.Currency?.Symbol || '',
+          athPriceUsd,
+          athMarketCapUsd,
+        });
+      } else {
+        // Update with maximum values
+        tokenMap.set(mintAddress, {
+          ...existing,
+          athPriceUsd: Math.max(existing.athPriceUsd, athPriceUsd),
+          athMarketCapUsd: Math.max(existing.athMarketCapUsd, athMarketCapUsd),
+        });
+      }
+    });
+    
+    const athDataList: TokenAthData[] = Array.from(tokenMap.values());
 
     console.log(`[Bitquery] Processed ${athDataList.length} tokens with ATH data`);
     if (athDataList.length > 0) {
