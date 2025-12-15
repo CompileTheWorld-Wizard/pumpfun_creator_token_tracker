@@ -94,8 +94,8 @@
           </div>
         </div>
 
-        <!-- Metrics Grid (2 columns) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <!-- Metrics Grid (3 columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <!-- Win Rate -->
           <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
             <div class="flex items-center justify-between mb-2">
@@ -275,7 +275,7 @@
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
       @click.self="cancelEdit"
     >
-      <div class="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-7xl max-h-[90vh] flex flex-col">
+      <div class="bg-gray-900 border border-gray-800 rounded-lg w-full max-w-[95rem] max-h-[90vh] flex flex-col">
         <!-- Header (Fixed) -->
         <div class="flex items-center justify-between p-4 pb-3 flex-shrink-0 border-b border-gray-800">
           <h3 class="text-lg font-bold text-gray-100">Edit Settings</h3>
@@ -322,8 +322,8 @@
           </div>
         </div>
 
-        <!-- Metrics Grid (2 columns) -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <!-- Metrics Grid (3 columns) -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
           <!-- Win Rate -->
           <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
             <div class="flex items-center justify-between mb-2">
@@ -341,7 +341,7 @@
                 v-model="editSettings.winRate.name"
                 type="text"
                 placeholder="Enter name..."
-                class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                class="w-full px-2 py-1 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
             <div class="space-y-1.5">
@@ -664,7 +664,7 @@
               Add Multiplier
             </button>
           </div>
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
             <div
               v-for="(config, configIndex) in editSettings.multiplierConfigs"
               :key="configIndex"
