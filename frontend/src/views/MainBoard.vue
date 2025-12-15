@@ -10,52 +10,52 @@
             </h1>
             <p class="text-gray-400 text-xs mt-0.5">Creator Wallet & Token Analytics</p>
           </div>
-          <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2">
             <button
               @click="showManageDialog = true"
-              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-2"
+              class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-1.5"
             >
-              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(manageBlacklistIconSvg)"></span>
+              <span class="w-3.5 h-3.5 inline-flex items-center justify-center" v-html="processSvg(manageBlacklistIconSvg)"></span>
               Manage Blacklist
-              <span v-if="wallets.length > 0" class="px-1.5 py-0.5 bg-red-600/80 text-white text-xs font-bold rounded-full">
+              <span v-if="wallets.length > 0" class="px-1 py-0.5 bg-red-600/80 text-white text-xs font-bold rounded-full">
                 {{ wallets.length }}
               </span>
             </button>
             <button
               @click="showClearDatabaseDialog = true"
-              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-2"
+              class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-1.5"
             >
-              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(clearDatabaseIconSvg)"></span>
+              <span class="w-3.5 h-3.5 inline-flex items-center justify-center" v-html="processSvg(clearDatabaseIconSvg)"></span>
               Clear Database
             </button>
             <button
               @click="showChangePasswordDialog = true"
-              class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-2"
+              class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-1.5"
             >
-              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
+              <span class="w-3.5 h-3.5 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
               Change Password
             </button>
             <button
               @click="toggleTracking"
               :disabled="trackingLoading"
               :class="[
-                'px-4 py-2 text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 flex items-center gap-2',
+                'px-3 py-1.5 text-xs font-semibold rounded transition focus:outline-none focus:ring-2 flex items-center gap-1.5',
                 isTracking || trackingLoading
                   ? 'bg-red-600/90 hover:bg-red-600 text-white focus:ring-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
                   : 'bg-green-600/90 hover:bg-green-600 text-white focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
               ]"
             >
-              <div v-if="trackingLoading" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-              <span v-if="!trackingLoading" class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(startTrackingIconSvg)"></span>
+              <div v-if="trackingLoading" class="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white border-t-transparent"></div>
+              <span v-if="!trackingLoading" class="w-3.5 h-3.5 inline-flex items-center justify-center" v-html="processSvg(startTrackingIconSvg)"></span>
               <span v-if="trackingLoading">Finalizing...</span>
               <span v-else-if="isTracking">Stop Tracking</span>
               <span v-else>Start Tracking</span>
             </button>
             <button
               @click="$router.push('/settings')"
-              class="px-4 py-2 bg-blue-600/90 hover:bg-blue-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center gap-2"
+              class="px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded transition focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center gap-1.5"
             >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
               </svg>
@@ -63,9 +63,9 @@
             </button>
             <button
               @click="handleLogout"
-              class="px-4 py-2 bg-red-600/90 hover:bg-red-600 text-white text-sm font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-2"
+              class="px-3 py-1.5 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-1.5"
             >
-              <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
+              <span class="w-3.5 h-3.5 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
               Logout
             </button>
           </div>
