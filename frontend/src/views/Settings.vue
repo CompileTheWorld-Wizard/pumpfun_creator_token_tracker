@@ -45,6 +45,13 @@
               New Preset
             </button>
             <button
+              @click="handleDuplicatePreset"
+              :disabled="!selectedPresetId"
+              class="px-4 py-2 bg-green-600/90 hover:bg-green-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Duplicate Preset
+            </button>
+            <button
               @click="showEditDialog = true"
               :disabled="!selectedPresetId || isSelectedPresetDefault"
               class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
@@ -815,6 +822,69 @@
       </div>
     </div>
 
+    <!-- Duplicate Preset Dialog -->
+    <div
+      v-if="showDuplicateDialog"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      @click.self="handleCancelDuplicateDialog"
+    >
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-gray-100">Duplicate Preset</h3>
+          <button
+            @click="handleCancelDuplicateDialog"
+            class="text-gray-400 hover:text-gray-200 transition"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <form @submit.prevent="handleDuplicatePresetConfirm" class="space-y-4">
+          <div>
+            <label for="duplicatePresetName" class="block text-sm font-semibold text-gray-300 mb-1.5">
+              Preset Name
+            </label>
+            <input
+              id="duplicatePresetName"
+              v-model="duplicatePresetName"
+              type="text"
+              required
+              class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
+              placeholder="Enter preset name"
+            />
+          </div>
+          <div>
+            <label class="flex items-center gap-2">
+              <input
+                v-model="duplicateAsDefault"
+                type="checkbox"
+                class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-700 rounded focus:ring-purple-500"
+              />
+              <span class="text-sm text-gray-300">Set as default preset</span>
+            </label>
+          </div>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              @click="handleCancelDuplicateDialog"
+              class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              :disabled="duplicating"
+              class="flex-1 px-4 py-2.5 bg-gradient-to-r from-green-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-green-500 hover:via-blue-500 hover:to-cyan-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span v-if="duplicating">Duplicating...</span>
+              <span v-else>Duplicate</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Delete Preset Dialog -->
     <div
       v-if="showDeleteDialog"
@@ -885,9 +955,13 @@ const appliedPresetId = ref<number | null>(null)
 const showSaveDialog = ref(false)
 const showDeleteDialog = ref(false)
 const showEditDialog = ref(false)
+const showDuplicateDialog = ref(false)
 const presetName = ref('')
+const duplicatePresetName = ref('')
 const saveAsDefault = ref(false)
+const duplicateAsDefault = ref(false)
 const saving = ref(false)
+const duplicating = ref(false)
 const deleting = ref(false)
 const applying = ref(false)
 
@@ -1024,6 +1098,66 @@ const handleNewPreset = () => {
   // Open edit dialog with default/empty settings for the new preset
   editSettings.value = getDefaultSettings()
   showEditDialog.value = true
+}
+
+const handleDuplicatePreset = () => {
+  if (!selectedPresetId.value) {
+    return
+  }
+  // Get the current preset name and suggest a duplicate name
+  const currentPreset = presets.value.find(p => p.id === selectedPresetId.value)
+  if (currentPreset) {
+    duplicatePresetName.value = `${currentPreset.name} (Copy)`
+  } else {
+    duplicatePresetName.value = ''
+  }
+  duplicateAsDefault.value = false
+  showDuplicateDialog.value = true
+}
+
+const handleDuplicatePresetConfirm = async () => {
+  if (!selectedPresetId.value) {
+    return
+  }
+
+  if (!duplicatePresetName.value.trim()) {
+    alert('Please enter a preset name')
+    return
+  }
+
+  duplicating.value = true
+  try {
+    // Get the current preset's settings
+    const currentPreset = await getScoringPreset(selectedPresetId.value as number)
+    const settingsToDuplicate = normalizeSettings(currentPreset.settings)
+    
+    // Create new preset with duplicated settings
+    const newPreset = await createScoringPreset(
+      duplicatePresetName.value.trim(),
+      settingsToDuplicate,
+      duplicateAsDefault.value
+    )
+    
+    // Reload presets and select the new one
+    await loadPresets()
+    selectedPresetId.value = newPreset.id
+    await loadPreset()
+    
+    showDuplicateDialog.value = false
+    duplicatePresetName.value = ''
+    duplicateAsDefault.value = false
+    alert('Preset duplicated successfully!')
+  } catch (error: any) {
+    alert(error.message || 'Failed to duplicate preset')
+  } finally {
+    duplicating.value = false
+  }
+}
+
+const handleCancelDuplicateDialog = () => {
+  showDuplicateDialog.value = false
+  duplicatePresetName.value = ''
+  duplicateAsDefault.value = false
 }
 
 const handleSavePreset = async () => {
