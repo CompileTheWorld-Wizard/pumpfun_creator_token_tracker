@@ -250,5 +250,71 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
   }
 });
 
+// Get creator wallets analytics with pagination
+router.get('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    
+    const offset = (page - 1) * limit;
+    
+    // Build WHERE clause
+    let whereClause = '';
+    if (!viewAll) {
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+    }
+    
+    // Get total count
+    const countResult = await pool.query(
+      `SELECT COUNT(DISTINCT ct.creator) as total
+       FROM tbl_soltrack_created_tokens ct
+       ${whereClause}`
+    );
+    const total = parseInt(countResult.rows[0].total);
+    
+    // Get paginated creator wallets with statistics
+    const result = await pool.query(
+      `SELECT 
+        ct.creator as address,
+        COUNT(*) as total_tokens,
+        COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+        CASE 
+          WHEN COUNT(*) > 0 THEN 
+            ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0
+        END as win_rate
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}
+      GROUP BY ct.creator
+      ORDER BY win_rate DESC, total_tokens DESC
+      LIMIT $1 OFFSET $2`,
+      [limit, offset]
+    );
+    
+    const wallets = result.rows.map(row => ({
+      address: row.address,
+      totalTokens: parseInt(row.total_tokens) || 0,
+      bondedTokens: parseInt(row.bonded_tokens) || 0,
+      winRate: parseFloat(row.win_rate) || 0
+    }));
+    
+    res.json({
+      wallets,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching creator wallets analytics:', error);
+    res.status(500).json({
+      error: 'Error fetching creator wallets analytics'
+    });
+  }
+});
+
 export default router;
 

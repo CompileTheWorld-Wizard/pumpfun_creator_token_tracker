@@ -76,7 +76,7 @@
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Stats Cards -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+      <div class="grid grid-cols-2 gap-3 mb-4">
         <div class="bg-gradient-to-br from-purple-600/20 to-purple-800/20 border border-purple-500/30 p-3 rounded-lg backdrop-blur-sm">
           <div class="flex items-center justify-between mb-1.5">
             <h3 class="text-xs font-semibold text-gray-400">Wallets</h3>
@@ -95,311 +95,42 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
           </div>
-          <p class="text-2xl font-bold text-blue-400">{{ pagination.total }}</p>
+          <p class="text-2xl font-bold text-blue-400">{{ tokensTotalCount }}</p>
           <p class="text-xs text-gray-500 mt-0.5">Total</p>
         </div>
-
-        <!-- Bonded Rate -->
-        <div class="bg-gradient-to-br from-green-600/20 to-green-800/20 border border-green-500/30 p-3 rounded-lg backdrop-blur-sm">
-          <div class="flex items-center justify-between mb-1.5">
-            <h3 class="text-xs font-semibold text-gray-400">Bonded Rate</h3>
-            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-            </svg>
-          </div>
-          <p v-if="!selectedCreatorWallet || !walletStats" class="text-lg font-semibold text-gray-500">Select wallet</p>
-          <template v-else>
-            <p class="text-2xl font-bold text-green-400">{{ walletStats.bondedRate.toFixed(1) }}%</p>
-            <p class="text-xs text-gray-500 mt-0.5">{{ walletStats.bondedTokens }}/{{ walletStats.totalTokens }}</p>
-          </template>
-        </div>
-        
-        <!-- Average ATH MCap -->
-        <div class="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 border border-cyan-500/30 p-3 rounded-lg backdrop-blur-sm">
-          <div class="flex items-center justify-between mb-1.5">
-            <h3 class="text-xs font-semibold text-gray-400">Avg ATH MCap</h3>
-            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
-            </svg>
-          </div>
-          <p v-if="!selectedCreatorWallet || !walletStats || walletStats.avgAthMcap === null" class="text-lg font-semibold text-gray-500">Select wallet</p>
-          <template v-else>
-            <p class="text-2xl font-bold text-cyan-400">${{ formatCurrency(walletStats.avgAthMcap) }}</p>
-            <p class="text-xs text-gray-500 mt-0.5">Average</p>
-          </template>
-        </div>
       </div>
 
-      <!-- Filter Section -->
-      <div class="mb-3 flex items-center gap-3 flex-wrap">
-        <label class="text-xs text-gray-400 font-medium">Filter by Creator Wallet:</label>
-        <div class="relative min-w-[250px]">
-          <div class="relative">
-            <input
-              v-model="walletInputValue"
-              @focus="handleWalletInputFocus"
-              @blur="walletInputFocused = false"
-              @input="showWalletDropdown = true; highlightedWalletIndex = -1"
-              @keydown.escape="showWalletDropdown = false; walletInputFocused = false"
-              @keydown.enter.prevent="handleWalletSelect(filteredWalletOptions[highlightedWalletIndex >= 0 ? highlightedWalletIndex : 0]?.value || '')"
-              @keydown.down.prevent="navigateWalletDropdown(1)"
-              @keydown.up.prevent="navigateWalletDropdown(-1)"
-              type="text"
-              :placeholder="!selectedCreatorWallet ? 'Search or select wallet...' : ''"
-              class="w-full px-2 py-1 pr-8 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
-            />
-            <button
-              v-if="selectedCreatorWallet"
-              @click.stop="clearWalletSelection"
-              class="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-200 transition"
-            >
-              <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(closeIconSvg, 'w-3 h-3')"></span>
-            </button>
-            <div
-              v-else
-              class="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none"
-            >
-              <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </div>
-          <!-- Dropdown -->
-          <div
-            v-if="showWalletDropdown && filteredWalletOptions.length > 0"
-            class="absolute z-50 w-full mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto"
+      <!-- Tab Controller -->
+      <div class="mb-4">
+        <div class="flex border-b border-gray-800">
+          <button
+            @click="activeTab = 'creator-wallets'"
+            :class="[
+              'px-4 py-2 text-sm font-semibold transition',
+              activeTab === 'creator-wallets'
+                ? 'text-purple-400 border-b-2 border-purple-400'
+                : 'text-gray-400 hover:text-gray-300'
+            ]"
           >
-            <div
-              v-for="(option, index) in filteredWalletOptions"
-              :key="option.value"
-              :data-index="index"
-              @click="handleWalletSelect(option.value)"
-              @mouseenter="highlightedWalletIndex = index"
-              :class="[
-                'px-3 py-2 text-xs cursor-pointer transition',
-                highlightedWalletIndex === index ? 'bg-purple-600/30 text-purple-300' : 'text-gray-200 hover:bg-gray-800'
-              ]"
-            >
-              <div v-if="option.value === ''" class="font-semibold text-purple-400">{{ option.label }}</div>
-              <div v-else class="font-mono">{{ option.label }}</div>
-            </div>
-          </div>
-        </div>
-        <label class="text-xs text-gray-400 font-medium ml-3">Items per page:</label>
-        <select
-          v-model="itemsPerPage"
-          @change="handleItemsPerPageChange"
-          class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
-        >
-          <option :value="10">10</option>
-          <option :value="20">20</option>
-          <option :value="50">50</option>
-          <option :value="100">100</option>
-          <option value="all">All</option>
-        </select>
-        <button
-          @click="handleRefresh"
-          :disabled="refreshing"
-          class="ml-auto px-3 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-        >
-          <svg 
-            :class="['w-4 h-4', refreshing ? 'animate-spin' : '']"
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
+            Creator Wallets
+          </button>
+          <button
+            @click="activeTab = 'tokens'"
+            :class="[
+              'px-4 py-2 text-sm font-semibold transition',
+              activeTab === 'tokens'
+                ? 'text-purple-400 border-b-2 border-purple-400'
+                : 'text-gray-400 hover:text-gray-300'
+            ]"
           >
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-          </svg>
-          <span>{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
-        </button>
-      </div>
-
-      <!-- Error State -->
-      <div v-if="error" class="bg-red-900/20 border border-red-500/30 rounded p-2 mb-3">
-        <p class="text-red-400 text-xs">{{ error }}</p>
-      </div>
-
-      <!-- Tokens Table -->
-      <div class="bg-gray-900/80 border border-gray-800 rounded overflow-hidden flex flex-col">
-        <div class="overflow-x-auto overflow-y-auto relative" style="max-height: calc(100vh - 350px);">
-          <!-- Loading Overlay -->
-          <div v-if="loading" class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-0" style="top: 0;">
-            <div class="flex items-center gap-2 bg-gray-900/60 backdrop-blur-md px-4 py-3 rounded-lg border border-gray-700/50">
-              <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
-              <span class="text-xs text-gray-200 font-medium">Loading tokens...</span>
-            </div>
-          </div>
-          <table class="w-full text-xs relative">
-            <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
-              <tr>
-                <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Token</th>
-                <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Creator</th>
-                <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-                <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Initial MC</th>
-                <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Peak MC</th>
-                <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final MC</th>
-                <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ATH MC</th>
-                <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Trades</th>
-                <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Created</th>
-                <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Chart</th>
-                <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-800">
-              <!-- Empty State -->
-              <tr v-if="!loading && tokens.length === 0">
-                <td :colspan="11" class="px-2 py-8 text-center">
-                  <p class="text-gray-400 text-xs font-semibold mb-1">
-                    {{ selectedCreatorWallet ? 'No tokens found for this wallet' : 'No tokens tracked yet' }}
-                  </p>
-                  <p class="text-gray-500 text-[10px]">
-                    {{ selectedCreatorWallet ? 'Try selecting a different wallet' : 'Tokens created by tracked wallets will appear here' }}
-                  </p>
-                </td>
-              </tr>
-              <!-- Token Rows -->
-              <tr
-                v-for="token in tokens"
-                :key="token.mint"
-                class="hover:bg-gray-800/50 transition cursor-pointer"
-                @click="selectedToken = token"
-              >
-                <td class="px-2 py-1.5 whitespace-nowrap">
-                  <div class="flex items-center gap-1.5">
-                    <button
-                      @click.stop="copyToClipboard(token.mint)"
-                      class="p-0.5 hover:bg-gray-700 rounded transition flex-shrink-0"
-                      :class="copiedToken === token.mint ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
-                      :title="copiedToken === token.mint ? 'Copied!' : 'Copy token address'"
-                    >
-                      <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(copiedToken === token.mint ? checkIconSvg : copyIconSvg, 'w-3 h-3')"></span>
-                    </button>
-                    <div>
-                      <div class="text-xs font-semibold text-gray-100">{{ token.name || 'Unnamed Token' }}</div>
-                      <div class="text-[10px] text-gray-500 font-mono">{{ formatAddress(token.mint) }}</div>
-                    </div>
-                    <span class="px-1.5 py-0.5 bg-purple-600/20 text-purple-400 text-[10px] font-semibold rounded">
-                      {{ token.symbol }}
-                    </span>
-                  </div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap">
-                  <div class="flex items-center gap-1.5">
-                    <button
-                      @click.stop="copyToClipboard(token.creator)"
-                      class="p-0.5 hover:bg-gray-700 rounded transition flex-shrink-0"
-                      :class="copiedToken === token.creator ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
-                      :title="copiedToken === token.creator ? 'Copied!' : 'Copy creator wallet address'"
-                    >
-                      <span class="w-3 h-3 inline-flex items-center justify-center" v-html="processSvg(copiedToken === token.creator ? checkIconSvg : copyIconSvg, 'w-3 h-3')"></span>
-                    </button>
-                    <div class="text-[10px] text-gray-400 font-mono">{{ formatAddress(token.creator) }}</div>
-                  </div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap">
-                  <span
-                    :class="token.bonded ? 'bg-green-600/20 text-green-400' : 'bg-yellow-600/20 text-yellow-400'"
-                    class="px-1.5 py-0.5 text-[10px] font-semibold rounded"
-                  >
-                    {{ token.bonded ? 'Bonded' : 'Bonding' }}
-                  </span>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div class="text-xs font-semibold text-gray-200">${{ formatCurrency(token.initialMarketCapUsd) }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div class="text-xs font-semibold text-green-400">${{ formatCurrency(token.peakMarketCapUsd) }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div class="text-xs font-semibold text-gray-200">${{ formatCurrency(token.finalMarketCapUsd) }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div class="text-xs font-semibold text-green-400">${{ formatCurrency(token.athMarketCapUsd) }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                  <div class="text-xs font-semibold text-gray-200">{{ token.tradeCount15s }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap">
-                  <div class="text-[10px] text-gray-400">{{ formatDate(token.createdAt) }}</div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap">
-                  <div v-if="token.marketCapTimeSeries && token.marketCapTimeSeries.length > 0" class="w-16 h-8">
-                    <canvas :ref="el => setChartRef(token.mint, el as HTMLCanvasElement | null)" class="w-full h-full"></canvas>
-                  </div>
-                  <div v-else class="w-16 h-8 flex items-center justify-center">
-                    <span class="text-[10px] text-gray-600">No data</span>
-                  </div>
-                </td>
-                <td class="px-2 py-1.5 whitespace-nowrap text-center">
-                  <button
-                    @click.stop="selectedToken = token"
-                    class="px-2 py-1 bg-purple-600/90 hover:bg-purple-600 text-white text-[10px] font-semibold rounded transition"
-                  >
-                    View
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        
-        <!-- Pagination Controls -->
-        <div v-if="pagination.total > 0" class="px-4 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
-          <div class="text-xs text-gray-400">
-            <span v-if="itemsPerPage === 'all'">
-              Showing all {{ pagination.total }} token{{ pagination.total !== 1 ? 's' : '' }}
-            </span>
-            <span v-else>
-              Showing {{ (pagination.page - 1) * pagination.limit + 1 }} to {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} tokens
-            </span>
-          </div>
-          <div v-if="pagination.totalPages > 1" class="flex items-center gap-2">
-            <button
-              @click="goToPage(1)"
-              :disabled="pagination.page === 1"
-              class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              First
-            </button>
-            <button
-              @click="goToPage(pagination.page - 1)"
-              :disabled="pagination.page === 1"
-              class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Previous
-            </button>
-            <div class="flex items-center gap-1">
-              <button
-                v-for="page in visiblePages"
-                :key="page"
-                @click="goToPage(page)"
-                :class="[
-                  'px-2 py-1 text-xs rounded transition min-w-[32px]',
-                  page === pagination.page
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-800 hover:bg-gray-700 text-gray-300'
-                ]"
-              >
-                {{ page }}
-              </button>
-            </div>
-            <button
-              @click="goToPage(pagination.page + 1)"
-              :disabled="pagination.page === pagination.totalPages"
-              class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Next
-            </button>
-            <button
-              @click="goToPage(pagination.totalPages)"
-              :disabled="pagination.page === pagination.totalPages"
-              class="px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Last
-            </button>
-          </div>
+            Tokens
+          </button>
         </div>
       </div>
+
+      <!-- Tab Content -->
+      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" />
+      <TokensTab v-else @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" />
     </main>
 
     <!-- Manage Blacklist Dialog -->
@@ -855,9 +586,11 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { logout, changePassword, clearDatabase } from '../services/auth'
-import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, getWalletStats, type WalletStats, type Wallet } from '../services/wallets'
+import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
-import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type PaginationInfo } from '../services/tokens'
+import { getCreatorWalletsFromTokens, type Token } from '../services/tokens'
+import CreatorWalletsTab from './CreatorWalletsTab.vue'
+import TokensTab from './TokensTab.vue'
 // Import SVG files as raw strings
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
@@ -871,6 +604,9 @@ import startTrackingIconSvg from '../icons/start-tracking.svg?raw'
 import logoutIconSvg from '../icons/logout.svg?raw'
 
 const router = useRouter()
+
+const activeTab = ref<'creator-wallets' | 'tokens'>('tokens')
+const tokensTotalCount = ref<number>(0)
 
 // Helper function to process SVG for inline rendering
 const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
@@ -904,29 +640,7 @@ const passwordError = ref('')
 const passwordSuccess = ref('')
 const searchQuery = ref('')
 const copiedAddress = ref<string | null>(null)
-const selectedCreatorWallet = ref<string>('')
-const walletSearchQuery = ref('')
-const showWalletDropdown = ref(false)
-const highlightedWalletIndex = ref(-1)
-const walletInputFocused = ref(false)
-
-// Computed property for wallet input display value
-const walletInputValue = computed({
-  get: () => {
-    if (walletInputFocused.value || showWalletDropdown.value) {
-      return walletSearchQuery.value
-    }
-    return selectedCreatorWallet.value ? formatWalletAddress(selectedCreatorWallet.value) : walletSearchQuery.value
-  },
-  set: (value: string) => {
-    walletSearchQuery.value = value
-  }
-})
-const tokens = ref<Token[]>([])
-const loading = ref(true)
-const error = ref<string | null>(null)
 const selectedToken = ref<Token | null>(null)
-const chartRefs = ref<Map<string, HTMLCanvasElement>>(new Map())
 const detailChartRef = ref<HTMLCanvasElement | null>(null)
 const chartTooltip = ref({
   show: false,
@@ -946,16 +660,6 @@ const chartMetadata = ref<{
   max: number
   range: number
 } | null>(null)
-const copiedToken = ref<string | null>(null)
-const itemsPerPage = ref<number | string>(20)
-const walletStats = ref<WalletStats | null>(null)
-const pagination = ref<PaginationInfo>({
-  page: 1,
-  limit: 20,
-  total: 0,
-  totalPages: 0
-})
-const refreshing = ref(false)
 
 // Filter wallets based on search query
 const filteredWallets = computed(() => {
@@ -967,43 +671,6 @@ const filteredWallets = computed(() => {
     wallet.address.toLowerCase().includes(query) ||
     (wallet.nickname && wallet.nickname.toLowerCase().includes(query))
   )
-})
-
-// Filter wallet options for the Select2-like input
-const filteredWalletOptions = computed(() => {
-  const options: Array<{ value: string; label: string }> = [
-    { value: '', label: 'All Wallets' }
-  ]
-  
-  const query = walletSearchQuery.value.toLowerCase().trim()
-  
-  creatorWallets.value.forEach(address => {
-    if (!query || address.toLowerCase().includes(query) || formatWalletAddress(address).toLowerCase().includes(query)) {
-      options.push({
-        value: address,
-        label: formatWalletAddress(address)
-      })
-    }
-  })
-  
-  return options
-})
-
-const visiblePages = computed(() => {
-  const pages: number[] = []
-  const maxVisible = 5
-  let start = Math.max(1, pagination.value.page - Math.floor(maxVisible / 2))
-  let end = Math.min(pagination.value.totalPages, start + maxVisible - 1)
-  
-  if (end - start < maxVisible - 1) {
-    start = Math.max(1, end - maxVisible + 1)
-  }
-  
-  for (let i = start; i <= end; i++) {
-    pages.push(i)
-  }
-  
-  return pages
 })
 
 const passwordMismatch = computed(() => {
@@ -1031,23 +698,6 @@ const formatCurrency = (value: number | null): string => {
   if (value >= 1_000_000) return (value / 1_000_000).toFixed(2) + 'M'
   if (value >= 1_000) return (value / 1_000).toFixed(2) + 'K'
   return value.toFixed(2)
-}
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-}
-
-const formatAddress = (address: string): string => {
-  if (!address) return ''
-  return `${address.slice(0, 4)}...${address.slice(-4)}`
 }
 
 const formatWalletAddress = (address: string): string => {
@@ -1184,13 +834,8 @@ const removeWalletByAddress = async (address: string) => {
       wallets.value.splice(index, 1)
     }
     
-    if (selectedCreatorWallet.value === address) {
-      selectedCreatorWallet.value = ''
-    }
-    
     // Reload creator wallets to update total count
     await loadCreatorWallets()
-    loadTokens()
   } catch (error) {
     console.error('Error removing wallet:', error)
     alert('Error removing wallet address. Please try again.')
@@ -1227,209 +872,7 @@ const closeManageDialog = () => {
   searchQuery.value = ''
 }
 
-const goToPage = (page: number) => {
-  if (page >= 1 && page <= pagination.value.totalPages) {
-    pagination.value.page = page
-    loadTokens()
-  }
-}
 
-const handleFilterChange = async () => {
-  // Reload creator wallets when filter changes
-  await loadCreatorWallets()
-  pagination.value.page = 1
-  await loadTokens()
-  await loadWalletStats()
-}
-
-const handleWalletInputFocus = () => {
-  walletInputFocused.value = true
-  showWalletDropdown.value = true
-  highlightedWalletIndex.value = -1
-  // Clear search query when focusing if a wallet is selected, to allow searching
-  if (selectedCreatorWallet.value) {
-    walletSearchQuery.value = ''
-  }
-}
-
-const handleWalletSelect = async (value: string) => {
-  selectedCreatorWallet.value = value
-  walletSearchQuery.value = ''
-  showWalletDropdown.value = false
-  walletInputFocused.value = false
-  highlightedWalletIndex.value = -1
-  await handleFilterChange()
-}
-
-const clearWalletSelection = async () => {
-  selectedCreatorWallet.value = ''
-  walletSearchQuery.value = ''
-  showWalletDropdown.value = false
-  walletInputFocused.value = false
-  highlightedWalletIndex.value = -1
-  await handleFilterChange()
-}
-
-const navigateWalletDropdown = (direction: number) => {
-  if (filteredWalletOptions.value.length === 0) return
-  
-  highlightedWalletIndex.value += direction
-  
-  if (highlightedWalletIndex.value < 0) {
-    highlightedWalletIndex.value = filteredWalletOptions.value.length - 1
-  } else if (highlightedWalletIndex.value >= filteredWalletOptions.value.length) {
-    highlightedWalletIndex.value = 0
-  }
-  
-  // Scroll into view if needed
-  nextTick(() => {
-    const dropdowns = document.querySelectorAll('.absolute.z-50')
-    if (dropdowns.length > 0) {
-      const dropdown = Array.from(dropdowns).find(el => 
-        el.querySelector(`[data-index="${highlightedWalletIndex.value}"]`)
-      ) as HTMLElement
-      if (dropdown) {
-        const highlighted = dropdown.querySelector(`[data-index="${highlightedWalletIndex.value}"]`) as HTMLElement
-        if (highlighted) {
-          highlighted.scrollIntoView({ block: 'nearest' })
-        }
-      }
-    }
-  })
-}
-
-// Close dropdown when clicking outside
-const handleClickOutside = (event: MouseEvent) => {
-  const target = event.target as HTMLElement
-  if (!target.closest('.relative.min-w-\\[250px\\]')) {
-    showWalletDropdown.value = false
-    walletInputFocused.value = false
-    highlightedWalletIndex.value = -1
-    // Restore display value if a wallet is selected
-    if (selectedCreatorWallet.value) {
-      walletSearchQuery.value = ''
-    }
-  }
-}
-
-const handleItemsPerPageChange = () => {
-  pagination.value.page = 1
-  if (itemsPerPage.value === 'all') {
-    pagination.value.limit = 1000000
-  } else {
-    pagination.value.limit = itemsPerPage.value as number
-  }
-  loadTokens()
-}
-
-const setChartRef = (mint: string, el: HTMLCanvasElement | null) => {
-  if (el) {
-    chartRefs.value.set(mint, el)
-  }
-}
-
-const copyToClipboard = async (text: string) => {
-  try {
-    // Try modern clipboard API first
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(text)
-      copiedToken.value = text
-      setTimeout(() => {
-        copiedToken.value = null
-      }, 1000)
-      return
-    }
-    
-    // Fallback for older browsers or insecure contexts
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    textArea.style.position = 'fixed'
-    textArea.style.opacity = '0'
-    textArea.style.pointerEvents = 'none'
-    document.body.appendChild(textArea)
-    textArea.select()
-    textArea.setSelectionRange(0, text.length)
-    
-    try {
-      const successful = document.execCommand('copy')
-      if (successful) {
-        copiedToken.value = text
-        setTimeout(() => {
-          copiedToken.value = null
-        }, 1000)
-      } else {
-        throw new Error('Copy command failed')
-      }
-    } catch (fallbackErr) {
-      console.error('Fallback copy failed:', fallbackErr)
-      alert('Failed to copy. Please copy manually.')
-    } finally {
-      document.body.removeChild(textArea)
-    }
-  } catch (err) {
-    console.error('Failed to copy:', err)
-    // Fallback for older browsers
-    try {
-      const textArea = document.createElement('textarea')
-      textArea.value = text
-      textArea.style.position = 'fixed'
-      textArea.style.opacity = '0'
-      textArea.style.pointerEvents = 'none'
-      document.body.appendChild(textArea)
-      textArea.select()
-      textArea.setSelectionRange(0, text.length)
-      
-      const successful = document.execCommand('copy')
-      if (successful) {
-        copiedToken.value = text
-        setTimeout(() => {
-          copiedToken.value = null
-        }, 1000)
-      } else {
-        alert('Failed to copy. Please copy manually.')
-      }
-      document.body.removeChild(textArea)
-    } catch (fallbackErr) {
-      console.error('Fallback copy failed:', fallbackErr)
-      alert('Failed to copy. Please copy manually.')
-    }
-  }
-}
-
-const drawMiniChart = (canvas: HTMLCanvasElement, timeSeries: any[]) => {
-  if (!timeSeries || timeSeries.length === 0) return
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  const width = canvas.width = canvas.offsetWidth
-  const height = canvas.height = canvas.offsetHeight
-  const padding = 2
-
-  ctx.clearRect(0, 0, width, height)
-
-  const values = timeSeries.map(d => d.marketCapUsd)
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const range = max - min || 1
-
-  ctx.strokeStyle = '#a855f7'
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-
-  timeSeries.forEach((point, index) => {
-    const x = padding + (index / (timeSeries.length - 1 || 1)) * (width - padding * 2)
-    const y = height - padding - ((point.marketCapUsd - min) / range) * (height - padding * 2)
-    
-    if (index === 0) {
-      ctx.moveTo(x, y)
-    } else {
-      ctx.lineTo(x, y)
-    }
-  })
-
-  ctx.stroke()
-}
 
 const drawDetailChart = (canvas: HTMLCanvasElement, timeSeries: any[]) => {
   if (!timeSeries || timeSeries.length === 0) return
@@ -1617,22 +1060,30 @@ const handleChartMouseLeave = () => {
   chartTooltip.value.show = false
 }
 
+const loadCreatorWallets = async () => {
+  try {
+    creatorWallets.value = await getCreatorWalletsFromTokens(true)
+    totalWalletsCount.value = creatorWallets.value.length
+    // Note: tokensTotalCount will be updated by TokensTab component via emit or we can fetch it separately
+  } catch (err: any) {
+    console.error('Error loading creator wallets:', err)
+    creatorWallets.value = []
+    totalWalletsCount.value = 0
+  }
+}
+
+// Watch for token selection from TokensTab
 watch(selectedToken, async (newToken) => {
   if (newToken && newToken.marketCapTimeSeries && newToken.marketCapTimeSeries.length > 0) {
-    // Wait for the modal to be fully rendered
     await nextTick()
-    
-    // Use requestAnimationFrame to ensure DOM is fully laid out
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        // Try to get the canvas element, with retries if needed
         let retries = 0
         const maxRetries = 20
         
         const tryDrawChart = () => {
           if (detailChartRef.value) {
             const canvas = detailChartRef.value
-            // Check if canvas has dimensions
             if (canvas.offsetWidth > 0) {
               drawDetailChart(canvas, newToken.marketCapTimeSeries)
             } else if (retries < maxRetries) {
@@ -1649,93 +1100,10 @@ watch(selectedToken, async (newToken) => {
       })
     })
   } else {
-    // Clear tooltip when token is deselected
     chartTooltip.value.show = false
     chartMetadata.value = null
   }
 })
-
-watch(tokens, async () => {
-  await nextTick()
-  tokens.value.forEach(token => {
-    const canvas = chartRefs.value.get(token.mint)
-    if (canvas && token.marketCapTimeSeries && token.marketCapTimeSeries.length > 0) {
-      drawMiniChart(canvas, token.marketCapTimeSeries)
-    }
-  })
-}, { deep: true })
-
-const loadWalletStats = async () => {
-  if (!selectedCreatorWallet.value) {
-    walletStats.value = null
-    return
-  }
-
-  try {
-    walletStats.value = await getWalletStats(selectedCreatorWallet.value)
-  } catch (err: any) {
-    console.error('Error loading wallet statistics:', err)
-    walletStats.value = null
-  }
-}
-
-const loadCreatorWallets = async () => {
-  try {
-    // Always load all creator wallets that have tokens (for the filter dropdown)
-    // The filter dropdown should show all wallets that have created tokens
-    creatorWallets.value = await getCreatorWalletsFromTokens(true)
-    // Update total wallets count (all unique creator wallets)
-    totalWalletsCount.value = creatorWallets.value.length
-  } catch (err: any) {
-    console.error('Error loading creator wallets:', err)
-    creatorWallets.value = []
-    totalWalletsCount.value = 0
-  }
-}
-
-const loadTokens = async () => {
-  loading.value = true
-  error.value = null
-  
-  try {
-    const limit = itemsPerPage.value === 'all' ? 1000000 : (itemsPerPage.value as number)
-    // When "All Wallets" is selected (empty string), show all tokens without filtering
-    // When a specific wallet is selected, filter by that wallet
-    const viewAll = !selectedCreatorWallet.value
-    const response = await getCreatedTokens(
-      pagination.value.page,
-      limit,
-      selectedCreatorWallet.value || undefined,
-      viewAll
-    )
-    tokens.value = response.tokens
-    pagination.value = response.pagination
-    
-    // Reload creator wallets list after loading tokens
-    await loadCreatorWallets()
-  } catch (err: any) {
-    error.value = err.message || 'Failed to load tokens'
-    console.error('Error loading tokens:', err)
-  } finally {
-    loading.value = false
-  }
-}
-
-const handleRefresh = async () => {
-  if (refreshing.value) {
-    return
-  }
-
-  refreshing.value = true
-  try {
-    await loadTokens()
-    await loadWalletStats()
-  } catch (err: any) {
-    console.error('Error refreshing data:', err)
-  } finally {
-    refreshing.value = false
-  }
-}
 
 onMounted(async () => {
   try {
@@ -1744,20 +1112,13 @@ onMounted(async () => {
     const response = await getStreamStatus()
     isTracking.value = response.status || false
     
-    await loadTokens()
     await loadCreatorWallets()
-    
-    // Add click outside listener
-    document.addEventListener('click', handleClickOutside)
   } catch (error) {
     console.error('Error loading data:', error)
   }
 })
 
 onUnmounted(async () => {
-  // Remove click outside listener
-  document.removeEventListener('click', handleClickOutside)
-  
   if (isTracking.value) {
     try {
       await stopStream()
@@ -1843,22 +1204,15 @@ const handleClearDatabase = async () => {
     if (result.success) {
       // Clear all local state
       wallets.value = []
-      tokens.value = []
-      selectedCreatorWallet.value = ''
-      walletStats.value = null
-      pagination.value = {
-        page: 1,
-        limit: 20,
-        total: 0,
-        totalPages: 0
-      }
+      tokensTotalCount.value = 0
+      totalWalletsCount.value = 0
       
       // Close dialog and show success
       closeClearDatabaseDialog()
       alert('Database cleared successfully!')
       
-      // Reload tokens to show empty state
-      await loadTokens()
+      // Reload data
+      await loadCreatorWallets()
     } else {
       clearDatabaseError.value = result.error || 'Failed to clear database'
     }
