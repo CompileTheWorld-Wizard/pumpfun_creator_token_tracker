@@ -371,6 +371,21 @@ const handleRefresh = async () => {
 onMounted(async () => {
   await loadWallets()
 })
+
+// Expose method to clear data
+const clearData = () => {
+  wallets.value = []
+  pagination.value = {
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  }
+}
+
+defineExpose({
+  clearData
+})
 </script>
 
 <style scoped>

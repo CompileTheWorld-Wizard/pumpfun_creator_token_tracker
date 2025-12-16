@@ -320,12 +320,12 @@
         <!-- Transaction Link -->
         <div class="flex justify-end">
           <a
-            :href="`https://solscan.io/tx/${selectedToken.createTxSignature}`"
+            :href="`https://gmgn.ai/sol/token/${selectedToken.mint}`"
             target="_blank"
             rel="noopener noreferrer"
             class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
           >
-            View on Solscan →
+            View in Gmgn →
           </a>
         </div>
       </div>

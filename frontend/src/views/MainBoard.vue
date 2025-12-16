@@ -129,8 +129,8 @@
       </div>
 
       <!-- Tab Content -->
-      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" />
-      <TokensTab v-else @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" />
+      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" ref="creatorWalletsTabRef" />
+      <TokensTab v-else ref="tokensTabRef" @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" />
     </main>
 
     <!-- Manage Blacklist Dialog -->
@@ -569,12 +569,12 @@
         <!-- Transaction Link -->
         <div class="flex justify-end">
           <a
-            :href="`https://solscan.io/tx/${selectedToken.createTxSignature}`"
+            :href="`https://gmgn.ai/sol/token/${selectedToken.mint}`"
             target="_blank"
             rel="noopener noreferrer"
             class="px-4 py-2 bg-purple-600/90 hover:bg-purple-600 text-white text-sm font-semibold rounded-lg transition"
           >
-            View on Solscan →
+            View in Gmgn →
           </a>
         </div>
       </div>
@@ -619,6 +619,8 @@ const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
 const wallets = ref<Wallet[]>([])
 const creatorWallets = ref<string[]>([]) // Creator wallets from tbl_soltrack_created_tokens (for filter)
 const totalWalletsCount = ref<number>(0) // Total unique creator wallets from tokens
+const tokensTabRef = ref<InstanceType<typeof TokensTab> | null>(null)
+const creatorWalletsTabRef = ref<InstanceType<typeof CreatorWalletsTab> | null>(null)
 const walletNicknameInput = ref('')
 const isTracking = ref(false)
 const trackingLoading = ref(false)
@@ -1206,6 +1208,14 @@ const handleClearDatabase = async () => {
       wallets.value = []
       tokensTotalCount.value = 0
       totalWalletsCount.value = 0
+      
+      // Clear tables in tab components
+      if (tokensTabRef.value) {
+        tokensTabRef.value.clearData()
+      }
+      if (creatorWalletsTabRef.value) {
+        creatorWalletsTabRef.value.clearData()
+      }
       
       // Close dialog and show success
       closeClearDatabaseDialog()

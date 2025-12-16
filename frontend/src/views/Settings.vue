@@ -24,10 +24,10 @@
 
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
-      <!-- Preset Management -->
+      <!-- Setting Management -->
       <div class="mb-3 bg-gray-900/80 border border-gray-800 rounded-lg p-3">
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-base font-bold text-gray-100">Preset Management</h2>
+          <h2 class="text-base font-bold text-gray-100">Setting Management</h2>
           <div class="flex items-center gap-1.5">
             <select
               v-model="selectedPresetId"
@@ -42,14 +42,14 @@
               @click="handleNewPreset"
               class="px-3 py-1.5 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded transition"
             >
-              New Preset
+              New Setting
             </button>
             <button
               @click="handleDuplicatePreset"
               :disabled="!selectedPresetId"
               class="px-3 py-1.5 bg-green-600/90 hover:bg-green-600 text-white text-xs font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Duplicate Preset
+              Duplicate Setting
             </button>
             <button
               @click="showEditDialog = true"
@@ -265,7 +265,7 @@
 
       <!-- Empty State -->
       <div v-else class="bg-gray-900/80 border border-gray-800 rounded-lg p-4 text-center">
-        <p class="text-gray-400 text-xs mb-2">No preset selected. Please select a preset or create a new one.</p>
+        <p class="text-gray-400 text-xs mb-2">No setting selected. Please select a setting or create a new one.</p>
       </div>
     </main>
 
@@ -291,18 +291,18 @@
 
         <!-- Content Area (Scrollable) -->
         <div class="flex-1 overflow-y-auto p-4">
-          <!-- Preset Name -->
+          <!-- Setting Name -->
         <div class="mb-3 bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-          <h2 class="text-base font-bold text-gray-100 mb-2">Preset Name</h2>
+          <h2 class="text-base font-bold text-gray-100 mb-2">Setting Name</h2>
           <input
             v-model="editPresetName"
             type="text"
             :disabled="isCreatingNewPreset"
             class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            placeholder="Enter preset name"
+            placeholder="Enter setting name"
           />
           <p v-if="isCreatingNewPreset" class="text-xs text-gray-500 mt-2">
-            Preset name will be set when saving the new preset
+            Setting name will be set when saving the new setting
           </p>
         </div>
 
@@ -781,7 +781,7 @@
       </div>
     </div>
 
-    <!-- Save Preset Dialog -->
+    <!-- Save Setting Dialog -->
     <div
       v-if="showSaveDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
@@ -789,7 +789,7 @@
     >
       <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-gray-100">Save Preset</h3>
+          <h3 class="text-lg font-bold text-gray-100">Save Setting</h3>
           <button
             @click="handleCancelSaveDialog"
             class="text-gray-400 hover:text-gray-200 transition"
@@ -802,7 +802,7 @@
         <form @submit.prevent="handleSavePreset" class="space-y-4">
           <div>
             <label for="presetName" class="block text-sm font-semibold text-gray-300 mb-1.5">
-              Preset Name
+              Setting Name
             </label>
             <input
               id="presetName"
@@ -810,7 +810,7 @@
               type="text"
               required
               class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
-              placeholder="Enter preset name"
+              placeholder="Enter setting name"
             />
           </div>
           <div>
@@ -820,7 +820,7 @@
                 type="checkbox"
                 class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-700 rounded focus:ring-purple-500"
               />
-              <span class="text-sm text-gray-300">Set as default preset</span>
+              <span class="text-sm text-gray-300">Set as default setting</span>
             </label>
           </div>
           <div class="flex gap-3">
@@ -844,7 +844,7 @@
       </div>
     </div>
 
-    <!-- Duplicate Preset Dialog -->
+    <!-- Duplicate Setting Dialog -->
     <div
       v-if="showDuplicateDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
@@ -852,7 +852,7 @@
     >
       <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-gray-100">Duplicate Preset</h3>
+          <h3 class="text-lg font-bold text-gray-100">Duplicate Setting</h3>
           <button
             @click="handleCancelDuplicateDialog"
             class="text-gray-400 hover:text-gray-200 transition"
@@ -865,7 +865,7 @@
         <form @submit.prevent="handleDuplicatePresetConfirm" class="space-y-4">
           <div>
             <label for="duplicatePresetName" class="block text-sm font-semibold text-gray-300 mb-1.5">
-              Preset Name
+              Setting Name
             </label>
             <input
               id="duplicatePresetName"
@@ -873,7 +873,7 @@
               type="text"
               required
               class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
-              placeholder="Enter preset name"
+              placeholder="Enter setting name"
             />
           </div>
           <div>
@@ -883,7 +883,7 @@
                 type="checkbox"
                 class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-700 rounded focus:ring-purple-500"
               />
-              <span class="text-sm text-gray-300">Set as default preset</span>
+              <span class="text-sm text-gray-300">Set as default setting</span>
             </label>
           </div>
           <div class="flex gap-3">
@@ -907,7 +907,7 @@
       </div>
     </div>
 
-    <!-- Delete Preset Dialog -->
+    <!-- Delete Setting Dialog -->
     <div
       v-if="showDeleteDialog"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
@@ -915,7 +915,7 @@
     >
       <div class="bg-gray-900 border border-red-500/50 rounded-lg p-6 w-full max-w-md mx-4">
         <div class="flex items-center justify-between mb-4">
-          <h3 class="text-lg font-bold text-red-400">Delete Preset</h3>
+          <h3 class="text-lg font-bold text-red-400">Delete Setting</h3>
           <button
             @click="showDeleteDialog = false"
             class="text-gray-400 hover:text-gray-200 transition"
@@ -926,13 +926,13 @@
           </button>
         </div>
         <div v-if="isSelectedPresetDefault" class="bg-red-950/50 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4">
-          <p class="text-sm font-semibold">⚠️ Cannot delete default preset</p>
+          <p class="text-sm font-semibold">⚠️ Cannot delete default setting</p>
           <p class="text-xs text-red-200 mt-1">
-            The default preset cannot be deleted. Please set another preset as default first.
+            The default setting cannot be deleted. Please set another setting as default first.
           </p>
         </div>
         <p v-else class="text-sm text-gray-300 mb-4">
-          Are you sure you want to delete this preset? This action cannot be undone.
+          Are you sure you want to delete this setting? This action cannot be undone.
         </p>
         <div class="flex gap-3">
           <button
@@ -1145,7 +1145,7 @@ const handleDuplicatePresetConfirm = async () => {
   }
 
   if (!duplicatePresetName.value.trim()) {
-    alert('Please enter a preset name')
+    alert('Please enter a setting name')
     return
   }
 
@@ -1170,9 +1170,9 @@ const handleDuplicatePresetConfirm = async () => {
     showDuplicateDialog.value = false
     duplicatePresetName.value = ''
     duplicateAsDefault.value = false
-    alert('Preset duplicated successfully!')
+    alert('Setting duplicated successfully!')
   } catch (error: any) {
-    alert(error.message || 'Failed to duplicate preset')
+    alert(error.message || 'Failed to duplicate setting')
   } finally {
     duplicating.value = false
   }
@@ -1186,7 +1186,7 @@ const handleCancelDuplicateDialog = () => {
 
 const handleSavePreset = async () => {
   if (!presetName.value.trim()) {
-    alert('Please enter a preset name')
+    alert('Please enter a setting name')
     return
   }
 
@@ -1220,9 +1220,9 @@ const handleSavePreset = async () => {
     }
     
     showSaveDialog.value = false
-    alert('Preset saved successfully!')
+    alert('Setting saved successfully!')
   } catch (error: any) {
-    alert(error.message || 'Failed to save preset')
+    alert(error.message || 'Failed to save setting')
   } finally {
     saving.value = false
   }
@@ -1234,7 +1234,7 @@ const handleDeletePreset = async () => {
   }
 
   if (isSelectedPresetDefault.value) {
-    alert('Cannot delete the default preset. Please set another preset as default first.')
+    alert('Cannot delete the default setting. Please set another setting as default first.')
     showDeleteDialog.value = false
     return
   }
@@ -1246,9 +1246,9 @@ const handleDeletePreset = async () => {
     selectedPresetId.value = ''
     showDeleteDialog.value = false
     settings.value = getDefaultSettings()
-    alert('Preset deleted successfully!')
+    alert('Setting deleted successfully!')
   } catch (error: any) {
-    alert(error.message || 'Failed to delete preset')
+    alert(error.message || 'Failed to delete setting')
   } finally {
     deleting.value = false
   }
@@ -1430,9 +1430,9 @@ const saveEdit = async () => {
 
   // If it's an existing preset, update it in the database
   if (!isCreatingNewPreset.value && selectedPresetId.value) {
-    // Validate preset name
+    // Validate setting name
     if (!editPresetName.value.trim()) {
-      alert('Please enter a preset name')
+      alert('Please enter a setting name')
       return
     }
 
@@ -1449,9 +1449,9 @@ const saveEdit = async () => {
       // Reload preset to get updated name in the dropdown
       await loadPreset()
       showEditDialog.value = false
-      alert('Preset updated successfully!')
+      alert('Setting updated successfully!')
     } catch (error: any) {
-      alert(error.message || 'Failed to update preset')
+      alert(error.message || 'Failed to update setting')
     } finally {
       saving.value = false
     }
@@ -1468,10 +1468,10 @@ const saveEdit = async () => {
 // Watch for edit dialog opening
 watch(showEditDialog, (isOpen) => {
   if (isOpen) {
-    // Prevent opening edit dialog for default preset (unless creating new)
+    // Prevent opening edit dialog for default setting (unless creating new)
     if (!isCreatingNewPreset.value && isSelectedPresetDefault.value) {
       showEditDialog.value = false
-      alert('Cannot edit the default preset. Please create a new preset or set another preset as default first.')
+      alert('Cannot edit the default setting. Please create a new setting or set another setting as default first.')
       return
     }
     // Only copy settings if editing an existing preset (not a new preset)

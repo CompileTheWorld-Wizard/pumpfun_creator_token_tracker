@@ -632,6 +632,22 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+// Expose method to clear data
+const clearData = () => {
+  tokens.value = []
+  pagination.value = {
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  }
+  emit('update-total', 0)
+}
+
+defineExpose({
+  clearData
+})
 </script>
 
 <style scoped>
