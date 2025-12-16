@@ -128,17 +128,7 @@ export async function fetchAthMarketCap(
       const mintAddress = trade.Trade?.Currency?.MintAddress || '';
       const maxPrice = trade.max;
       const athMarketcap = trade.ATH_Marketcap;
-      
-      // Log for debugging
-      if (!mintAddress || !maxPrice || !athMarketcap) {
-        console.log(`[Bitquery] Missing data for trade:`, {
-          mintAddress,
-          maxPrice,
-          athMarketcap,
-          trade: JSON.stringify(trade).substring(0, 200)
-        });
-      }
-      
+            
       if (!mintAddress) return;
       
       const athPriceUsd = maxPrice ? parseFloat(maxPrice) : 0;
