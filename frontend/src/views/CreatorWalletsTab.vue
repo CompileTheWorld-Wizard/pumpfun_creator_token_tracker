@@ -76,13 +76,14 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Multiplier Scores</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="7" class="px-2 py-8 text-center">
+              <td colspan="8" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -131,6 +132,24 @@
                     ${{ formatCurrency(wallet.medianAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 text-right">
+                <div class="flex flex-col items-end gap-1">
+                  <div class="flex items-center gap-0.5 flex-wrap justify-end max-w-[200px]">
+                    <span 
+                      v-for="multiplier in [1.5, 2, 3, 5, 10]" 
+                      :key="multiplier"
+                      class="text-[9px] px-1 py-0.5 rounded bg-gray-800/60 border border-gray-700/60 whitespace-nowrap"
+                      :class="getMultiplierScoreColor(wallet.scores.individualMultiplierScores[multiplier] || 0)"
+                      :title="`${multiplier}x multiplier score: ${(wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(2)}`"
+                    >
+                      <span class="text-gray-400">{{ multiplier }}x</span>: <span class="font-semibold">{{ (wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(1) }}</span>
+                    </span>
+                  </div>
+                  <div class="text-[10px] font-semibold text-gray-400 border-t border-gray-700/50 pt-0.5">
+                    Total: <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
+                  </div>
                 </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-right">
@@ -272,6 +291,11 @@ const getScoreColor = (score: number): string => {
   if (score >= 5) return 'text-yellow-400'
   if (score >= 0) return 'text-gray-400'
   return 'text-red-400'
+}
+
+const getMultiplierScoreColor = (score: number): string => {
+  if (score > 0) return 'text-green-400'
+  return 'text-gray-500'
 }
 
 const copyToClipboard = async (text: string) => {

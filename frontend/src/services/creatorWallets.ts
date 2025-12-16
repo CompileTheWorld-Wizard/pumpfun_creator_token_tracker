@@ -5,6 +5,7 @@ export interface CreatorWalletScores {
   avgAthMcapScore: number;
   medianAthMcapScore: number;
   multiplierScore: number;
+  individualMultiplierScores: Record<number, number>;
   finalScore: number;
 }
 

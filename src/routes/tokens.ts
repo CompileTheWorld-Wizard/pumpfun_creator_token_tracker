@@ -323,6 +323,7 @@ function calculateCreatorWalletScores(
   avgAthMcapScore: number;
   medianAthMcapScore: number;
   multiplierScore: number;
+  individualMultiplierScores: Record<number, number>;
   finalScore: number;
 } {
   let winRateScore = 0;
@@ -367,12 +368,15 @@ function calculateCreatorWalletScores(
     }
   }
   
-  // Multiplier scores (cumulative)
+  // Multiplier scores (cumulative) - track individual scores
+  const individualMultiplierScores: Map<number, number> = new Map();
+  
   if (settings.multiplierConfigs && Array.isArray(settings.multiplierConfigs)) {
     settings.multiplierConfigs.forEach((config: any) => {
       if (config.multiplier && config.ranges && Array.isArray(config.ranges)) {
         const percentage = multiplierPercentages.get(config.multiplier) || 0;
         const score = getScoreFromRanges(percentage, config.ranges);
+        individualMultiplierScores.set(config.multiplier, score);
         multiplierScore += score;
       }
     });
@@ -385,6 +389,7 @@ function calculateCreatorWalletScores(
     avgAthMcapScore,
     medianAthMcapScore,
     multiplierScore,
+    individualMultiplierScores: Object.fromEntries(individualMultiplierScores),
     finalScore
   };
 }
@@ -544,6 +549,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         avgAthMcapScore: 0,
         medianAthMcapScore: 0,
         multiplierScore: 0,
+        individualMultiplierScores: {} as Record<number, number>,
         finalScore: 0
       };
       
@@ -570,6 +576,12 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,
           medianAthMcapScore: Math.round(scores.medianAthMcapScore * 100) / 100,
           multiplierScore: Math.round(scores.multiplierScore * 100) / 100,
+          individualMultiplierScores: Object.fromEntries(
+            Object.entries(scores.individualMultiplierScores).map(([key, value]) => [
+              parseFloat(key),
+              Math.round(value * 100) / 100
+            ])
+          ),
           finalScore: Math.round(scores.finalScore * 100) / 100
         }
       };
