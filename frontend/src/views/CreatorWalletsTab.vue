@@ -137,7 +137,7 @@
                 </div>
               </td>
               <td class="px-2 py-1.5 text-right min-w-[280px]">
-                <div class="flex items-center gap-0.5 flex-wrap justify-end max-w-[280px]">
+                <div class="flex items-center gap-0.5 flex-wrap justify-end w-full">
                   <span 
                     v-for="multiplier in [1.5, 2, 3, 5, 10]" 
                     :key="multiplier"
