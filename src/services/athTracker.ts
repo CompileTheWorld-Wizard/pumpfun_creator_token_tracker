@@ -13,7 +13,7 @@ import type { TradeEventData, AmmBuyEventData, AmmSellEventData } from '../types
 // Constants
 const SAVE_INTERVAL_MS = 5000; // Save every 5 seconds
 const SOL_PRICE_KEY = 'price:timeseries:So11111111111111111111111111111111111111112';
-const EVENTS_SORTED_SET = 'pumpfun:events:1min'; // Use same cache as tokenTracker
+const EVENTS_SORTED_SET = 'pumpfun:events'; // Use same cache as tokenTracker
 const TOKEN_SUPPLY = 1_000_000_000; // 1 billion tokens (human readable)
 
 // In-memory token ATH data
@@ -153,13 +153,36 @@ export async function fetchAthForTokens(
       const batch = tokenAddresses.slice(i, i + 100);
       console.log(`[AthTracker] Processing batch ${Math.floor(i / 100) + 1}: ${batch.length} tokens`);
       
-      const athDataList = await fetchAthMarketCap(batch, sinceTime);
-      console.log(`[AthTracker] Received ${athDataList.length} ATH results from Bitquery for this batch`);
+      let athDataList: TokenAthData[] = [];
+      try {
+        athDataList = await fetchAthMarketCap(batch, sinceTime);
+        console.log(`[AthTracker] Received ${athDataList.length} ATH results from Bitquery for this batch`);
+      } catch (error) {
+        console.error(`[AthTracker] Error fetching ATH from Bitquery for batch ${Math.floor(i / 100) + 1}:`, error);
+        // Continue processing with empty results - will use peak_market_cap_usd as fallback
+        athDataList = [];
+      }
 
       // Create a map of results for quick lookup
       const resultMap = new Map<string, TokenAthData>();
       for (const athData of athDataList) {
         resultMap.set(athData.mintAddress, athData);
+      }
+
+      // Get peak_market_cap_usd for tokens in this batch to ensure ATH >= peak
+      const peakMcapMap = new Map<string, number>();
+      try {
+        const peakResult = await pool.query(
+          `SELECT mint, peak_market_cap_usd 
+           FROM tbl_soltrack_created_tokens 
+           WHERE mint = ANY($1) AND peak_market_cap_usd IS NOT NULL`,
+          [batch]
+        );
+        for (const row of peakResult.rows) {
+          peakMcapMap.set(row.mint, parseFloat(row.peak_market_cap_usd) || 0);
+        }
+      } catch (error) {
+        console.error(`[AthTracker] Error fetching peak market cap for batch:`, error);
       }
 
       // Update token map and database with ATH data
@@ -168,57 +191,109 @@ export async function fetchAthForTokens(
         const athData = resultMap.get(mint);
         const existing = tokenAthMap.get(mint);
         const tokenInfo = tokens.find(t => t.mint === mint);
+        const peakMcap = peakMcapMap.get(mint) || 0;
 
         if (existing) {
           if (athData) {
-            // Only update if Bitquery ATH is higher than current (or if current is 0 and we have data)
-            if (athData.athMarketCapUsd >= existing.athMarketCapUsd && athData.athMarketCapUsd > 0) {
-              existing.athMarketCapUsd = athData.athMarketCapUsd;
+            // Ensure ATH is at least as high as peak_market_cap_usd
+            const effectiveAth = Math.max(athData.athMarketCapUsd, peakMcap);
+            // Only update if effective ATH is higher than current (or if current is 0 and we have data)
+            if (effectiveAth >= existing.athMarketCapUsd && effectiveAth > 0) {
+              existing.athMarketCapUsd = effectiveAth;
               existing.dirty = true;
               updatedCount++;
-              console.log(`[AthTracker] Updated ATH for ${mint} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
+              console.log(`[AthTracker] Updated ATH for ${mint} (${athData.symbol}): $${effectiveAth.toFixed(2)}${peakMcap > athData.athMarketCapUsd ? ` (using peak: $${peakMcap.toFixed(2)})` : ''}`);
             }
             // Update name/symbol if missing
             if (!existing.name && athData.name) existing.name = athData.name;
             if (!existing.symbol && athData.symbol) existing.symbol = athData.symbol;
+          } else if (peakMcap > 0) {
+            // No Bitquery data, but we have peak - use it as minimum ATH
+            if (peakMcap > existing.athMarketCapUsd) {
+              existing.athMarketCapUsd = peakMcap;
+              existing.dirty = true;
+              updatedCount++;
+              console.log(`[AthTracker] Updated ATH for ${mint} using peak (no Bitquery data): $${peakMcap.toFixed(2)}`);
+            }
           }
         } else if (tokenInfo) {
           // Token not in map yet, add it
+          // Use peak_market_cap_usd as minimum if Bitquery data is missing or lower
+          const effectiveAth = Math.max(athData?.athMarketCapUsd || 0, peakMcap);
           tokenAthMap.set(mint, {
             mint,
             name: tokenInfo.name,
             symbol: tokenInfo.symbol,
             creator: tokenInfo.creator,
             bonded: false,
-            athMarketCapUsd: athData?.athMarketCapUsd || 0,
+            athMarketCapUsd: effectiveAth,
             currentMarketCapUsd: 0,
             lastUpdated: Date.now(),
             createdAt: tokenInfo.blockTime * 1000,
             dirty: true,
           });
-          if (athData && athData.athMarketCapUsd > 0) {
+          if (effectiveAth > 0) {
             updatedCount++;
-            console.log(`[AthTracker] Added ATH for ${mint} (${athData.symbol}): $${athData.athMarketCapUsd.toFixed(2)}`);
+            console.log(`[AthTracker] Added ATH for ${mint} (${tokenInfo.symbol}): $${effectiveAth.toFixed(2)}${peakMcap > (athData?.athMarketCapUsd || 0) ? ` (using peak)` : ''}`);
           }
         }
 
-        // Update database directly
-        if (athData && athData.athMarketCapUsd > 0) {
+        // Update database directly - ensure ATH is at least as high as peak_market_cap_usd
+        const effectiveAth = Math.max(athData?.athMarketCapUsd || 0, peakMcap);
+        if (effectiveAth > 0) {
           try {
             await pool.query(
               `UPDATE tbl_soltrack_created_tokens 
-               SET ath_market_cap_usd = GREATEST($1, COALESCE(ath_market_cap_usd, 0)),
+               SET ath_market_cap_usd = GREATEST(
+                 $1, 
+                 COALESCE(ath_market_cap_usd, 0),
+                 COALESCE(peak_market_cap_usd, 0)
+               ),
                    updated_at = NOW()
                WHERE mint = $2`,
-              [athData.athMarketCapUsd, mint]
+              [effectiveAth, mint]
             );
           } catch (error) {
             console.error(`[AthTracker] Error updating ATH in database for ${mint}:`, error);
+          }
+        } else if (peakMcap > 0) {
+          // No Bitquery data but we have peak - update ATH with peak
+          try {
+            await pool.query(
+              `UPDATE tbl_soltrack_created_tokens 
+               SET ath_market_cap_usd = GREATEST(
+                 $1, 
+                 COALESCE(ath_market_cap_usd, 0)
+               ),
+                   updated_at = NOW()
+               WHERE mint = $2`,
+              [peakMcap, mint]
+            );
+          } catch (error) {
+            console.error(`[AthTracker] Error updating ATH with peak for ${mint}:`, error);
           }
         }
       }
 
       console.log(`[AthTracker] Updated ${updatedCount} tokens with ATH data in this batch`);
+
+      // Ensure all tokens in batch have ATH >= peak_market_cap_usd (even if Bitquery failed)
+      try {
+        await pool.query(
+          `UPDATE tbl_soltrack_created_tokens 
+           SET ath_market_cap_usd = GREATEST(
+             COALESCE(ath_market_cap_usd, 0),
+             COALESCE(peak_market_cap_usd, 0)
+           ),
+               updated_at = NOW()
+           WHERE mint = ANY($1) 
+             AND peak_market_cap_usd IS NOT NULL 
+             AND (ath_market_cap_usd IS NULL OR ath_market_cap_usd < peak_market_cap_usd)`,
+          [batch]
+        );
+      } catch (error) {
+        console.error(`[AthTracker] Error ensuring ATH >= peak for batch:`, error);
+      }
 
       // Small delay between batches to avoid rate limiting
       if (i + 100 < tokenAddresses.length) {
@@ -264,7 +339,7 @@ export async function registerToken(
     dirty: true,
   });
 
-  // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:1min)
+  // Note: Token data is already cached in Redis by storeTransactionEvent (pumpfun:events:5min)
   // ATH fetching for real-time tokens is handled separately via trade events
 }
 
@@ -455,13 +530,13 @@ export async function handleAmmSellEvent(
 
 /**
  * Check Redis cache for pending token (edge case handling)
- * Uses the same events cache as tokenTracker (pumpfun:events:1min)
+ * Uses the same events cache as tokenTracker (pumpfun:events:5min)
  */
 async function checkPendingToken(mint: string): Promise<TokenAthInfo | undefined> {
   try {
     // Query the events sorted set for CreateEvent with this mint
-    const oneMinuteAgo = Date.now() - 60000;
-    const events = await redis.zrangebyscore(EVENTS_SORTED_SET, oneMinuteAgo, '+inf');
+    const fiveMinutesAgo = Date.now() - 300000; // 5 minutes
+    const events = await redis.zrangebyscore(EVENTS_SORTED_SET, fiveMinutesAgo, '+inf');
     
     for (const eventJson of events) {
       const event = JSON.parse(eventJson);
@@ -556,7 +631,11 @@ async function saveAthDataToDb(): Promise<void> {
              name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
              symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
              bonded = EXCLUDED.bonded,
-             ath_market_cap_usd = GREATEST(EXCLUDED.ath_market_cap_usd, COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0)),
+             ath_market_cap_usd = GREATEST(
+               EXCLUDED.ath_market_cap_usd, 
+               COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
+               COALESCE(tbl_soltrack_created_tokens.peak_market_cap_usd, 0)
+             ),
              is_fetched = tbl_soltrack_created_tokens.is_fetched,
              updated_at = NOW()`,
           [
@@ -714,7 +793,11 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
         try {
           await pool.query(
             `UPDATE tbl_soltrack_created_tokens 
-             SET ath_market_cap_usd = GREATEST($1, COALESCE(ath_market_cap_usd, 0)),
+             SET ath_market_cap_usd = GREATEST(
+               $1, 
+               COALESCE(ath_market_cap_usd, 0),
+               COALESCE(peak_market_cap_usd, 0)
+             ),
                  updated_at = NOW()
              WHERE mint = $2`,
             [athData.athMarketCapUsd, athData.mintAddress]

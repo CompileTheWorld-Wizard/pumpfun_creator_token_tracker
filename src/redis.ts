@@ -17,8 +17,8 @@ const redisConfig = {
 export const redis = new Redis(redisConfig);
 
 // Redis keys
-const EVENTS_SORTED_SET = 'pumpfun:events:1min';
-const EVENT_TTL_SECONDS = 60;
+const EVENTS_SORTED_SET = 'pumpfun:events:5min';
+const EVENT_TTL_SECONDS = 300; // 5 minutes
 
 // Event types
 export type EventType = 'CreateEvent' | 'BuyEvent' | 'SellEvent' | 'TradeEvent' | 'unknown';
@@ -31,7 +31,7 @@ export interface TransactionEvent {
 }
 
 /**
- * Store a transaction event in Redis (kept for 1 minute)
+ * Store a transaction event in Redis (kept for 5 minutes)
  */
 export async function storeTransactionEvent(event: TransactionEvent): Promise<void> {
   try {
@@ -41,21 +41,21 @@ export async function storeTransactionEvent(event: TransactionEvent): Promise<vo
     // Add event to sorted set with timestamp as score
     await redis.zadd(EVENTS_SORTED_SET, score, eventJson);
     
-    // Clean up events older than 1 minute
-    const oneMinuteAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
-    await redis.zremrangebyscore(EVENTS_SORTED_SET, '-inf', oneMinuteAgo);
+    // Clean up events older than 5 minutes
+    const fiveMinutesAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
+    await redis.zremrangebyscore(EVENTS_SORTED_SET, '-inf', fiveMinutesAgo);
   } catch (error) {
     console.error('[Redis] Error storing transaction event:', error);
   }
 }
 
 /**
- * Get all events from the last 1 minute
+ * Get all events from the last 5 minutes
  */
 export async function getRecentEvents(): Promise<TransactionEvent[]> {
   try {
-    const oneMinuteAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
-    const events = await redis.zrangebyscore(EVENTS_SORTED_SET, oneMinuteAgo, '+inf');
+    const fiveMinutesAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
+    const events = await redis.zrangebyscore(EVENTS_SORTED_SET, fiveMinutesAgo, '+inf');
     
     return events.map(eventJson => JSON.parse(eventJson) as TransactionEvent);
   } catch (error) {
@@ -65,7 +65,7 @@ export async function getRecentEvents(): Promise<TransactionEvent[]> {
 }
 
 /**
- * Get event counts by type for the last 1 minute
+ * Get event counts by type for the last 5 minutes
  */
 export async function getEventCounts(): Promise<Record<EventType, number>> {
   const events = await getRecentEvents();
@@ -86,12 +86,12 @@ export async function getEventCounts(): Promise<Record<EventType, number>> {
 }
 
 /**
- * Get total event count for the last 1 minute
+ * Get total event count for the last 5 minutes
  */
 export async function getTotalEventCount(): Promise<number> {
   try {
-    const oneMinuteAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
-    return await redis.zcount(EVENTS_SORTED_SET, oneMinuteAgo, '+inf');
+    const fiveMinutesAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
+    return await redis.zcount(EVENTS_SORTED_SET, fiveMinutesAgo, '+inf');
   } catch (error) {
     console.error('[Redis] Error getting total event count:', error);
     return 0;
@@ -103,8 +103,8 @@ export async function getTotalEventCount(): Promise<number> {
  */
 export async function cleanupOldEvents(): Promise<number> {
   try {
-    const oneMinuteAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
-    return await redis.zremrangebyscore(EVENTS_SORTED_SET, '-inf', oneMinuteAgo);
+    const fiveMinutesAgo = Date.now() - (EVENT_TTL_SECONDS * 1000);
+    return await redis.zremrangebyscore(EVENTS_SORTED_SET, '-inf', fiveMinutesAgo);
   } catch (error) {
     console.error('[Redis] Error cleaning up old events:', error);
     return 0;

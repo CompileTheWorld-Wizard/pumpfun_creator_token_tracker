@@ -16,7 +16,7 @@ import { registerToken as registerTokenForAth, fetchAthForTokens } from './athTr
 const COLLECTION_DELAY_MS = 20000; // Wait 20 seconds before collecting data
 const DATA_WINDOW_MS = 15000; // Collect 15 seconds of data
 const SOL_PRICE_KEY = 'price:timeseries:So11111111111111111111111111111111111111112';
-const EVENTS_SORTED_SET = 'pumpfun:events:1min';
+const EVENTS_SORTED_SET = 'pumpfun:events:5min';
 
 // Token total supply (standard for pump.fun tokens)
 const DEFAULT_TOKEN_SUPPLY = 1_000_000_000;
@@ -244,10 +244,12 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
 /**
  * Handle a CreateEvent - schedule tracking if NOT from a blacklisted wallet
  * Also fetches latest 100 tokens by the same creator if not already fetched
+ * @param devBuyTradeEvent Optional TradeEvent from the same transaction (dev buy)
  */
 export async function handleCreateEvent(
   createEventData: CreateEventData,
-  txSignature: string
+  txSignature: string,
+  devBuyTradeEvent?: TradeEventData | null
 ): Promise<void> {
   const creator = createEventData.creator || createEventData.user;
   
@@ -282,7 +284,7 @@ export async function handleCreateEvent(
   // Schedule data collection after delay
   const timeoutId = setTimeout(async () => {
     try {
-      await collectAndSaveTokenData(createEventData, txSignature);
+      await collectAndSaveTokenData(createEventData, txSignature, devBuyTradeEvent);
     } catch (error) {
       console.error(`[TokenTracker] Error collecting data for ${mint}:`, error);
     } finally {
@@ -384,24 +386,47 @@ function calculateMarketCap(
 
 /**
  * Collect and save token data after the delay period
+ * @param devBuyTradeEvent Optional TradeEvent from the same transaction (dev buy) - should be included as initial mcap
  */
 async function collectAndSaveTokenData(
   createEventData: CreateEventData,
-  createTxSignature: string
+  createTxSignature: string,
+  devBuyTradeEvent?: TradeEventData | null
 ): Promise<void> {
   const mint = createEventData.mint;
   const createdAt = createEventData.timestamp * 1000; // Convert to milliseconds
   
   console.log(`[TokenTracker] Collecting market cap data for ${mint}...`);
+  if (devBuyTradeEvent) {
+    console.log(`[TokenTracker] Dev buy TradeEvent found in same transaction - will be included as initial mcap`);
+  }
   
   // Define time window: first 15 seconds after creation
   const startTime = createdAt;
   const endTime = createdAt + DATA_WINDOW_MS;
   
-  // Get trade events for this mint
+  // Get trade events for this mint from Redis
   const tradeEvents = await getTradeEventsForMint(mint, startTime, endTime);
   
-  console.log(`[TokenTracker] Found ${tradeEvents.length} trades in the first 15 seconds`);
+  // If dev buy exists, ensure it's included (it should be in Redis, but add it if missing)
+  let devBuyIncluded = false;
+  if (devBuyTradeEvent) {
+    // Check if dev buy is already in the list (same signature)
+    devBuyIncluded = tradeEvents.some(te => te.signature === createTxSignature);
+    
+    if (!devBuyIncluded) {
+      // Add dev buy at the beginning (it's the first trade)
+      const devBuyTimestamp = createdAt; // Dev buy happens at creation time
+      tradeEvents.unshift({
+        timestamp: devBuyTimestamp,
+        data: devBuyTradeEvent,
+        signature: createTxSignature,
+      });
+      console.log(`[TokenTracker] Added dev buy TradeEvent to trade events list`);
+    }
+  }
+  
+  console.log(`[TokenTracker] Found ${tradeEvents.length} trades in the first 15 seconds${devBuyTradeEvent ? ` (including dev buy)` : ''}`);
   
   // Build market cap time series
   const marketCapTimeSeries: MarketCapDataPoint[] = [];
@@ -501,6 +526,11 @@ async function saveTokenTrackingResult(
         final_market_cap_usd = EXCLUDED.final_market_cap_usd,
         trade_count_15s = EXCLUDED.trade_count_15s,
         is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
+        -- Ensure ATH is at least as high as peak_market_cap_usd
+        ath_market_cap_usd = GREATEST(
+          COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
+          COALESCE(EXCLUDED.peak_market_cap_usd, 0)
+        ),
         updated_at = NOW()`,
       [
         result.mint,

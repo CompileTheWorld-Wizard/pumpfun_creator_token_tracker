@@ -169,9 +169,12 @@ async function processData(processed: any) {
       return;
     }
 
-    // Store events in Redis
+    // Store events in Redis and process them
     const events = processed.transaction.message?.events;
     if (events && Array.isArray(events)) {
+      // First pass: Store all events in Redis
+      const transactionTimestamp = Date.now();
+      
       for (const event of events) {
         const eventName = event?.name ? String(event.name) : 'unknown';
         
@@ -192,50 +195,110 @@ async function processData(processed: any) {
           await storeTransactionEvent({
             signature: txSignature,
             eventType,
-            timestamp: Date.now(),
+            timestamp: transactionTimestamp,
             data: event?.data || null,
           });
         }
-        
-        // Send CreateEvent to token tracker (15-second tracking)
-        // Token tracker will handle fetching creator's latest 100 tokens
-        if (eventType === 'CreateEvent' && event?.data) {
-          // During graceful shutdown, don't accept new tokens
-          if (isStopping) {
-            continue;
+      }
+      
+      // Second pass: Collect CreateEvent and TradeEvent from same transaction
+      let createEventFound: CreateEventData | null = null;
+      let devBuyTradeEventFound: TradeEventData | null = null;
+      const tradeEventsInTx: TradeEventData[] = [];
+      
+      // First, find CreateEvent
+      for (const event of events) {
+        const eventName = event?.name ? String(event.name) : 'unknown';
+        if (eventName === 'CreateEvent' && event?.data) {
+          createEventFound = event.data as CreateEventData;
+          break; // Found CreateEvent, can exit
+        }
+      }
+      
+      // Then, find TradeEvents in the same transaction
+      if (createEventFound) {
+        for (const event of events) {
+          const eventName = event?.name ? String(event.name) : 'unknown';
+          if (eventName === 'TradeEvent' && event?.data) {
+            const tradeData = event.data as TradeEventData;
+            tradeEventsInTx.push(tradeData);
+            // Check if this TradeEvent is for the same mint as CreateEvent and is a buy (dev buy)
+            if (tradeData.mint === createEventFound.mint && tradeData.is_buy) {
+              devBuyTradeEventFound = tradeData;
+              console.log(`[PumpFun] Found dev buy TradeEvent in same transaction as CreateEvent for ${tradeData.mint}`);
+            }
           }
-          
-          const createData = event.data as CreateEventData;
-          const creator = createData.creator || createData.user;
+        }
+      }
+      
+      // Process CreateEvent with dev buy if found
+      if (createEventFound) {
+        // During graceful shutdown, don't accept new tokens
+        if (!isStopping) {
+          const creator = createEventFound.creator || createEventFound.user;
           
           // Skip if creator is blacklisted (fast check in streamer)
-          if (isBlacklistedCreator(creator)) {
-            continue;
+          if (!isBlacklistedCreator(creator)) {
+            // Signal token tracker (handles 15-sec tracking + creator token fetching)
+            // Pass dev buy TradeEvent if found in same transaction
+            handleCreateEvent(createEventFound, txSignature, devBuyTradeEventFound);
+            
+            // Signal ATH tracker to register token
+            registerTokenForAth(
+              createEventFound.mint,
+              createEventFound.name,
+              createEventFound.symbol,
+              creator,
+              createEventFound.timestamp * 1000
+            );
+            
+            // If dev buy found, also send to ATH tracker immediately
+            if (devBuyTradeEventFound) {
+              handleTradeEvent(devBuyTradeEventFound, txSignature);
+            }
           }
-          
-          // Signal token tracker (handles 15-sec tracking + creator token fetching)
-          handleCreateEvent(createData, txSignature);
-          
-          // Signal ATH tracker to register token
-          registerTokenForAth(
-            createData.mint,
-            createData.name,
-            createData.symbol,
-            creator,
-            createData.timestamp * 1000
-          );
+        }
+      }
+      
+      // Process other events (TradeEvent, BuyEvent, SellEvent) that are NOT dev buys
+      for (const event of events) {
+        const eventName = event?.name ? String(event.name) : 'unknown';
+        
+        let eventType: EventType = 'unknown';
+        if (eventName === 'CreateEvent') {
+          eventType = 'CreateEvent';
+        } else if (eventName === 'BuyEvent') {
+          eventType = 'BuyEvent';
+        } else if (eventName === 'SellEvent') {
+          eventType = 'SellEvent';
+        } else if (eventName === 'TradeEvent') {
+          eventType = 'TradeEvent';
         }
         
-        // Send TradeEvent to ATH tracker (pump.fun bonding curve)
+        // Skip CreateEvent (already processed) and dev buy TradeEvent (already processed)
+        if (eventType === 'CreateEvent') {
+          continue;
+        }
+        
         if (eventType === 'TradeEvent' && event?.data) {
-          handleTradeEvent(event.data as TradeEventData, txSignature);
+          const tradeData = event.data as TradeEventData;
+          // Skip if this is the dev buy we already processed (same mint, same transaction, is buy)
+          if (createEventFound && 
+              devBuyTradeEventFound && 
+              tradeData.mint === createEventFound.mint && 
+              tradeData.is_buy &&
+              tradeData.sol_amount === devBuyTradeEventFound.sol_amount &&
+              tradeData.token_amount === devBuyTradeEventFound.token_amount) {
+            continue; // Skip dev buy - already processed
+          }
+          // Process other TradeEvents (not dev buys)
+          handleTradeEvent(tradeData, txSignature);
         }
         
         // Send BuyEvent to ATH tracker (pump.fun AMM)
         if (eventType === 'BuyEvent' && event?.data) {
           const buyData = event.data as AmmBuyEventData;
           // Extract mint from pool or other field - AMM events need pool lookup
-          // For now, we'll need to get mint from the transaction accounts
           const mint = extractMintFromAmmEvent(processed, event);
           if (mint) {
             handleAmmBuyEvent(buyData, mint, txSignature);
