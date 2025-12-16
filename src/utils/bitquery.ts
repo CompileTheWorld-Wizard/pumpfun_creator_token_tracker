@@ -51,7 +51,7 @@ export async function fetchAthMarketCap(
             Trade: {
               Currency: {MintAddress: {in: $tokens}}
               PriceInUSD:{gt:0},
-              Side: {AmountInUSD: {gt: "20"}}
+              Side: {AmountInUSD: {gt: "0.01"}}
             },
             Block: {Time: {since: $since}}
           }
