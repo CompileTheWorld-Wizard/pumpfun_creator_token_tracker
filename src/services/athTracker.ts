@@ -249,12 +249,12 @@ export async function fetchAthForTokens(
             await pool.query(
               `UPDATE tbl_soltrack_created_tokens 
                SET ath_market_cap_usd = GREATEST(
-                 $1, 
+                 $1::DECIMAL, 
                  COALESCE(ath_market_cap_usd, 0),
                  COALESCE(peak_market_cap_usd, 0)
                ),
                    initial_market_cap_usd = CASE 
-                     WHEN $3 > 0 THEN $3 
+                     WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
                      ELSE initial_market_cap_usd
                    END,
                    updated_at = NOW()
@@ -803,12 +803,12 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
           await pool.query(
             `UPDATE tbl_soltrack_created_tokens 
              SET ath_market_cap_usd = GREATEST(
-               $1, 
+               $1::DECIMAL, 
                COALESCE(ath_market_cap_usd, 0),
                COALESCE(peak_market_cap_usd, 0)
              ),
                  initial_market_cap_usd = CASE 
-                   WHEN $3 > 0 THEN $3 
+                   WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
                    ELSE initial_market_cap_usd
                  END,
                  updated_at = NOW()
@@ -826,7 +826,7 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
           console.log(`[AthTracker] Updating initial_market_cap_usd for ${athData.mintAddress} (${athData.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
           await pool.query(
             `UPDATE tbl_soltrack_created_tokens 
-             SET initial_market_cap_usd = $1,
+             SET initial_market_cap_usd = $1::DECIMAL,
                  updated_at = NOW()
              WHERE mint = $2`,
             [startingMarketCap, athData.mintAddress]
