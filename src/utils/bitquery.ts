@@ -15,6 +15,8 @@ export interface TokenAthData {
   symbol: string;
   athPriceUsd: number;
   athMarketCapUsd: number;
+  startingPriceUsd: number;
+  startingMarketCapUsd: number;
 }
 
 /**
@@ -48,7 +50,8 @@ export async function fetchAthMarketCap(
           where: {
             Trade: {
               Currency: {MintAddress: {in: $tokens}}
-              PriceInUSD:{gt:0}
+              PriceInUSD:{gt:0},
+              Side: {AmountInUSD: {gt: "20"}}
             },
             Block: {Time: {since: $since}}
           }
@@ -60,6 +63,7 @@ export async function fetchAthMarketCap(
               Symbol
             }
             PriceInUSD(maximum: Trade_PriceInUSD)
+            Starting_Price:PriceInUSD(minimum: Block_Slot)
             Side{
               Currency{
                 Name
@@ -70,6 +74,7 @@ export async function fetchAthMarketCap(
           }
           max: quantile(of: Trade_PriceInUSD, level: 0.98)
           ATH_Marketcap: calculate(expression: "$max * 1000000000")
+          Starting_Marketcap:calculate(expression:"$Trade_Starting_Price * 1000000000")
         }
       }
     }
@@ -122,17 +127,22 @@ export async function fetchAthMarketCap(
     }
     
     // Map trades to TokenAthData and group by mintAddress to get maximum values
+    // When multiple trades exist for the same token, pair starting mcap with ATH mcap from the same trade entry
     const tokenMap = new Map<string, TokenAthData>();
     
     trades.forEach((trade: any) => {
       const mintAddress = trade.Trade?.Currency?.MintAddress || '';
       const maxPrice = trade.max;
       const athMarketcap = trade.ATH_Marketcap;
+      const startingMarketcap = trade.Starting_Marketcap;
+      const startingPrice = trade.Trade?.Starting_Price;
             
       if (!mintAddress) return;
       
       const athPriceUsd = maxPrice ? parseFloat(maxPrice) : 0;
       const athMarketCapUsd = athMarketcap ? parseFloat(athMarketcap) : 0;
+      const startingPriceUsd = startingPrice ? parseFloat(startingPrice) : 0;
+      const startingMarketCapUsd = startingMarketcap ? parseFloat(startingMarketcap) : 0;
       
       const existing = tokenMap.get(mintAddress);
       
@@ -144,14 +154,28 @@ export async function fetchAthMarketCap(
           symbol: trade.Trade?.Currency?.Symbol || '',
           athPriceUsd,
           athMarketCapUsd,
+          startingPriceUsd,
+          startingMarketCapUsd,
         });
       } else {
-        // Update with maximum values
-        tokenMap.set(mintAddress, {
-          ...existing,
-          athPriceUsd: Math.max(existing.athPriceUsd, athPriceUsd),
-          athMarketCapUsd: Math.max(existing.athMarketCapUsd, athMarketCapUsd),
-        });
+        // Update with maximum ATH values, but keep starting values paired with the same trade entry
+        // If this trade has a higher ATH, use its starting values; otherwise keep existing
+        if (athMarketCapUsd > existing.athMarketCapUsd) {
+          // This trade has higher ATH, use its starting values
+          tokenMap.set(mintAddress, {
+            ...existing,
+            athPriceUsd,
+            athMarketCapUsd,
+            startingPriceUsd,
+            startingMarketCapUsd,
+          });
+        } else {
+          // Keep existing ATH (which is higher), but update price if needed
+          tokenMap.set(mintAddress, {
+            ...existing,
+            athPriceUsd: Math.max(existing.athPriceUsd, athPriceUsd),
+          });
+        }
       }
     });
     
