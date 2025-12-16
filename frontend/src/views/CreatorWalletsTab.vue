@@ -141,14 +141,29 @@
                       v-for="multiplier in [1.5, 2, 3, 5, 10]" 
                       :key="multiplier"
                       class="text-[9px] px-1 py-0.5 rounded bg-gray-800/60 border border-gray-700/60 whitespace-nowrap"
-                      :class="getMultiplierScoreColor(wallet.scores.individualMultiplierScores[multiplier] || 0)"
-                      :title="`${multiplier}x multiplier score: ${(wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(2)}`"
+                      :class="viewMode === 'score' ? getMultiplierScoreColor(wallet.scores.individualMultiplierScores[multiplier] || 0) : 'text-gray-300'"
+                      :title="viewMode === 'score' 
+                        ? `${multiplier}x multiplier score: ${(wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(2)}`
+                        : `${multiplier}x: ${(wallet.multiplierPercentages[multiplier] || 0).toFixed(2)}% of tokens`"
                     >
-                      <span class="text-gray-400">{{ multiplier }}x</span>: <span class="font-semibold">{{ (wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(1) }}</span>
+                      <span class="text-gray-400">{{ multiplier }}x</span>: 
+                      <span class="font-semibold">
+                        <template v-if="viewMode === 'data'">
+                          {{ (wallet.multiplierPercentages[multiplier] || 0).toFixed(1) }}%
+                        </template>
+                        <template v-else>
+                          {{ (wallet.scores.individualMultiplierScores[multiplier] || 0).toFixed(1) }}
+                        </template>
+                      </span>
                     </span>
                   </div>
                   <div class="text-[10px] font-semibold text-gray-400 border-t border-gray-700/50 pt-0.5">
-                    Total: <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
+                    <template v-if="viewMode === 'data'">
+                      Valid Tokens: <span class="font-bold text-gray-300">{{ getValidTokenCount(wallet) }}</span>
+                    </template>
+                    <template v-else>
+                      Total Score: <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
+                    </template>
                   </div>
                 </div>
               </td>
@@ -296,6 +311,10 @@ const getScoreColor = (score: number): string => {
 const getMultiplierScoreColor = (score: number): string => {
   if (score > 0) return 'text-green-400'
   return 'text-gray-500'
+}
+
+const getValidTokenCount = (wallet: CreatorWallet): number => {
+  return wallet.validTokenCount || 0
 }
 
 const copyToClipboard = async (text: string) => {

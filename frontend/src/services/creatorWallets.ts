@@ -16,6 +16,8 @@ export interface CreatorWallet {
   winRate: number; // % bonded (win rate)
   avgAthMcap: number | null;
   medianAthMcap: number | null;
+  validTokenCount: number; // Tokens with both initial and ATH market cap > 0
+  multiplierPercentages: Record<number, number>; // % of tokens that reach each multiplier threshold
   scores: CreatorWalletScores;
 }
 

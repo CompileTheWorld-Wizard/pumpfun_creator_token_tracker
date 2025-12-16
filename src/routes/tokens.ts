@@ -280,7 +280,7 @@ function calculateMultiplierPercentages(
   // Define multiplier thresholds (sorted from highest to lowest for cumulative calculation)
   const thresholds = [10, 5, 3, 2, 1.5];
   
-  // Filter tokens that have both initial and ATH market cap
+  // Filter tokens that have both initial and ATH market cap, excluding 0 market cap tokens
   const validTokens = tokens.filter(
     t => t.initialMarketCapUsd !== null && 
          t.initialMarketCapUsd > 0 && 
@@ -294,10 +294,13 @@ function calculateMultiplierPercentages(
     return percentages;
   }
   
-  // Calculate multiplier for each token
-  const multipliers = validTokens.map(t => 
-    (t.athMarketCapUsd as number) / (t.initialMarketCapUsd as number)
-  );
+  // Calculate multiplier for each token: ATH market cap / initial market cap
+  // This compares the all-time high against the starting (initial) market cap
+  const multipliers = validTokens.map(t => {
+    const initial = t.initialMarketCapUsd as number;
+    const ath = t.athMarketCapUsd as number;
+    return ath / initial;
+  });
   
   // For each threshold, calculate percentage of tokens that reach at least that multiplier
   // This is cumulative: tokens that reach 2x also count for 1.5x
@@ -516,7 +519,11 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           ct.initial_market_cap_usd,
           ct.ath_market_cap_usd
         FROM tbl_soltrack_created_tokens ct
-        ${tokenWhereClause}`,
+        ${tokenWhereClause}
+        AND ct.initial_market_cap_usd IS NOT NULL
+        AND ct.initial_market_cap_usd > 0
+        AND ct.ath_market_cap_usd IS NOT NULL
+        AND ct.ath_market_cap_usd > 0`,
         [creatorAddresses]
       );
       
@@ -543,6 +550,14 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       const tokens = tokensByCreator.get(row.address) || [];
       const multiplierPercentages = calculateMultiplierPercentages(tokens);
       
+      // Count valid tokens (tokens with both initial and ATH market cap > 0)
+      const validTokenCount = tokens.filter(
+        t => t.initialMarketCapUsd !== null && 
+             t.initialMarketCapUsd > 0 && 
+             t.athMarketCapUsd !== null && 
+             t.athMarketCapUsd > 0
+      ).length;
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
@@ -564,6 +579,14 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         );
       }
       
+      // Convert multiplier percentages Map to object
+      const multiplierPercentagesObj = Object.fromEntries(
+        Array.from(multiplierPercentages.entries()).map(([key, value]) => [
+          key,
+          Math.round(value * 100) / 100
+        ])
+      );
+      
       return {
         address: row.address,
         totalTokens: parseInt(row.total_tokens) || 0,
@@ -571,6 +594,8 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         winRate,
         avgAthMcap,
         medianAthMcap,
+        validTokenCount,
+        multiplierPercentages: multiplierPercentagesObj,
         scores: {
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,
