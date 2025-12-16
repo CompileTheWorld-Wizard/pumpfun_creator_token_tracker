@@ -240,7 +240,8 @@ export async function fetchAthForTokens(
 
         // Update database directly - ensure ATH is at least as high as peak_market_cap_usd
         const effectiveAth = Math.max(athData?.athMarketCapUsd || 0, peakMcap);
-        if (effectiveAth > 0) {
+        const startingMarketCap = athData?.startingMarketCapUsd || 0;
+        if (effectiveAth > 0 || startingMarketCap > 0) {
           try {
             await pool.query(
               `UPDATE tbl_soltrack_created_tokens 
@@ -249,9 +250,13 @@ export async function fetchAthForTokens(
                  COALESCE(ath_market_cap_usd, 0),
                  COALESCE(peak_market_cap_usd, 0)
                ),
+                   initial_market_cap_usd = CASE 
+                     WHEN $3 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $3 
+                     ELSE COALESCE(initial_market_cap_usd, 0)
+                   END,
                    updated_at = NOW()
                WHERE mint = $2`,
-              [effectiveAth, mint]
+              [effectiveAth, mint, startingMarketCap]
             );
           } catch (error) {
             console.error(`[AthTracker] Error updating ATH in database for ${mint}:`, error);
@@ -789,6 +794,7 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
     let updatedCount = 0;
     for (const athData of athDataList) {
       const tokenInfo = tokenDataMap.get(athData.mintAddress);
+      const startingMarketCap = athData.startingMarketCapUsd || 0;
       if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
         try {
           await pool.query(
@@ -798,14 +804,34 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
                COALESCE(ath_market_cap_usd, 0),
                COALESCE(peak_market_cap_usd, 0)
              ),
+                 initial_market_cap_usd = CASE 
+                   WHEN $3 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $3 
+                   ELSE COALESCE(initial_market_cap_usd, 0)
+                 END,
                  updated_at = NOW()
              WHERE mint = $2`,
-            [athData.athMarketCapUsd, athData.mintAddress]
+            [athData.athMarketCapUsd, athData.mintAddress, startingMarketCap]
           );
           updatedCount++;
           console.log(`[AthTracker] Updated ATH for ${athData.symbol || athData.mintAddress}: $${athData.athMarketCapUsd.toFixed(2)}`);
         } catch (error) {
           console.error(`[AthTracker] Error updating ATH for ${athData.mintAddress}:`, error);
+        }
+      } else if (tokenInfo && startingMarketCap > 0) {
+        // ATH didn't change, but we might have starting market cap to update
+        try {
+          await pool.query(
+            `UPDATE tbl_soltrack_created_tokens 
+             SET initial_market_cap_usd = CASE 
+               WHEN $1 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $1 
+               ELSE initial_market_cap_usd
+             END,
+                 updated_at = NOW()
+             WHERE mint = $2`,
+            [startingMarketCap, athData.mintAddress]
+          );
+        } catch (error) {
+          console.error(`[AthTracker] Error updating initial market cap for ${athData.mintAddress}:`, error);
         }
       }
     }
