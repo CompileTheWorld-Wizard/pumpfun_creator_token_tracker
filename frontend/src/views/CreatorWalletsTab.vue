@@ -71,7 +71,7 @@
           <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
             <tr>
               <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Wallet Address</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Tokens</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Tokens(Valid)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bonded Tokens</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
@@ -108,7 +108,9 @@
                 </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-right">
-                <div class="text-xs font-semibold text-gray-200">{{ wallet.totalTokens }}</div>
+                <div class="text-xs font-semibold text-gray-200">
+                  {{ wallet.totalTokens }}<span class="text-gray-500 ml-1">({{ getValidTokenCount(wallet) }})</span>
+                </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold text-green-400">{{ wallet.bondedTokens }}</div>
@@ -157,13 +159,8 @@
                       </span>
                     </span>
                   </div>
-                  <div class="text-[10px] font-semibold text-gray-400 border-t border-gray-700/50 pt-0.5">
-                    <template v-if="viewMode === 'data'">
-                      Valid Tokens: <span class="font-bold text-gray-300">{{ getValidTokenCount(wallet) }}</span>
-                    </template>
-                    <template v-else>
-                      Total Score: <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
-                    </template>
+                  <div v-if="viewMode === 'score'" class="text-[10px] font-semibold text-gray-400 border-t border-gray-700/50 pt-0.5">
+                    Total Score: <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
                   </div>
                 </div>
               </td>
