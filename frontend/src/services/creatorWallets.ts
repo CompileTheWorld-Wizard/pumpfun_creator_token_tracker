@@ -4,6 +4,7 @@ export interface CreatorWalletScores {
   winRateScore: number;
   avgAthMcapScore: number;
   medianAthMcapScore: number;
+  multiplierScore: number;
   finalScore: number;
 }
 

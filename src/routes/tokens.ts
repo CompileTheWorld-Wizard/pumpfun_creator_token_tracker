@@ -271,22 +271,64 @@ function getRanges(metric: any): Array<{ min: number; max: number; score: number
   return [];
 }
 
+// Calculate multiplier percentages for a creator's tokens
+function calculateMultiplierPercentages(
+  tokens: Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>
+): Map<number, number> {
+  const percentages = new Map<number, number>();
+  
+  // Define multiplier thresholds (sorted from highest to lowest for cumulative calculation)
+  const thresholds = [10, 5, 3, 2, 1.5];
+  
+  // Filter tokens that have both initial and ATH market cap
+  const validTokens = tokens.filter(
+    t => t.initialMarketCapUsd !== null && 
+         t.initialMarketCapUsd > 0 && 
+         t.athMarketCapUsd !== null && 
+         t.athMarketCapUsd > 0
+  );
+  
+  if (validTokens.length === 0) {
+    // No valid tokens, return 0% for all thresholds
+    thresholds.forEach(threshold => percentages.set(threshold, 0));
+    return percentages;
+  }
+  
+  // Calculate multiplier for each token
+  const multipliers = validTokens.map(t => 
+    (t.athMarketCapUsd as number) / (t.initialMarketCapUsd as number)
+  );
+  
+  // For each threshold, calculate percentage of tokens that reach at least that multiplier
+  // This is cumulative: tokens that reach 2x also count for 1.5x
+  thresholds.forEach(threshold => {
+    const countReachingThreshold = multipliers.filter(m => m >= threshold).length;
+    const percentage = (countReachingThreshold / validTokens.length) * 100;
+    percentages.set(threshold, percentage);
+  });
+  
+  return percentages;
+}
+
 // Calculate scores for each metric for a creator wallet
 function calculateCreatorWalletScores(
   winRate: number,
   avgAthMcap: number | null,
   medianAthMcap: number | null,
+  multiplierPercentages: Map<number, number>,
   settings: any,
   allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
 ): {
   winRateScore: number;
   avgAthMcapScore: number;
   medianAthMcapScore: number;
+  multiplierScore: number;
   finalScore: number;
 } {
   let winRateScore = 0;
   let avgAthMcapScore = 0;
   let medianAthMcapScore = 0;
+  let multiplierScore = 0;
   
   // Win Rate score
   const winRateRanges = getRanges(settings.winRate);
@@ -325,12 +367,24 @@ function calculateCreatorWalletScores(
     }
   }
   
-  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore;
+  // Multiplier scores (cumulative)
+  if (settings.multiplierConfigs && Array.isArray(settings.multiplierConfigs)) {
+    settings.multiplierConfigs.forEach((config: any) => {
+      if (config.multiplier && config.ranges && Array.isArray(config.ranges)) {
+        const percentage = multiplierPercentages.get(config.multiplier) || 0;
+        const score = getScoreFromRanges(percentage, config.ranges);
+        multiplierScore += score;
+      }
+    });
+  }
+  
+  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore + multiplierScore;
   
   return {
     winRateScore,
     avgAthMcapScore,
     medianAthMcapScore,
+    multiplierScore,
     finalScore
   };
 }
@@ -440,22 +494,68 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       [limit, offset]
     );
     
+    // Get token data for multiplier calculations for the paginated creators
+    const creatorAddresses = result.rows.map(row => row.address);
+    let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
+    
+    if (creatorAddresses.length > 0) {
+      // Build WHERE clause for token query (same filter as main query)
+      let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+      if (!viewAll) {
+        tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      }
+      
+      const tokensResult = await pool.query(
+        `SELECT 
+          ct.creator,
+          ct.initial_market_cap_usd,
+          ct.ath_market_cap_usd
+        FROM tbl_soltrack_created_tokens ct
+        ${tokenWhereClause}`,
+        [creatorAddresses]
+      );
+      
+      // Group tokens by creator
+      tokensResult.rows.forEach(row => {
+        const creator = row.creator;
+        if (!tokensByCreator.has(creator)) {
+          tokensByCreator.set(creator, []);
+        }
+        tokensByCreator.get(creator)!.push({
+          initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
+          athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
+        });
+      });
+    }
+    
     // Calculate scores and create wallet objects
     const walletsWithScores = result.rows.map(row => {
       const winRate = parseFloat(row.win_rate) || 0;
       const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
       const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
       
+      // Get tokens for this creator and calculate multiplier percentages
+      const tokens = tokensByCreator.get(row.address) || [];
+      const multiplierPercentages = calculateMultiplierPercentages(tokens);
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
         avgAthMcapScore: 0,
         medianAthMcapScore: 0,
+        multiplierScore: 0,
         finalScore: 0
       };
       
       if (scoringSettings) {
-        scores = calculateCreatorWalletScores(winRate, avgAthMcap, medianAthMcap, scoringSettings, allWalletsData);
+        scores = calculateCreatorWalletScores(
+          winRate, 
+          avgAthMcap, 
+          medianAthMcap, 
+          multiplierPercentages,
+          scoringSettings, 
+          allWalletsData
+        );
       }
       
       return {
@@ -469,6 +569,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,
           medianAthMcapScore: Math.round(scores.medianAthMcapScore * 100) / 100,
+          multiplierScore: Math.round(scores.multiplierScore * 100) / 100,
           finalScore: Math.round(scores.finalScore * 100) / 100
         }
       };
