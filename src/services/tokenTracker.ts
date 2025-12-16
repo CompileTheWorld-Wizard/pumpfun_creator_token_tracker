@@ -297,6 +297,7 @@ export async function handleCreateEvent(
 
 /**
  * Get SOL USD price at a specific timestamp
+ * Returns a fallback price if exact timestamp price is not available
  */
 async function getSolPriceAtTime(timestamp: number): Promise<number | null> {
   try {
@@ -310,18 +311,46 @@ async function getSolPriceAtTime(timestamp: number): Promise<number | null> {
       1
     );
 
-    if (results.length === 0) {
-      // Try to get any available price
-      const anyPrice = await redis.zrevrange(SOL_PRICE_KEY, 0, 0);
-      if (anyPrice.length > 0) {
-        const priceData = JSON.parse(anyPrice[0]);
-        return priceData.price_usd;
+    if (results.length > 0) {
+      const priceData = JSON.parse(results[0]);
+      const price = priceData.price_usd;
+      if (price != null && !isNaN(price) && isFinite(price) && price > 0) {
+        return price;
       }
-      return null;
     }
 
-    const priceData = JSON.parse(results[0]);
-    return priceData.price_usd;
+    // Try to get any available price (fallback)
+    const anyPrice = await redis.zrevrange(SOL_PRICE_KEY, 0, 0);
+    if (anyPrice.length > 0) {
+      const priceData = JSON.parse(anyPrice[0]);
+      const price = priceData.price_usd;
+      if (price != null && !isNaN(price) && isFinite(price) && price > 0) {
+        console.warn(`[TokenTracker] Using fallback SOL price ${price} for timestamp ${timestamp}`);
+        return price;
+      }
+    }
+
+    // Try to get a price from a wider range (within 1 minute)
+    const oneMinuteAgo = timestamp - 60000;
+    const oneMinuteLater = timestamp + 60000;
+    const nearbyResults = await redis.zrangebyscore(
+      SOL_PRICE_KEY,
+      oneMinuteAgo,
+      oneMinuteLater,
+      'LIMIT',
+      0,
+      1
+    );
+    if (nearbyResults.length > 0) {
+      const priceData = JSON.parse(nearbyResults[0]);
+      const price = priceData.price_usd;
+      if (price != null && !isNaN(price) && isFinite(price) && price > 0) {
+        console.warn(`[TokenTracker] Using nearby SOL price ${price} for timestamp ${timestamp}`);
+        return price;
+      }
+    }
+
+    return null;
   } catch (error) {
     console.error('[TokenTracker] Error getting SOL price:', error);
     return null;
@@ -366,20 +395,55 @@ async function getTradeEventsForMint(
 
 /**
  * Calculate market cap from trade data
+ * Returns null values if calculation is invalid (division by zero, etc.)
  */
 function calculateMarketCap(
   tradeData: TradeEventData,
-  solPriceUsd: number,
+  solPriceUsd: number | null,
   tokenSupply: number = DEFAULT_TOKEN_SUPPLY
-): { executionPriceSol: number; marketCapSol: number; marketCapUsd: number } {
+): { executionPriceSol: number; marketCapSol: number; marketCapUsd: number } | null {
   // Calculate execution price (SOL per token)
   // sol_amount and token_amount are in their base units
   const solAmount = tradeData.sol_amount / 1e9; // Convert lamports to SOL
   const tokenAmount = tradeData.token_amount / 1e6; // Convert to token units (assuming 6 decimals)
   
+  // Validate inputs to prevent division by zero and invalid calculations
+  if (tokenAmount === 0 || !isFinite(tokenAmount) || isNaN(tokenAmount)) {
+    console.warn(`[TokenTracker] Invalid token amount: ${tokenAmount} (raw: ${tradeData.token_amount})`);
+    return null;
+  }
+  
+  if (solAmount < 0 || !isFinite(solAmount) || isNaN(solAmount)) {
+    console.warn(`[TokenTracker] Invalid SOL amount: ${solAmount} (raw: ${tradeData.sol_amount})`);
+    return null;
+  }
+  
   const executionPriceSol = solAmount / tokenAmount;
+  
+  // Validate calculated price
+  if (!isFinite(executionPriceSol) || isNaN(executionPriceSol) || executionPriceSol <= 0) {
+    console.warn(`[TokenTracker] Invalid execution price: ${executionPriceSol}`);
+    return null;
+  }
+  
   const marketCapSol = executionPriceSol * tokenSupply;
-  const marketCapUsd = marketCapSol * solPriceUsd;
+  
+  // If SOL price is null, we can still calculate marketCapSol but not marketCapUsd
+  let marketCapUsd = 0;
+  if (solPriceUsd != null && solPriceUsd > 0 && isFinite(solPriceUsd)) {
+    marketCapUsd = marketCapSol * solPriceUsd;
+  }
+  
+  // Final validation
+  if (!isFinite(marketCapSol) || isNaN(marketCapSol) || marketCapSol < 0) {
+    console.warn(`[TokenTracker] Invalid market cap SOL: ${marketCapSol}`);
+    return null;
+  }
+  
+  if (solPriceUsd != null && (!isFinite(marketCapUsd) || isNaN(marketCapUsd) || marketCapUsd < 0)) {
+    console.warn(`[TokenTracker] Invalid market cap USD: ${marketCapUsd}`);
+    return null;
+  }
   
   return { executionPriceSol, marketCapSol, marketCapUsd };
 }
@@ -434,28 +498,33 @@ async function collectAndSaveTokenData(
   for (const trade of tradeEvents) {
     const solPriceUsd = await getSolPriceAtTime(trade.timestamp);
     
-    if (solPriceUsd === null) {
-      console.warn(`[TokenTracker] Could not get SOL price for timestamp ${trade.timestamp}`);
-      continue;
-    }
-    
     // Convert token_total_supply from base units to human-readable (divide by 1e6 for 6 decimals)
     const tokenSupply = createEventData.token_total_supply 
       ? createEventData.token_total_supply / 1e6 
       : DEFAULT_TOKEN_SUPPLY;
     
-    const { executionPriceSol, marketCapSol, marketCapUsd } = calculateMarketCap(
+    const marketCapResult = calculateMarketCap(
       trade.data,
       solPriceUsd,
       tokenSupply
     );
     
+    // Skip invalid calculations but log the issue
+    if (marketCapResult === null) {
+      console.warn(`[TokenTracker] Skipping trade ${trade.signature} due to invalid calculation`);
+      continue;
+    }
+    
+    const { executionPriceSol, marketCapSol, marketCapUsd } = marketCapResult;
+    
+    // Include trade even if SOL price is missing (marketCapUsd will be 0)
+    // This prevents gaps in the timeseries
     marketCapTimeSeries.push({
       timestamp: trade.timestamp,
       executionPriceSol,
       marketCapSol,
-      marketCapUsd,
-      solPriceUsd,
+      marketCapUsd: marketCapUsd || 0, // Use 0 if SOL price was missing
+      solPriceUsd: solPriceUsd || 0, // Use 0 if SOL price was missing
       tradeType: trade.data.is_buy ? 'buy' : 'sell',
       signature: trade.signature,
     });
