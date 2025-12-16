@@ -76,7 +76,7 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Multiplier Scores</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
             </tr>
           </thead>
@@ -134,9 +134,9 @@
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 text-right">
+              <td class="px-2 py-1.5 text-right min-w-[280px]">
                 <div class="flex flex-col items-end gap-1">
-                  <div class="flex items-center gap-0.5 flex-wrap justify-end max-w-[200px]">
+                  <div class="flex items-center gap-0.5 flex-wrap justify-end max-w-[280px]">
                     <span 
                       v-for="multiplier in [1.5, 2, 3, 5, 10]" 
                       :key="multiplier"
