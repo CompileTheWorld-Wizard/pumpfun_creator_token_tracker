@@ -408,7 +408,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     const allWalletsResult = await pool.query(
       `SELECT 
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as median_ath_mcap
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator`
@@ -431,7 +431,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           ELSE 0
         END as win_rate,
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as median_ath_mcap
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator
