@@ -183,7 +183,14 @@ export async function fetchAthMarketCap(
 
     console.log(`[Bitquery] Processed ${athDataList.length} tokens with ATH data`);
     if (athDataList.length > 0) {
-      console.log(`[Bitquery] Sample ATH data:`, athDataList[0]);
+      const sample = athDataList[0];
+      console.log(`[Bitquery] Sample ATH data:`, {
+        mintAddress: sample.mintAddress,
+        symbol: sample.symbol,
+        athMarketCapUsd: sample.athMarketCapUsd,
+        startingMarketCapUsd: sample.startingMarketCapUsd,
+        startingPriceUsd: sample.startingPriceUsd
+      });
     }
     
     return athDataList;

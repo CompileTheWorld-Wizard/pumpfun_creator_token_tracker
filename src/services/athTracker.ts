@@ -243,6 +243,9 @@ export async function fetchAthForTokens(
         const startingMarketCap = athData?.startingMarketCapUsd || 0;
         if (effectiveAth > 0 || startingMarketCap > 0) {
           try {
+            if (startingMarketCap > 0) {
+              console.log(`[AthTracker] Updating initial_market_cap_usd for ${mint} (${athData?.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
+            }
             await pool.query(
               `UPDATE tbl_soltrack_created_tokens 
                SET ath_market_cap_usd = GREATEST(
@@ -251,8 +254,8 @@ export async function fetchAthForTokens(
                  COALESCE(peak_market_cap_usd, 0)
                ),
                    initial_market_cap_usd = CASE 
-                     WHEN $3 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $3 
-                     ELSE COALESCE(initial_market_cap_usd, 0)
+                     WHEN $3 > 0 THEN $3 
+                     ELSE initial_market_cap_usd
                    END,
                    updated_at = NOW()
                WHERE mint = $2`,
@@ -805,8 +808,8 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
                COALESCE(peak_market_cap_usd, 0)
              ),
                  initial_market_cap_usd = CASE 
-                   WHEN $3 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $3 
-                   ELSE COALESCE(initial_market_cap_usd, 0)
+                   WHEN $3 > 0 THEN $3 
+                   ELSE initial_market_cap_usd
                  END,
                  updated_at = NOW()
              WHERE mint = $2`,
@@ -820,12 +823,10 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
       } else if (tokenInfo && startingMarketCap > 0) {
         // ATH didn't change, but we might have starting market cap to update
         try {
+          console.log(`[AthTracker] Updating initial_market_cap_usd for ${athData.mintAddress} (${athData.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
           await pool.query(
             `UPDATE tbl_soltrack_created_tokens 
-             SET initial_market_cap_usd = CASE 
-               WHEN $1 > 0 AND (initial_market_cap_usd IS NULL OR initial_market_cap_usd = 0) THEN $1 
-               ELSE initial_market_cap_usd
-             END,
+             SET initial_market_cap_usd = $1,
                  updated_at = NOW()
              WHERE mint = $2`,
             [startingMarketCap, athData.mintAddress]
