@@ -24,6 +24,13 @@ export interface ExpectedROI {
   avgRoi3rdBuy: number;
 }
 
+export interface AthMcapPercentiles {
+  percentile25th: number | null;
+  percentile50th: number | null;
+  percentile75th: number | null;
+  percentile90th: number | null;
+}
+
 export interface CreatorWallet {
   address: string;
   totalTokens: number;
@@ -31,6 +38,7 @@ export interface CreatorWallet {
   winRate: number; // % bonded (win rate)
   avgAthMcap: number | null;
   medianAthMcap: number | null;
+  athMcapPercentiles: AthMcapPercentiles;
   validTokenCount: number; // Tokens with both initial and ATH market cap > 0
   avgRugRate: number; // Overall rug rate (%)
   avgRugTime: number | null; // Average rug time in seconds (when tokens rug on average)

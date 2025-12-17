@@ -844,7 +844,10 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           ELSE 0
         END as win_rate,
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_25th,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_50th,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_75th,
+        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_90th
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator
@@ -931,7 +934,12 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     const walletsWithScores = result.rows.map(row => {
       const winRate = parseFloat(row.win_rate) || 0;
       const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
-      const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
+      const percentile25th = row.percentile_25th ? parseFloat(row.percentile_25th) : null;
+      const percentile50th = row.percentile_50th ? parseFloat(row.percentile_50th) : null;
+      const percentile75th = row.percentile_75th ? parseFloat(row.percentile_75th) : null;
+      const percentile90th = row.percentile_90th ? parseFloat(row.percentile_90th) : null;
+      // Keep median_ath_mcap for backward compatibility (same as 50th percentile)
+      const medianAthMcap = percentile50th;
       
       // Get tokens for this creator and calculate multiplier percentages
       const tokens = tokensByCreator.get(row.address) || [];

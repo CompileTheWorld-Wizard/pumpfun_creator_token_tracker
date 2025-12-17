@@ -71,34 +71,39 @@
           <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
             <!-- Top row with merged headers -->
             <tr>
-              <th rowspan="2" class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Wallet Address</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Total Tokens(Valid)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Bonded Tokens</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Win Rate (% Bonded)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg ATH MCap</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Median ATH MCap</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Wallet Address</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Total Tokens(Valid)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Bonded Tokens</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Win Rate (% Bonded)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg ATH MCap</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Median ATH MCap</th>
+              <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">ATH MCap Percentiles</th>
               <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buys/Sells</th>
               <th colspan="3" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Expected ROI (1st/2nd/3rd Buy)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Rate (%)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Time (seconds)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px] border border-gray-700">Multiplier Scores</th>
-              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Final Score</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Rate (%)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Time (seconds)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px] border border-gray-700">Multiplier Scores</th>
+              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Final Score</th>
             </tr>
             <!-- Bottom row with individual column headers -->
             <tr>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Count</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Sol Amount</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Count</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Sol Amount</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">1st Buy</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">2nd Buy</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">3rd Buy</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">25th</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">50th</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">75th</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">90th</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Count</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Sol Amount</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Count</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Sol Amount</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">1st Buy</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">2nd Buy</th>
+              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">3rd Buy</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="16" class="px-2 py-8 text-center">
+              <td colspan="20" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -147,6 +152,39 @@
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.medianAthMcap !== null">
                     ${{ formatCurrency(wallet.medianAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- ATH MCap Percentiles -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.athMcapPercentiles?.percentile25th !== null && wallet.athMcapPercentiles?.percentile25th !== undefined">
+                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile25th) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.athMcapPercentiles?.percentile50th !== null && wallet.athMcapPercentiles?.percentile50th !== undefined">
+                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile50th) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.athMcapPercentiles?.percentile75th !== null && wallet.athMcapPercentiles?.percentile75th !== undefined">
+                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile75th) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.athMcapPercentiles?.percentile90th !== null && wallet.athMcapPercentiles?.percentile90th !== undefined">
+                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile90th) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
