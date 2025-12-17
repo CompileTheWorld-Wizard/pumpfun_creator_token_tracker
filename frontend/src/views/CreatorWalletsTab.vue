@@ -76,6 +76,7 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Buys/Sells</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate by Time Bucket (%)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
@@ -85,7 +86,7 @@
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="10" class="px-2 py-8 text-center">
+              <td colspan="11" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -134,6 +135,14 @@
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.medianAthMcap !== null">
                     ${{ formatCurrency(wallet.medianAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ Math.round(wallet.buySellStats.avgBuyCount) }} buys, total of {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }} SOL | {{ Math.round(wallet.buySellStats.avgSellCount) }} sells, total {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }} SOL
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>

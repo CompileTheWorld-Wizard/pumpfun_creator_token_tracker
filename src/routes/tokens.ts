@@ -513,6 +513,88 @@ function calculateTimeBucketRugRate(
   return (rugCount / streamedTokens.length) * 100;
 }
 
+// Calculate average buy/sell statistics for a creator wallet
+function calculateBuySellStats(
+  tokens: Array<{
+    marketCapTimeSeries: any;
+  }>
+): {
+  avgBuyCount: number;
+  avgBuyTotalSol: number;
+  avgSellCount: number;
+  avgSellTotalSol: number;
+} {
+  if (tokens.length === 0) {
+    return {
+      avgBuyCount: 0,
+      avgBuyTotalSol: 0,
+      avgSellCount: 0,
+      avgSellTotalSol: 0
+    };
+  }
+  
+  let totalBuyCount = 0;
+  let totalBuySol = 0;
+  let totalSellCount = 0;
+  let totalSellSol = 0;
+  let tokensWithData = 0;
+  
+  for (const token of tokens) {
+    // Parse market cap time series
+    let marketCapTimeSeries = token.marketCapTimeSeries;
+    if (typeof marketCapTimeSeries === 'string') {
+      try {
+        marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
+      } catch (e) {
+        continue; // Skip if can't parse
+      }
+    }
+    
+    if (!Array.isArray(marketCapTimeSeries) || marketCapTimeSeries.length === 0) {
+      continue; // Skip if no time series data
+    }
+    
+    tokensWithData++;
+    
+    // Count buys and sells, and sum SOL amounts
+    let buyCount = 0;
+    let buySol = 0;
+    let sellCount = 0;
+    let sellSol = 0;
+    
+    for (const point of marketCapTimeSeries) {
+      const tradeType = point.tradeType || point.trade_type;
+      const solAmount = point.executionPriceSol || point.execution_price_sol || 0;
+      
+      if (tradeType === 'buy') {
+        buyCount++;
+        buySol += solAmount;
+      } else if (tradeType === 'sell') {
+        sellCount++;
+        sellSol += solAmount;
+      }
+    }
+    
+    totalBuyCount += buyCount;
+    totalBuySol += buySol;
+    totalSellCount += sellCount;
+    totalSellSol += sellSol;
+  }
+  
+  // Calculate averages
+  const avgBuyCount = tokensWithData > 0 ? totalBuyCount / tokensWithData : 0;
+  const avgBuyTotalSol = tokensWithData > 0 ? totalBuySol / tokensWithData : 0;
+  const avgSellCount = tokensWithData > 0 ? totalSellCount / tokensWithData : 0;
+  const avgSellTotalSol = tokensWithData > 0 ? totalSellSol / tokensWithData : 0;
+  
+  return {
+    avgBuyCount: Math.round(avgBuyCount * 100) / 100,
+    avgBuyTotalSol: Math.round(avgBuyTotalSol * 100) / 100,
+    avgSellCount: Math.round(avgSellCount * 100) / 100,
+    avgSellTotalSol: Math.round(avgSellTotalSol * 100) / 100
+  };
+}
+
 // Get creator wallets analytics with pagination
 router.get('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
@@ -732,6 +814,9 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         );
       }
       
+      // Calculate buy/sell statistics
+      const buySellStats = calculateBuySellStats(allTokens);
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
@@ -781,6 +866,12 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           ])
         ),
         multiplierPercentages: multiplierPercentagesObj,
+        buySellStats: {
+          avgBuyCount: buySellStats.avgBuyCount,
+          avgBuyTotalSol: buySellStats.avgBuyTotalSol,
+          avgSellCount: buySellStats.avgSellCount,
+          avgSellTotalSol: buySellStats.avgSellTotalSol
+        },
         scores: {
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,

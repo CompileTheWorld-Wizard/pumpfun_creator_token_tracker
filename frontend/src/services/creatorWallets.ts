@@ -11,6 +11,13 @@ export interface CreatorWalletScores {
   finalScore: number;
 }
 
+export interface BuySellStats {
+  avgBuyCount: number;
+  avgBuyTotalSol: number;
+  avgSellCount: number;
+  avgSellTotalSol: number;
+}
+
 export interface CreatorWallet {
   address: string;
   totalTokens: number;
@@ -22,6 +29,7 @@ export interface CreatorWallet {
   avgRugRate: number; // Overall rug rate (%)
   timeBucketRugRates: Record<number, number>; // Rug rate by time bucket (seconds)
   multiplierPercentages: Record<number, number>; // % of tokens that reach each multiplier threshold
+  buySellStats: BuySellStats;
   scores: CreatorWalletScores;
 }
 
