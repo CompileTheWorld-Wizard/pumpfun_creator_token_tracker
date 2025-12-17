@@ -69,25 +69,36 @@
         </div>
         <table class="w-full text-xs relative">
           <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
+            <!-- Top row with merged headers -->
             <tr>
-              <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Wallet Address</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Tokens(Valid)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bonded Tokens</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Buys/Sells</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Expected ROI (1st/2nd/3rd Buy)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Time (seconds)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
+              <th rowspan="2" class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Wallet Address</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Total Tokens(Valid)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Bonded Tokens</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
+              <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-l border-r border-gray-700">Avg Buys/Sells</th>
+              <th colspan="3" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-700">Expected ROI (1st/2nd/3rd Buy)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Time (seconds)</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
+              <th rowspan="2" class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
+            </tr>
+            <!-- Bottom row with individual column headers -->
+            <tr>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-l border-gray-700">Avg Buy Count</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Buy Sol Amount</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Sell Count</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-700">Avg Sell Sol Amount</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-l border-gray-700">1st Buy</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">2nd Buy</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider border-r border-gray-700">3rd Buy</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="12" class="px-2 py-8 text-center">
+              <td colspan="16" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -140,27 +151,70 @@
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+              <!-- Avg Buy Count -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border-l border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.buySellStats">
-                    {{ Math.round(wallet.buySellStats.avgBuyCount) }} buys, total of {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }} SOL | {{ Math.round(wallet.buySellStats.avgSellCount) }} sells, total {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }} SOL
+                    {{ Math.round(wallet.buySellStats.avgBuyCount) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
+              <!-- Avg Buy Sol Amount -->
               <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }} SOL
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Avg Sell Count -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ Math.round(wallet.buySellStats.avgSellCount) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Avg Sell Sol Amount -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border-r border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }} SOL
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Expected ROI 1st Buy -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border-l border-gray-700">
+                <div class="text-xs font-semibold">
                   <span v-if="wallet.expectedROI">
                     <span :class="getRoiColor(wallet.expectedROI.avgRoi1stBuy)">
-                      1st: {{ wallet.expectedROI.avgRoi1stBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi1stBuy.toFixed(2) }}%
+                      {{ wallet.expectedROI.avgRoi1stBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi1stBuy.toFixed(2) }}%
                     </span>
-                    <span class="text-gray-500 mx-1">|</span>
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Expected ROI 2nd Buy -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.expectedROI">
                     <span :class="getRoiColor(wallet.expectedROI.avgRoi2ndBuy)">
-                      2nd: {{ wallet.expectedROI.avgRoi2ndBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi2ndBuy.toFixed(2) }}%
+                      {{ wallet.expectedROI.avgRoi2ndBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi2ndBuy.toFixed(2) }}%
                     </span>
-                    <span class="text-gray-500 mx-1">|</span>
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Expected ROI 3rd Buy -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border-r border-gray-700">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.expectedROI">
                     <span :class="getRoiColor(wallet.expectedROI.avgRoi3rdBuy)">
-                      3rd: {{ wallet.expectedROI.avgRoi3rdBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi3rdBuy.toFixed(2) }}%
+                      {{ wallet.expectedROI.avgRoi3rdBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi3rdBuy.toFixed(2) }}%
                     </span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
