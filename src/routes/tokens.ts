@@ -959,15 +959,29 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       let percentile90th: boolean = false;
       
       if (percentileRank !== null) {
-        // If percentile rank is <= 25, they're in the 25th percentile bucket (bottom 25%)
-        // If percentile rank is <= 50, they're in the 50th percentile bucket (bottom 50%)
-        // If percentile rank is <= 75, they're in the 75th percentile bucket (bottom 75%)
-        // If percentile rank is <= 90, they're in the 90th percentile bucket (bottom 90%)
-        // Higher percentile rank = better, so we show which thresholds they've exceeded
-        if (percentileRank >= 25) percentile25th = true; // Reached at least 25th percentile
-        if (percentileRank >= 50) percentile50th = true; // Reached at least 50th percentile
-        if (percentileRank >= 75) percentile75th = true; // Reached at least 75th percentile
-        if (percentileRank >= 90) percentile90th = true; // Reached at least 90th percentile
+        // Determine which percentile bucket this creator falls into
+        // If in bottom 25% (percentile rank <= 25), show 25th percentile
+        // If in bottom 50% (percentile rank <= 50), show 50th percentile  
+        // If in bottom 75% (percentile rank <= 75), show 75th percentile
+        // If in bottom 90% (percentile rank <= 90), show 90th percentile
+        // If in top 10% (percentile rank > 90), show 90th percentile (they've exceeded it)
+        // Show cumulative: if at 60th percentile, they're in 75th and 90th buckets
+        if (percentileRank <= 25) {
+          percentile25th = true;
+        } else if (percentileRank <= 50) {
+          percentile25th = true;
+          percentile50th = true;
+        } else if (percentileRank <= 75) {
+          percentile25th = true;
+          percentile50th = true;
+          percentile75th = true;
+        } else {
+          // percentileRank > 75, they've reached all thresholds
+          percentile25th = true;
+          percentile50th = true;
+          percentile75th = true;
+          percentile90th = true;
+        }
       }
       
       // Get tokens for this creator and calculate multiplier percentages

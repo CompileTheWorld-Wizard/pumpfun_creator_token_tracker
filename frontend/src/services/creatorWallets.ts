@@ -25,10 +25,10 @@ export interface ExpectedROI {
 }
 
 export interface AthMcapPercentiles {
-  percentile25th: boolean; // Whether creator has reached at least 25th percentile rank
-  percentile50th: boolean; // Whether creator has reached at least 50th percentile rank
-  percentile75th: boolean; // Whether creator has reached at least 75th percentile rank
-  percentile90th: boolean; // Whether creator has reached at least 90th percentile rank
+  percentile25th: boolean; // Whether creator has reached 25th percentile threshold
+  percentile50th: boolean; // Whether creator has reached 50th percentile threshold
+  percentile75th: boolean; // Whether creator has reached 75th percentile threshold
+  percentile90th: boolean; // Whether creator has reached 90th percentile threshold
 }
 
 export interface CreatorWallet {
@@ -38,6 +38,7 @@ export interface CreatorWallet {
   winRate: number; // % bonded (win rate)
   avgAthMcap: number | null;
   medianAthMcap: number | null;
+  athMcapPercentileRank: number | null; // Percentile rank (0-100) of this creator's avg ATH compared to all creators
   athMcapPercentiles: AthMcapPercentiles;
   validTokenCount: number; // Tokens with both initial and ATH market cap > 0
   avgRugRate: number; // Overall rug rate (%)

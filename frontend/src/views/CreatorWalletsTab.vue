@@ -159,26 +159,30 @@
               <!-- ATH MCap Percentiles -->
               <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
                 <div class="text-xs font-semibold">
-                  <span v-if="wallet.athMcapPercentiles?.percentile25th" class="text-green-400">✓</span>
-                  <span v-else class="text-gray-500">-</span>
+                  <span v-if="wallet.athMcapPercentileRank !== null && wallet.athMcapPercentileRank <= 25" class="text-green-400">✓</span>
+                  <span v-else-if="wallet.athMcapPercentileRank !== null" class="text-gray-500">-</span>
+                  <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
                 <div class="text-xs font-semibold">
-                  <span v-if="wallet.athMcapPercentiles?.percentile50th" class="text-green-400">✓</span>
-                  <span v-else class="text-gray-500">-</span>
+                  <span v-if="wallet.athMcapPercentileRank !== null && wallet.athMcapPercentileRank > 25 && wallet.athMcapPercentileRank <= 50" class="text-green-400">✓</span>
+                  <span v-else-if="wallet.athMcapPercentileRank !== null" class="text-gray-500">-</span>
+                  <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
                 <div class="text-xs font-semibold">
-                  <span v-if="wallet.athMcapPercentiles?.percentile75th" class="text-green-400">✓</span>
-                  <span v-else class="text-gray-500">-</span>
+                  <span v-if="wallet.athMcapPercentileRank !== null && wallet.athMcapPercentileRank > 50 && wallet.athMcapPercentileRank <= 75" class="text-green-400">✓</span>
+                  <span v-else-if="wallet.athMcapPercentileRank !== null" class="text-gray-500">-</span>
+                  <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
                 <div class="text-xs font-semibold">
-                  <span v-if="wallet.athMcapPercentiles?.percentile90th" class="text-green-400">✓</span>
-                  <span v-else class="text-gray-500">-</span>
+                  <span v-if="wallet.athMcapPercentileRank !== null && wallet.athMcapPercentileRank > 75" class="text-green-400">✓</span>
+                  <span v-else-if="wallet.athMcapPercentileRank !== null" class="text-gray-500">-</span>
+                  <span v-else class="text-gray-500">N/A</span>
                 </div>
               </td>
               <!-- Avg Buy Count -->
