@@ -79,7 +79,7 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Buys/Sells</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Expected ROI (1st/2nd/3rd Buy)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate by Time Bucket (%)</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Time (seconds)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
             </tr>
@@ -172,14 +172,9 @@
                 </div>
               </td>
               <td class="px-2 py-1.5 text-right">
-                <div v-if="Object.keys(wallet.timeBucketRugRates || {}).length > 0">
-                  <div class="text-xs font-semibold" :class="getAvgTimeBucketRugRate(wallet) >= 50 ? 'text-red-400' : getAvgTimeBucketRugRate(wallet) >= 30 ? 'text-yellow-400' : 'text-gray-400'">
-                    {{ getAvgTimeBucketRugRate(wallet).toFixed(2) }}%<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.timeBucketRugRateScore?.toFixed(0) || '0' }})</span>
-                  </div>
-                  <div class="text-[9px] text-gray-500 mt-0.5">
-                    <span v-for="(rate, seconds) in wallet.timeBucketRugRates" :key="seconds" class="mr-2">
-                      {{ seconds }}s: {{ rate.toFixed(1) }}%
-                    </span>
+                <div v-if="wallet.avgRugTime !== null && wallet.avgRugTime !== undefined">
+                  <div class="text-xs font-semibold" :class="wallet.avgRugTime <= 5 ? 'text-red-400' : wallet.avgRugTime <= 15 ? 'text-yellow-400' : 'text-green-400'">
+                    {{ wallet.avgRugTime.toFixed(2) }}s<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.timeBucketRugRateScore?.toFixed(0) || '0' }})</span>
                   </div>
                 </div>
                 <div v-else class="text-xs text-gray-500">N/A</div>
@@ -360,11 +355,6 @@ const getValidTokenCount = (wallet: CreatorWallet): number => {
   return wallet.validTokenCount || 0
 }
 
-const getAvgTimeBucketRugRate = (wallet: CreatorWallet): number => {
-  const rates = Object.values(wallet.timeBucketRugRates || {})
-  if (rates.length === 0) return 0
-  return rates.reduce((a, b) => a + b, 0) / rates.length
-}
 
 const copyToClipboard = async (text: string) => {
   try {

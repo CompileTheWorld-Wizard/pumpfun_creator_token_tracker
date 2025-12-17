@@ -320,7 +320,7 @@ function calculateCreatorWalletScores(
   medianAthMcap: number | null,
   multiplierPercentages: Map<number, number>,
   avgRugRate: number,
-  timeBucketRugRates: Record<number, number>,
+  avgRugTime: number | null,
   settings: any,
   allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
 ): {
@@ -397,16 +397,12 @@ function calculateCreatorWalletScores(
     avgRugRateScore = getScoreFromRanges(avgRugRate, avgRugRateRanges);
   }
   
-  // Time Bucket Rug Rate score (always calculate, but only include in final score if enabled)
-  if (settings.avgRugRateByTimeBucket) {
+  // Average Rug Time score (always calculate, but only include in final score if enabled)
+  if (settings.avgRugRateByTimeBucket && avgRugTime !== null && avgRugTime >= 0) {
     const timeBucketRanges = getRanges(settings.avgRugRateByTimeBucket);
     if (timeBucketRanges.length > 0) {
-      // Calculate average rug rate across all time buckets
-      const timeBucketValues = Object.values(timeBucketRugRates);
-      if (timeBucketValues.length > 0) {
-        const avgTimeBucketRugRate = timeBucketValues.reduce((a, b) => a + b, 0) / timeBucketValues.length;
-        timeBucketRugRateScore = getScoreFromRanges(avgTimeBucketRugRate, timeBucketRanges);
-      }
+      // Use average rug time (in seconds) to get score from ranges
+      timeBucketRugRateScore = getScoreFromRanges(avgRugTime, timeBucketRanges);
     }
   }
   
@@ -458,24 +454,23 @@ function calculateRugRate(
   return (rugCount / tokens.length) * 100;
 }
 
-// Calculate time bucket rug rate for streamed tokens
-// Checks if token rugs within X seconds by examining market cap time series
-function calculateTimeBucketRugRate(
+// Calculate average rug time for streamed tokens
+// Returns the average time (in seconds) when tokens rug (market cap drops below threshold)
+function calculateAvgRugTime(
   tokens: Array<{
     isFetched: boolean;
     createdAt: Date;
     marketCapTimeSeries: any;
     athMarketCapUsd: number | null;
   }>,
-  timeBucketSeconds: number,
   rugThresholdMcap: number
-): number {
+): number | null {
   // Only consider streamed tokens (is_fetched = false)
   const streamedTokens = tokens.filter(t => !t.isFetched);
   
-  if (streamedTokens.length === 0) return 0;
+  if (streamedTokens.length === 0) return null;
   
-  let rugCount = 0;
+  const rugTimes: number[] = [];
   
   for (const token of streamedTokens) {
     // Check if token has market cap time series data
@@ -494,23 +489,37 @@ function calculateTimeBucketRugRate(
     
     // Get token creation time
     const createdAtMs = new Date(token.createdAt).getTime();
-    const timeBucketMs = timeBucketSeconds * 1000;
-    const cutoffTime = createdAtMs + timeBucketMs;
     
-    // Check if token rugs within the time bucket
-    // A token rugs if its market cap drops below threshold within the time bucket
-    const hasRugInBucket = marketCapTimeSeries.some((point: any) => {
-      const pointTime = point.timestamp || point.time || 0;
-      // Check if point is within the time bucket and market cap is below threshold
-      return pointTime >= createdAtMs && pointTime <= cutoffTime && point.marketCapUsd < rugThresholdMcap;
-    });
+    // Find the first point where market cap drops below threshold
+    // Sort by timestamp to ensure chronological order
+    const sortedPoints = marketCapTimeSeries
+      .map((point: any) => ({
+        timestamp: point.timestamp || point.time || 0,
+        marketCapUsd: point.marketCapUsd || point.market_cap_usd || 0
+      }))
+      .filter((point: any) => point.timestamp >= createdAtMs) // Only points after creation
+      .sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp
     
-    if (hasRugInBucket) {
-      rugCount++;
+    // Find first point where market cap is below threshold
+    for (const point of sortedPoints) {
+      if (point.marketCapUsd < rugThresholdMcap && point.marketCapUsd > 0) {
+        // Calculate time in seconds from creation
+        const rugTimeSeconds = (point.timestamp - createdAtMs) / 1000;
+        if (rugTimeSeconds >= 0) {
+          rugTimes.push(rugTimeSeconds);
+        }
+        break; // Only count the first rug time
+      }
     }
   }
   
-  return (rugCount / streamedTokens.length) * 100;
+  // Calculate average rug time
+  if (rugTimes.length === 0) {
+    return null; // No tokens rugs found
+  }
+  
+  const avgRugTime = rugTimes.reduce((a, b) => a + b, 0) / rugTimes.length;
+  return avgRugTime;
 }
 
 // Calculate expected ROI for 1st/2nd/3rd buy positions
@@ -916,26 +925,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       });
     }
     
-    // Extract time buckets from avgRugRateByTimeBucket ranges
-    // Time buckets are the max values from each range (or min if max is not set)
-    const timeBucketRanges = getRanges(scoringSettings?.avgRugRateByTimeBucket);
-    const rugRateTimeBuckets: number[] = [];
-    if (timeBucketRanges.length > 0) {
-      // Extract unique time bucket values from ranges (use max value of each range)
-      const bucketSet = new Set<number>();
-      timeBucketRanges.forEach(range => {
-        if (range.max !== undefined && range.max !== null) {
-          bucketSet.add(range.max);
-        } else if (range.min !== undefined && range.min !== null) {
-          bucketSet.add(range.min);
-        }
-      });
-      rugRateTimeBuckets.push(...Array.from(bucketSet).sort((a, b) => a - b));
-    }
-    // Fallback to default if no ranges configured
-    if (rugRateTimeBuckets.length === 0) {
-      rugRateTimeBuckets.push(1, 3, 5, 10);
-    }
+    // No need to extract time buckets - we're calculating average rug time instead
     
     // Calculate scores and create wallet objects
     const walletsWithScores = result.rows.map(row => {
@@ -961,15 +951,8 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       // Calculate overall rug rate
       const avgRugRate = calculateRugRate(allTokens, rugThresholdMcap);
       
-      // Calculate time bucket rug rates (only for streamed tokens)
-      const timeBucketRugRates: Record<number, number> = {};
-      for (const timeBucket of rugRateTimeBuckets) {
-        timeBucketRugRates[timeBucket] = calculateTimeBucketRugRate(
-          allTokens,
-          timeBucket,
-          rugThresholdMcap
-        );
-      }
+      // Calculate average rug time (only for streamed tokens)
+      const avgRugTime = calculateAvgRugTime(allTokens, rugThresholdMcap);
       
       // Calculate buy/sell statistics
       const buySellStats = calculateBuySellStats(allTokens);
@@ -996,7 +979,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           medianAthMcap, 
           multiplierPercentages,
           avgRugRate,
-          timeBucketRugRates,
+          avgRugTime,
           scoringSettings, 
           allWalletsData
         );
@@ -1019,12 +1002,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         medianAthMcap,
         validTokenCount,
         avgRugRate: Math.round(avgRugRate * 100) / 100,
-        timeBucketRugRates: Object.fromEntries(
-          Object.entries(timeBucketRugRates).map(([key, value]) => [
-            parseFloat(key),
-            Math.round(value * 100) / 100
-          ])
-        ),
+        avgRugTime: avgRugTime !== null ? Math.round(avgRugTime * 100) / 100 : null,
         multiplierPercentages: multiplierPercentagesObj,
         buySellStats: {
           avgBuyCount: buySellStats.avgBuyCount,
