@@ -322,7 +322,8 @@ function calculateCreatorWalletScores(
   avgRugRate: number,
   avgRugTime: number | null,
   settings: any,
-  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
+  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>,
+  avgAthMcapPercentileRank: number | null = null
 ): {
   winRateScore: number;
   avgAthMcapScore: number;
@@ -357,13 +358,18 @@ function calculateCreatorWalletScores(
     .filter((v): v is number => v !== null && v > 0)
     .sort((a, b) => a - b);
   
-  // Average ATH MCap score
-  if (avgAthMcap !== null && avgAthMcap > 0 && settings.avgAthMcap && avgAthMcapValues.length > 0) {
+  // Average ATH MCap score (based on percentile rank)
+  if (settings.avgAthMcap) {
     const avgAthMcapRanges = getRanges(settings.avgAthMcap);
     if (avgAthMcapRanges.length > 0) {
-      // Calculate percentile
-      const percentile = calculatePercentile(avgAthMcap, avgAthMcapValues);
-      avgAthMcapScore = getScoreFromRanges(percentile, avgAthMcapRanges);
+      // Use provided percentile rank if available, otherwise calculate it
+      let percentile: number | null = avgAthMcapPercentileRank;
+      if (percentile === null && avgAthMcap !== null && avgAthMcap > 0 && avgAthMcapValues.length > 0) {
+        percentile = calculatePercentile(avgAthMcap, avgAthMcapValues);
+      }
+      if (percentile !== null) {
+        avgAthMcapScore = getScoreFromRanges(percentile, avgAthMcapRanges);
+      }
     }
   }
   
@@ -1032,7 +1038,8 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           avgRugRate,
           avgRugTime,
           scoringSettings, 
-          allWalletsData
+          allWalletsData,
+          percentileRank
         );
       }
       

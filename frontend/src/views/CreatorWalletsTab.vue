@@ -143,7 +143,11 @@
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.avgAthMcap !== null">
-                    ${{ formatCurrency(wallet.avgAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.avgAthMcapScore.toFixed(0) }})</span>
+                    ${{ formatCurrency(wallet.avgAthMcap) }}
+                    <span v-if="wallet.athMcapPercentileRank !== null" class="text-gray-500 ml-1">
+                      ({{ wallet.athMcapPercentileRank.toFixed(1) }}%<span v-if="viewMode === 'score'">, Score: {{ wallet.scores.avgAthMcapScore.toFixed(0) }}</span>)
+                    </span>
+                    <span v-else-if="viewMode === 'score'" class="text-gray-500 ml-1">(Score: {{ wallet.scores.avgAthMcapScore.toFixed(0) }})</span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
@@ -198,7 +202,7 @@
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.buySellStats">
-                    {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }} SOL
+                    {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
@@ -216,7 +220,7 @@
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.buySellStats">
-                    {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }} SOL
+                    {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
