@@ -18,6 +18,12 @@ export interface BuySellStats {
   avgSellTotalSol: number;
 }
 
+export interface ExpectedROI {
+  avgRoi1stBuy: number;
+  avgRoi2ndBuy: number;
+  avgRoi3rdBuy: number;
+}
+
 export interface CreatorWallet {
   address: string;
   totalTokens: number;
@@ -30,6 +36,7 @@ export interface CreatorWallet {
   timeBucketRugRates: Record<number, number>; // Rug rate by time bucket (seconds)
   multiplierPercentages: Record<number, number>; // % of tokens that reach each multiplier threshold
   buySellStats: BuySellStats;
+  expectedROI: ExpectedROI;
   scores: CreatorWalletScores;
 }
 

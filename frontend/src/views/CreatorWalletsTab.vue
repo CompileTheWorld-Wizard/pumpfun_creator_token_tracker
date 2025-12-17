@@ -77,6 +77,7 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Buys/Sells</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Expected ROI (1st/2nd/3rd Buy)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate by Time Bucket (%)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
@@ -86,7 +87,7 @@
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="11" class="px-2 py-8 text-center">
+              <td colspan="12" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -143,6 +144,24 @@
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.buySellStats">
                     {{ Math.round(wallet.buySellStats.avgBuyCount) }} buys, total of {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }} SOL | {{ Math.round(wallet.buySellStats.avgSellCount) }} sells, total {{ wallet.buySellStats.avgSellTotalSol.toFixed(2) }} SOL
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.expectedROI">
+                    <span :class="wallet.expectedROI.avgRoi1stBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                      1st: {{ wallet.expectedROI.avgRoi1stBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi1stBuy.toFixed(2) }}%
+                    </span>
+                    <span class="text-gray-500 mx-1">|</span>
+                    <span :class="wallet.expectedROI.avgRoi2ndBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                      2nd: {{ wallet.expectedROI.avgRoi2ndBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi2ndBuy.toFixed(2) }}%
+                    </span>
+                    <span class="text-gray-500 mx-1">|</span>
+                    <span :class="wallet.expectedROI.avgRoi3rdBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                      3rd: {{ wallet.expectedROI.avgRoi3rdBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi3rdBuy.toFixed(2) }}%
+                    </span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>

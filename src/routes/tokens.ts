@@ -513,6 +513,155 @@ function calculateTimeBucketRugRate(
   return (rugCount / streamedTokens.length) * 100;
 }
 
+// Calculate expected ROI for 1st/2nd/3rd buy positions
+function calculateExpectedROI(
+  tokens: Array<{
+    marketCapTimeSeries: any;
+    athMarketCapUsd: number | null;
+  }>
+): {
+  avgRoi1stBuy: number;
+  avgRoi2ndBuy: number;
+  avgRoi3rdBuy: number;
+} {
+  const DEFAULT_TOKEN_SUPPLY = 1_000_000_000; // 1 billion tokens
+  
+  if (tokens.length === 0) {
+    return {
+      avgRoi1stBuy: 0,
+      avgRoi2ndBuy: 0,
+      avgRoi3rdBuy: 0
+    };
+  }
+  
+  let totalRoi1st = 0;
+  let totalRoi2nd = 0;
+  let totalRoi3rd = 0;
+  let tokensWith1stBuy = 0;
+  let tokensWith2ndBuy = 0;
+  let tokensWith3rdBuy = 0;
+  
+  for (const token of tokens) {
+    // Skip if no ATH market cap
+    if (!token.athMarketCapUsd || token.athMarketCapUsd <= 0) {
+      continue;
+    }
+    
+    // Parse market cap time series
+    let marketCapTimeSeries = token.marketCapTimeSeries;
+    if (typeof marketCapTimeSeries === 'string') {
+      try {
+        marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
+      } catch (e) {
+        continue; // Skip if can't parse
+      }
+    }
+    
+    if (!Array.isArray(marketCapTimeSeries) || marketCapTimeSeries.length === 0) {
+      continue; // Skip if no time series data
+    }
+    
+    // Filter only buy transactions and get them in order
+    const buyTrades = marketCapTimeSeries
+      .filter((point: any) => {
+        const tradeType = point.tradeType || point.trade_type;
+        return tradeType === 'buy' && 
+               point.executionPriceSol !== undefined && 
+               point.executionPriceSol !== null &&
+               point.executionPriceSol > 0;
+      })
+      .map((point: any) => ({
+        executionPriceSol: point.executionPriceSol || point.execution_price_sol || 0,
+        timestamp: point.timestamp || point.time || 0
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to get order
+    
+    // Need at least 1 buy to calculate ROI
+    if (buyTrades.length === 0) {
+      continue;
+    }
+    
+    // Find the execution price at ATH from the time series
+    // Look for the point with the highest market cap in the time series
+    let priceAtAthSol: number | null = null;
+    let maxMarketCapUsd = 0;
+    
+    for (const point of marketCapTimeSeries) {
+      const marketCapUsd = point.marketCapUsd || point.market_cap_usd || 0;
+      const executionPriceSol = point.executionPriceSol || point.execution_price_sol;
+      
+      if (marketCapUsd > maxMarketCapUsd && executionPriceSol !== undefined && executionPriceSol !== null && executionPriceSol > 0) {
+        maxMarketCapUsd = marketCapUsd;
+        priceAtAthSol = executionPriceSol;
+      }
+    }
+    
+    // If ATH is higher than what's in time series, calculate price from ATH market cap
+    // We need SOL price to convert, but we'll use the SOL price from the highest point
+    // If we can't find a price in time series, skip this token
+    if (!priceAtAthSol || priceAtAthSol <= 0) {
+      // Fallback: calculate from ATH market cap if we have SOL price
+      // Find any point with SOL price for conversion
+      let solPriceUsd = 0;
+      for (const point of marketCapTimeSeries) {
+        const price = point.solPriceUsd || point.sol_price_usd;
+        if (price && price > 0) {
+          solPriceUsd = price;
+          break;
+        }
+      }
+      
+      if (solPriceUsd > 0) {
+        // Convert ATH market cap USD to SOL, then to price per token
+        const athMarketCapSol = token.athMarketCapUsd / solPriceUsd;
+        priceAtAthSol = athMarketCapSol / DEFAULT_TOKEN_SUPPLY;
+      } else {
+        continue; // Skip if we can't calculate
+      }
+    }
+    
+    // Calculate ROI for each position
+    // ROI = (sell_price - buy_price) / buy_price * 100
+    if (buyTrades.length >= 1 && priceAtAthSol > 0) {
+      const buyPrice1st = buyTrades[0].executionPriceSol;
+      if (buyPrice1st > 0) {
+        const roi1st = ((priceAtAthSol - buyPrice1st) / buyPrice1st) * 100;
+        totalRoi1st += roi1st;
+        tokensWith1stBuy++;
+      }
+    }
+    
+    if (buyTrades.length >= 2 && priceAtAthSol > 0) {
+      const buyPrice2nd = buyTrades[1].executionPriceSol;
+      if (buyPrice2nd > 0) {
+        const roi2nd = ((priceAtAthSol - buyPrice2nd) / buyPrice2nd) * 100;
+        totalRoi2nd += roi2nd;
+        tokensWith2ndBuy++;
+      }
+    }
+    
+    if (buyTrades.length >= 3 && priceAtAthSol > 0) {
+      const buyPrice3rd = buyTrades[2].executionPriceSol;
+      if (buyPrice3rd > 0) {
+        const roi3rd = ((priceAtAthSol - buyPrice3rd) / buyPrice3rd) * 100;
+        totalRoi3rd += roi3rd;
+        tokensWith3rdBuy++;
+      }
+    }
+  }
+  
+  // Calculate averages
+  const avgRoi1stBuy = tokensWith1stBuy > 0 ? totalRoi1st / tokensWith1stBuy : 0;
+  const avgRoi2ndBuy = tokensWith2ndBuy > 0 ? totalRoi2nd / tokensWith2ndBuy : 0;
+  const avgRoi3rdBuy = tokensWith3rdBuy > 0 ? totalRoi3rd / tokensWith3rdBuy : 0;
+  
+  return {
+    avgRoi1stBuy: Math.round(avgRoi1stBuy * 100) / 100,
+    avgRoi2ndBuy: Math.round(avgRoi2ndBuy * 100) / 100,
+    avgRoi3rdBuy: Math.round(avgRoi3rdBuy * 100) / 100
+  };
+}
+
 // Calculate average buy/sell statistics for a creator wallet
 function calculateBuySellStats(
   tokens: Array<{
@@ -825,6 +974,9 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       // Calculate buy/sell statistics
       const buySellStats = calculateBuySellStats(allTokens);
       
+      // Calculate expected ROI for 1st/2nd/3rd buy positions
+      const expectedROI = calculateExpectedROI(allTokens);
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
@@ -879,6 +1031,11 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           avgBuyTotalSol: buySellStats.avgBuyTotalSol,
           avgSellCount: buySellStats.avgSellCount,
           avgSellTotalSol: buySellStats.avgSellTotalSol
+        },
+        expectedROI: {
+          avgRoi1stBuy: expectedROI.avgRoi1stBuy,
+          avgRoi2ndBuy: expectedROI.avgRoi2ndBuy,
+          avgRoi3rdBuy: expectedROI.avgRoi3rdBuy
         },
         scores: {
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
