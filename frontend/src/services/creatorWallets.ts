@@ -5,6 +5,8 @@ export interface CreatorWalletScores {
   avgAthMcapScore: number;
   medianAthMcapScore: number;
   multiplierScore: number;
+  avgRugRateScore: number;
+  timeBucketRugRateScore: number;
   individualMultiplierScores: Record<number, number>;
   finalScore: number;
 }
@@ -17,6 +19,8 @@ export interface CreatorWallet {
   avgAthMcap: number | null;
   medianAthMcap: number | null;
   validTokenCount: number; // Tokens with both initial and ATH market cap > 0
+  avgRugRate: number; // Overall rug rate (%)
+  timeBucketRugRates: Record<number, number>; // Rug rate by time bucket (seconds)
   multiplierPercentages: Record<number, number>; // % of tokens that reach each multiplier threshold
   scores: CreatorWalletScores;
 }

@@ -20,6 +20,9 @@ export interface TimeBucketRange {
 
 export interface ScoringSettings {
   trackingTimeSeconds: number; // min 15, max 120
+  rugThresholdMcap: number; // X SOL amount in market cap (default 6000)
+  rugRateTimeBuckets: number[]; // Time buckets in seconds (e.g., [1, 3, 5, 10])
+  includeTimeBucketRugRate: boolean; // Whether to include time bucket rug rate in total score (default false)
   winRate: {
     name?: string; // Optional name for analytics table
     ranges: ScoreRange[];

@@ -76,6 +76,7 @@
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Win Rate (% Bonded)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg ATH MCap</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Median ATH MCap</th>
+              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Avg Rug Rate (%)</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px]">Multiplier Scores</th>
               <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final Score</th>
             </tr>
@@ -83,7 +84,7 @@
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="8" class="px-2 py-8 text-center">
+              <td colspan="9" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -134,6 +135,16 @@
                     ${{ formatCurrency(wallet.medianAthMcap) }}<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.medianAthMcapScore.toFixed(0) }})</span>
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <td class="px-2 py-1.5 whitespace-nowrap text-right">
+                <div class="text-xs font-semibold" :class="wallet.avgRugRate >= 50 ? 'text-red-400' : wallet.avgRugRate >= 30 ? 'text-yellow-400' : 'text-gray-400'">
+                  {{ wallet.avgRugRate?.toFixed(2) || '0.00' }}%<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.avgRugRateScore?.toFixed(0) || '0' }})</span>
+                </div>
+                <div v-if="Object.keys(wallet.timeBucketRugRates || {}).length > 0" class="text-[9px] text-gray-500 mt-0.5">
+                  <span v-for="(rate, seconds) in wallet.timeBucketRugRates" :key="seconds" class="mr-2">
+                    {{ seconds }}s: {{ rate.toFixed(1) }}%
+                  </span>
                 </div>
               </td>
               <td class="px-2 py-1.5 text-right min-w-[280px]">

@@ -319,20 +319,27 @@ function calculateCreatorWalletScores(
   avgAthMcap: number | null,
   medianAthMcap: number | null,
   multiplierPercentages: Map<number, number>,
+  avgRugRate: number,
+  timeBucketRugRates: Record<number, number>,
   settings: any,
-  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
+  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>,
+  allWalletsRugRates: number[]
 ): {
   winRateScore: number;
   avgAthMcapScore: number;
   medianAthMcapScore: number;
   multiplierScore: number;
   individualMultiplierScores: Record<number, number>;
+  avgRugRateScore: number;
+  timeBucketRugRateScore: number;
   finalScore: number;
 } {
   let winRateScore = 0;
   let avgAthMcapScore = 0;
   let medianAthMcapScore = 0;
   let multiplierScore = 0;
+  let avgRugRateScore = 0;
+  let timeBucketRugRateScore = 0;
   
   // Win Rate score
   const winRateRanges = getRanges(settings.winRate);
@@ -385,7 +392,26 @@ function calculateCreatorWalletScores(
     });
   }
   
-  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore + multiplierScore;
+  // Average Rug Rate score
+  const avgRugRateRanges = getRanges(settings.avgRugRate);
+  if (avgRugRateRanges.length > 0) {
+    avgRugRateScore = getScoreFromRanges(avgRugRate, avgRugRateRanges);
+  }
+  
+  // Time Bucket Rug Rate score (only if enabled)
+  if (settings.includeTimeBucketRugRate && settings.avgRugRateByTimeBucket) {
+    const timeBucketRanges = getRanges(settings.avgRugRateByTimeBucket);
+    if (timeBucketRanges.length > 0) {
+      // Calculate average rug rate across all time buckets
+      const timeBucketValues = Object.values(timeBucketRugRates);
+      if (timeBucketValues.length > 0) {
+        const avgTimeBucketRugRate = timeBucketValues.reduce((a, b) => a + b, 0) / timeBucketValues.length;
+        timeBucketRugRateScore = getScoreFromRanges(avgTimeBucketRugRate, timeBucketRanges);
+      }
+    }
+  }
+  
+  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore + multiplierScore + avgRugRateScore + timeBucketRugRateScore;
   
   return {
     winRateScore,
@@ -393,6 +419,8 @@ function calculateCreatorWalletScores(
     medianAthMcapScore,
     multiplierScore,
     individualMultiplierScores: Object.fromEntries(individualMultiplierScores),
+    avgRugRateScore,
+    timeBucketRugRateScore,
     finalScore
   };
 }
@@ -412,6 +440,76 @@ function calculatePercentile(value: number, sortedArray: number[]): number {
   }
   
   return (countBelow / sortedArray.length) * 100;
+}
+
+// Calculate overall rug rate: (# tokens that rug / # created) where rug = ATH < X mcap
+function calculateRugRate(
+  tokens: Array<{ athMarketCapUsd: number | null }>,
+  rugThresholdMcap: number
+): number {
+  if (tokens.length === 0) return 0;
+  
+  const rugCount = tokens.filter(t => {
+    const ath = t.athMarketCapUsd;
+    return ath !== null && ath < rugThresholdMcap;
+  }).length;
+  
+  return (rugCount / tokens.length) * 100;
+}
+
+// Calculate time bucket rug rate for streamed tokens
+// Checks if token rugs within X seconds by examining market cap time series
+function calculateTimeBucketRugRate(
+  tokens: Array<{
+    isFetched: boolean;
+    createdAt: Date;
+    marketCapTimeSeries: any;
+    athMarketCapUsd: number | null;
+  }>,
+  timeBucketSeconds: number,
+  rugThresholdMcap: number
+): number {
+  // Only consider streamed tokens (is_fetched = false)
+  const streamedTokens = tokens.filter(t => !t.isFetched);
+  
+  if (streamedTokens.length === 0) return 0;
+  
+  let rugCount = 0;
+  
+  for (const token of streamedTokens) {
+    // Check if token has market cap time series data
+    let marketCapTimeSeries = token.marketCapTimeSeries;
+    if (typeof marketCapTimeSeries === 'string') {
+      try {
+        marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
+      } catch (e) {
+        continue; // Skip if can't parse
+      }
+    }
+    
+    if (!Array.isArray(marketCapTimeSeries) || marketCapTimeSeries.length === 0) {
+      continue; // Skip if no time series data
+    }
+    
+    // Get token creation time
+    const createdAtMs = new Date(token.createdAt).getTime();
+    const timeBucketMs = timeBucketSeconds * 1000;
+    const cutoffTime = createdAtMs + timeBucketMs;
+    
+    // Check if token rugs within the time bucket
+    // A token rugs if its market cap drops below threshold within the time bucket
+    const hasRugInBucket = marketCapTimeSeries.some((point: any) => {
+      const pointTime = point.timestamp || point.time || 0;
+      // Check if point is within the time bucket and market cap is below threshold
+      return pointTime >= createdAtMs && pointTime <= cutoffTime && point.marketCapUsd < rugThresholdMcap;
+    });
+    
+    if (hasRugInBucket) {
+      rugCount++;
+    }
+  }
+  
+  return (rugCount / streamedTokens.length) * 100;
 }
 
 // Get creator wallets analytics with pagination
@@ -466,15 +564,49 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     );
     const total = parseInt(countResult.rows[0].total);
     
+    // Get rug threshold from settings (default 6000) - need this early for calculations
+    const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
+    
     // First, get ALL wallets data to calculate percentiles (not just paginated ones)
     const allWalletsResult = await pool.query(
       `SELECT 
+        ct.creator,
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator`
     );
+    
+    // Get all tokens for all wallets to calculate rug rates for percentile calculation
+    const allWalletsTokensResult = await pool.query(
+      `SELECT 
+        ct.creator,
+        ct.ath_market_cap_usd
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}`
+    );
+    
+    // Group tokens by creator for all wallets
+    const allWalletsTokensMap = new Map<string, Array<{ athMarketCapUsd: number | null }>>();
+    allWalletsTokensResult.rows.forEach(row => {
+      const creator = row.creator;
+      if (!allWalletsTokensMap.has(creator)) {
+        allWalletsTokensMap.set(creator, []);
+      }
+      allWalletsTokensMap.get(creator)!.push({
+        athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
+      });
+    });
+    
+    // Calculate rug rates for all wallets
+    const allWalletsRugRates: number[] = [];
+    allWalletsResult.rows.forEach(row => {
+      const creator = row.creator;
+      const tokens = allWalletsTokensMap.get(creator) || [];
+      const rugRate = calculateRugRate(tokens, rugThresholdMcap);
+      allWalletsRugRates.push(rugRate);
+    });
     
     const allWalletsData = allWalletsResult.rows.map(row => ({
       avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
@@ -502,9 +634,15 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       [limit, offset]
     );
     
-    // Get token data for multiplier calculations for the paginated creators
+    // Get token data for multiplier and rug rate calculations for the paginated creators
     const creatorAddresses = result.rows.map(row => row.address);
     let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
+    let allTokensByCreator: Map<string, Array<{ 
+      athMarketCapUsd: number | null;
+      isFetched: boolean;
+      createdAt: Date;
+      marketCapTimeSeries: any;
+    }>> = new Map();
     
     if (creatorAddresses.length > 0) {
       // Build WHERE clause for token query (same filter as main query)
@@ -513,6 +651,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
       }
       
+      // Get tokens for multiplier calculations (valid tokens only)
       const tokensResult = await pool.query(
         `SELECT 
           ct.creator,
@@ -527,7 +666,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         [creatorAddresses]
       );
       
-      // Group tokens by creator
+      // Group tokens by creator for multiplier calculations
       tokensResult.rows.forEach(row => {
         const creator = row.creator;
         if (!tokensByCreator.has(creator)) {
@@ -538,7 +677,38 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
         });
       });
+      
+      // Get ALL tokens for rug rate calculations (including invalid ones)
+      const allTokensResult = await pool.query(
+        `SELECT 
+          ct.creator,
+          ct.ath_market_cap_usd,
+          ct.is_fetched,
+          ct.created_at,
+          ct.market_cap_time_series
+        FROM tbl_soltrack_created_tokens ct
+        ${tokenWhereClause}`,
+        [creatorAddresses]
+      );
+      
+      // Group all tokens by creator for rug rate calculations
+      allTokensResult.rows.forEach(row => {
+        const creator = row.creator;
+        if (!allTokensByCreator.has(creator)) {
+          allTokensByCreator.set(creator, []);
+        }
+        allTokensByCreator.get(creator)!.push({
+          athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
+          isFetched: row.is_fetched || false,
+          createdAt: row.created_at,
+          marketCapTimeSeries: row.market_cap_time_series
+        });
+      });
     }
+    
+    // Get rug rate settings
+    const rugRateTimeBuckets = scoringSettings?.rugRateTimeBuckets || [1, 3, 5, 10];
+    const includeTimeBucketRugRate = scoringSettings?.includeTimeBucketRugRate || false;
     
     // Calculate scores and create wallet objects
     const walletsWithScores = result.rows.map(row => {
@@ -558,6 +728,22 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
              t.athMarketCapUsd > 0
       ).length;
       
+      // Get all tokens for rug rate calculations
+      const allTokens = allTokensByCreator.get(row.address) || [];
+      
+      // Calculate overall rug rate
+      const avgRugRate = calculateRugRate(allTokens, rugThresholdMcap);
+      
+      // Calculate time bucket rug rates (only for streamed tokens)
+      const timeBucketRugRates: Record<number, number> = {};
+      for (const timeBucket of rugRateTimeBuckets) {
+        timeBucketRugRates[timeBucket] = calculateTimeBucketRugRate(
+          allTokens,
+          timeBucket,
+          rugThresholdMcap
+        );
+      }
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
@@ -574,8 +760,11 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           avgAthMcap, 
           medianAthMcap, 
           multiplierPercentages,
+          avgRugRate,
+          timeBucketRugRates,
           scoringSettings, 
-          allWalletsData
+          allWalletsData,
+          allWalletsRugRates
         );
       }
       
@@ -595,12 +784,21 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         avgAthMcap,
         medianAthMcap,
         validTokenCount,
+        avgRugRate: Math.round(avgRugRate * 100) / 100,
+        timeBucketRugRates: Object.fromEntries(
+          Object.entries(timeBucketRugRates).map(([key, value]) => [
+            parseFloat(key),
+            Math.round(value * 100) / 100
+          ])
+        ),
         multiplierPercentages: multiplierPercentagesObj,
         scores: {
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,
           medianAthMcapScore: Math.round(scores.medianAthMcapScore * 100) / 100,
           multiplierScore: Math.round(scores.multiplierScore * 100) / 100,
+          avgRugRateScore: Math.round(scores.avgRugRateScore * 100) / 100,
+          timeBucketRugRateScore: Math.round(scores.timeBucketRugRateScore * 100) / 100,
           individualMultiplierScores: Object.fromEntries(
             Object.entries(scores.individualMultiplierScores).map(([key, value]) => [
               parseFloat(key),
