@@ -42,6 +42,8 @@ export interface MarketCapDataPoint {
   solPriceUsd: number;
   tradeType: 'buy' | 'sell';
   signature: string;
+  solAmount: number; // Actual SOL amount for this trade
+  tokenAmount: number; // Actual token amount for this trade
 }
 
 /**
@@ -401,7 +403,7 @@ function calculateMarketCap(
   tradeData: TradeEventData,
   solPriceUsd: number | null,
   tokenSupply: number = DEFAULT_TOKEN_SUPPLY
-): { executionPriceSol: number; marketCapSol: number; marketCapUsd: number } | null {
+): { executionPriceSol: number; marketCapSol: number; marketCapUsd: number; solAmount: number; tokenAmount: number } | null {
   // Calculate execution price (SOL per token)
   // sol_amount and token_amount are in their base units
   const solAmount = tradeData.sol_amount / 1e9; // Convert lamports to SOL
@@ -445,7 +447,7 @@ function calculateMarketCap(
     return null;
   }
   
-  return { executionPriceSol, marketCapSol, marketCapUsd };
+  return { executionPriceSol, marketCapSol, marketCapUsd, solAmount, tokenAmount };
 }
 
 /**
@@ -515,7 +517,7 @@ async function collectAndSaveTokenData(
       continue;
     }
     
-    const { executionPriceSol, marketCapSol, marketCapUsd } = marketCapResult;
+    const { executionPriceSol, marketCapSol, marketCapUsd, solAmount, tokenAmount } = marketCapResult;
     
     // Include trade even if SOL price is missing (marketCapUsd will be 0)
     // This prevents gaps in the timeseries
@@ -527,6 +529,8 @@ async function collectAndSaveTokenData(
       solPriceUsd: solPriceUsd || 0, // Use 0 if SOL price was missing
       tradeType: trade.data.is_buy ? 'buy' : 'sell',
       signature: trade.signature,
+      solAmount,
+      tokenAmount,
     });
   }
   

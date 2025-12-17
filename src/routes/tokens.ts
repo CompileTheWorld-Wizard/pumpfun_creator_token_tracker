@@ -564,7 +564,15 @@ function calculateBuySellStats(
     
     for (const point of marketCapTimeSeries) {
       const tradeType = point.tradeType || point.trade_type;
-      const solAmount = point.executionPriceSol || point.execution_price_sol || 0;
+      // Use solAmount (actual SOL amount for the trade) - this is required for accurate calculations
+      // Old data might not have solAmount, so we skip those trades
+      const solAmount = point.solAmount !== undefined ? point.solAmount : 
+                       (point.sol_amount !== undefined ? point.sol_amount : null);
+      
+      // Skip trades without solAmount (old data format)
+      if (solAmount === null || solAmount === undefined) {
+        continue;
+      }
       
       if (tradeType === 'buy') {
         buyCount++;
