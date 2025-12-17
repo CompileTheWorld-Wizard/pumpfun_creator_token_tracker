@@ -304,7 +304,6 @@ async function startServer() {
       const defaultScoringSettings = {
         trackingTimeSeconds: 15,
         rugThresholdMcap: 6000, // Default 6k market cap threshold
-        rugRateTimeBuckets: [1, 3, 5, 10], // Default time buckets in seconds
         includeTimeBucketRugRate: false, // Default: exclude from total score
         winRate: {
           ranges: [

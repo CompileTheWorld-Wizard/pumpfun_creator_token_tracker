@@ -103,10 +103,6 @@
                 <span class="text-gray-500 ml-2">(ATH &lt; X mcap)</span>
               </div>
               <div>
-                <span class="text-gray-400">Time Buckets:</span>
-                <span class="font-semibold ml-2">{{ displaySettings.rugRateTimeBuckets?.join(', ') || '1, 3, 5, 10' }}s</span>
-              </div>
-              <div>
                 <span class="text-gray-400">Include in Total Score:</span>
                 <span class="font-semibold ml-2" :class="displaySettings.includeTimeBucketRugRate ? 'text-green-400' : 'text-red-400'">
                   {{ displaySettings.includeTimeBucketRugRate ? 'Yes' : 'No' }}
@@ -358,17 +354,6 @@
                   placeholder="6000"
                 />
                 <p class="text-xs text-gray-500 mt-1">Token is considered "rug" if ATH &lt; this value (default: 6000)</p>
-              </div>
-              <div>
-                <label class="block text-xs text-gray-300 mb-1">Time Buckets (seconds, comma-separated):</label>
-                <input
-                  v-model="rugRateTimeBucketsInput"
-                  type="text"
-                  class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
-                  placeholder="1, 3, 5, 10"
-                  @input="updateRugRateTimeBuckets"
-                />
-                <p class="text-xs text-gray-500 mt-1">Time buckets for checking rug within X seconds (e.g., 1, 3, 5, 10)</p>
               </div>
               <div class="flex items-center gap-2">
                 <input
@@ -1055,7 +1040,6 @@ const applying = ref(false)
 const getDefaultSettings = (): ScoringSettings => ({
   trackingTimeSeconds: 15,
   rugThresholdMcap: 6000,
-  rugRateTimeBuckets: [1, 3, 5, 10],
   includeTimeBucketRugRate: false,
   winRate: { ranges: [] },
   avgAthMcap: { ranges: [] },
@@ -1070,7 +1054,6 @@ const normalizeSettings = (settings: any): ScoringSettings => {
   const normalized: ScoringSettings = {
     trackingTimeSeconds: settings.trackingTimeSeconds || 15,
     rugThresholdMcap: settings.rugThresholdMcap ?? 6000,
-    rugRateTimeBuckets: Array.isArray(settings.rugRateTimeBuckets) ? settings.rugRateTimeBuckets : [1, 3, 5, 10],
     includeTimeBucketRugRate: settings.includeTimeBucketRugRate ?? false,
     winRate: Array.isArray(settings.winRate) 
       ? { ranges: settings.winRate } 
@@ -1105,23 +1088,6 @@ const normalizeSettings = (settings: any): ScoringSettings => {
 const settings = ref<ScoringSettings>(getDefaultSettings())
 
 const editSettings = ref<ScoringSettings>(getDefaultSettings())
-
-// Helper for time buckets input (comma-separated string)
-const rugRateTimeBucketsInput = computed({
-  get: () => {
-    const buckets = editSettings.value.rugRateTimeBuckets || []
-    return buckets.join(', ')
-  },
-  set: (value: string) => {
-    const buckets = value.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0)
-    editSettings.value.rugRateTimeBuckets = buckets.length > 0 ? buckets : [1, 3, 5, 10]
-  }
-})
-
-const updateRugRateTimeBuckets = () => {
-  // The computed setter will handle the update
-  rugRateTimeBucketsInput.value = rugRateTimeBucketsInput.value
-}
 
 const displaySettings = computed(() => {
   if (selectedPresetId.value || appliedPresetId.value) {

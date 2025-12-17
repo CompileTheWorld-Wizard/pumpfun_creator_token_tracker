@@ -322,8 +322,7 @@ function calculateCreatorWalletScores(
   avgRugRate: number,
   timeBucketRugRates: Record<number, number>,
   settings: any,
-  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>,
-  allWalletsRugRates: number[]
+  allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }>
 ): {
   winRateScore: number;
   avgAthMcapScore: number;
@@ -398,8 +397,8 @@ function calculateCreatorWalletScores(
     avgRugRateScore = getScoreFromRanges(avgRugRate, avgRugRateRanges);
   }
   
-  // Time Bucket Rug Rate score (only if enabled)
-  if (settings.includeTimeBucketRugRate && settings.avgRugRateByTimeBucket) {
+  // Time Bucket Rug Rate score (always calculate, but only include in final score if enabled)
+  if (settings.avgRugRateByTimeBucket) {
     const timeBucketRanges = getRanges(settings.avgRugRateByTimeBucket);
     if (timeBucketRanges.length > 0) {
       // Calculate average rug rate across all time buckets
@@ -411,7 +410,9 @@ function calculateCreatorWalletScores(
     }
   }
   
-  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore + multiplierScore + avgRugRateScore + timeBucketRugRateScore;
+  // Only include time bucket rug rate score in final score if enabled
+  const finalScore = winRateScore + avgAthMcapScore + medianAthMcapScore + multiplierScore + avgRugRateScore + 
+    (settings.includeTimeBucketRugRate ? timeBucketRugRateScore : 0);
   
   return {
     winRateScore,
@@ -578,36 +579,6 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       GROUP BY ct.creator`
     );
     
-    // Get all tokens for all wallets to calculate rug rates for percentile calculation
-    const allWalletsTokensResult = await pool.query(
-      `SELECT 
-        ct.creator,
-        ct.ath_market_cap_usd
-      FROM tbl_soltrack_created_tokens ct
-      ${whereClause}`
-    );
-    
-    // Group tokens by creator for all wallets
-    const allWalletsTokensMap = new Map<string, Array<{ athMarketCapUsd: number | null }>>();
-    allWalletsTokensResult.rows.forEach(row => {
-      const creator = row.creator;
-      if (!allWalletsTokensMap.has(creator)) {
-        allWalletsTokensMap.set(creator, []);
-      }
-      allWalletsTokensMap.get(creator)!.push({
-        athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
-      });
-    });
-    
-    // Calculate rug rates for all wallets
-    const allWalletsRugRates: number[] = [];
-    allWalletsResult.rows.forEach(row => {
-      const creator = row.creator;
-      const tokens = allWalletsTokensMap.get(creator) || [];
-      const rugRate = calculateRugRate(tokens, rugThresholdMcap);
-      allWalletsRugRates.push(rugRate);
-    });
-    
     const allWalletsData = allWalletsResult.rows.map(row => ({
       avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
       medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
@@ -706,9 +677,26 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       });
     }
     
-    // Get rug rate settings
-    const rugRateTimeBuckets = scoringSettings?.rugRateTimeBuckets || [1, 3, 5, 10];
-    const includeTimeBucketRugRate = scoringSettings?.includeTimeBucketRugRate || false;
+    // Extract time buckets from avgRugRateByTimeBucket ranges
+    // Time buckets are the max values from each range (or min if max is not set)
+    const timeBucketRanges = getRanges(scoringSettings?.avgRugRateByTimeBucket);
+    const rugRateTimeBuckets: number[] = [];
+    if (timeBucketRanges.length > 0) {
+      // Extract unique time bucket values from ranges (use max value of each range)
+      const bucketSet = new Set<number>();
+      timeBucketRanges.forEach(range => {
+        if (range.max !== undefined && range.max !== null) {
+          bucketSet.add(range.max);
+        } else if (range.min !== undefined && range.min !== null) {
+          bucketSet.add(range.min);
+        }
+      });
+      rugRateTimeBuckets.push(...Array.from(bucketSet).sort((a, b) => a - b));
+    }
+    // Fallback to default if no ranges configured
+    if (rugRateTimeBuckets.length === 0) {
+      rugRateTimeBuckets.push(1, 3, 5, 10);
+    }
     
     // Calculate scores and create wallet objects
     const walletsWithScores = result.rows.map(row => {
@@ -750,6 +738,8 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         avgAthMcapScore: 0,
         medianAthMcapScore: 0,
         multiplierScore: 0,
+        avgRugRateScore: 0,
+        timeBucketRugRateScore: 0,
         individualMultiplierScores: {} as Record<number, number>,
         finalScore: 0
       };
@@ -763,8 +753,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           avgRugRate,
           timeBucketRugRates,
           scoringSettings, 
-          allWalletsData,
-          allWalletsRugRates
+          allWalletsData
         );
       }
       
