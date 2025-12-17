@@ -151,15 +151,15 @@
               <td class="px-2 py-1.5 whitespace-nowrap text-right">
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.expectedROI">
-                    <span :class="wallet.expectedROI.avgRoi1stBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                    <span :class="getRoiColor(wallet.expectedROI.avgRoi1stBuy)">
                       1st: {{ wallet.expectedROI.avgRoi1stBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi1stBuy.toFixed(2) }}%
                     </span>
                     <span class="text-gray-500 mx-1">|</span>
-                    <span :class="wallet.expectedROI.avgRoi2ndBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                    <span :class="getRoiColor(wallet.expectedROI.avgRoi2ndBuy)">
                       2nd: {{ wallet.expectedROI.avgRoi2ndBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi2ndBuy.toFixed(2) }}%
                     </span>
                     <span class="text-gray-500 mx-1">|</span>
-                    <span :class="wallet.expectedROI.avgRoi3rdBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+                    <span :class="getRoiColor(wallet.expectedROI.avgRoi3rdBuy)">
                       3rd: {{ wallet.expectedROI.avgRoi3rdBuy >= 0 ? '+' : '' }}{{ wallet.expectedROI.avgRoi3rdBuy.toFixed(2) }}%
                     </span>
                   </span>
@@ -355,6 +355,11 @@ const getValidTokenCount = (wallet: CreatorWallet): number => {
   return wallet.validTokenCount || 0
 }
 
+const getRoiColor = (roi: number): string => {
+  if (roi > 15) return 'text-green-400'
+  if (roi >= 5) return 'text-orange-400'
+  return 'text-red-400'
+}
 
 const copyToClipboard = async (text: string) => {
   try {
