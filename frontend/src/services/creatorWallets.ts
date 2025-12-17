@@ -25,10 +25,10 @@ export interface ExpectedROI {
 }
 
 export interface AthMcapPercentiles {
-  percentile25th: number | null;
-  percentile50th: number | null;
-  percentile75th: number | null;
-  percentile90th: number | null;
+  percentile25th: boolean; // Whether creator has reached at least 25th percentile rank
+  percentile50th: boolean; // Whether creator has reached at least 50th percentile rank
+  percentile75th: boolean; // Whether creator has reached at least 75th percentile rank
+  percentile90th: boolean; // Whether creator has reached at least 90th percentile rank
 }
 
 export interface CreatorWallet {

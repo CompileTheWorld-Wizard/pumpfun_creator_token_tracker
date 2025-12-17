@@ -157,36 +157,28 @@
                 </div>
               </td>
               <!-- ATH MCap Percentiles -->
-              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
-                <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.athMcapPercentiles?.percentile25th !== null && wallet.athMcapPercentiles?.percentile25th !== undefined">
-                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile25th) }}
-                  </span>
-                  <span v-else class="text-gray-500">N/A</span>
+              <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.athMcapPercentiles?.percentile25th" class="text-green-400">✓</span>
+                  <span v-else class="text-gray-500">-</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
-                <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.athMcapPercentiles?.percentile50th !== null && wallet.athMcapPercentiles?.percentile50th !== undefined">
-                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile50th) }}
-                  </span>
-                  <span v-else class="text-gray-500">N/A</span>
+              <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.athMcapPercentiles?.percentile50th" class="text-green-400">✓</span>
+                  <span v-else class="text-gray-500">-</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
-                <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.athMcapPercentiles?.percentile75th !== null && wallet.athMcapPercentiles?.percentile75th !== undefined">
-                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile75th) }}
-                  </span>
-                  <span v-else class="text-gray-500">N/A</span>
+              <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.athMcapPercentiles?.percentile75th" class="text-green-400">✓</span>
+                  <span v-else class="text-gray-500">-</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
-                <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.athMcapPercentiles?.percentile90th !== null && wallet.athMcapPercentiles?.percentile90th !== undefined">
-                    ${{ formatCurrency(wallet.athMcapPercentiles.percentile90th) }}
-                  </span>
-                  <span v-else class="text-gray-500">N/A</span>
+              <td class="px-2 py-1.5 whitespace-nowrap text-center border border-gray-700">
+                <div class="text-xs font-semibold">
+                  <span v-if="wallet.athMcapPercentiles?.percentile90th" class="text-green-400">✓</span>
+                  <span v-else class="text-gray-500">-</span>
                 </div>
               </td>
               <!-- Avg Buy Count -->

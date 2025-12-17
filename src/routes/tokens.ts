@@ -844,10 +844,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
           ELSE 0
         END as win_rate,
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_25th,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_50th,
-        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_75th,
-        PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as percentile_90th
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator
@@ -930,16 +927,48 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
     
     // No need to extract time buckets - we're calculating average rug time instead
     
+    // Calculate percentile rank for each creator's avg ATH compared to all creators
+    // Get all avg ATH values and sort them
+    const allAvgAthValues = allWalletsData
+      .map(w => w.avgAthMcap)
+      .filter((v): v is number => v !== null && v > 0)
+      .sort((a, b) => a - b);
+    
     // Calculate scores and create wallet objects
     const walletsWithScores = result.rows.map(row => {
       const winRate = parseFloat(row.win_rate) || 0;
       const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
-      const percentile25th = row.percentile_25th ? parseFloat(row.percentile_25th) : null;
-      const percentile50th = row.percentile_50th ? parseFloat(row.percentile_50th) : null;
-      const percentile75th = row.percentile_75th ? parseFloat(row.percentile_75th) : null;
-      const percentile90th = row.percentile_90th ? parseFloat(row.percentile_90th) : null;
-      // Keep median_ath_mcap for backward compatibility (same as 50th percentile)
-      const medianAthMcap = percentile50th;
+      const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
+      
+      // Calculate percentile rank of this creator's avg ATH compared to all creators
+      // This shows where this creator ranks among all creators (0-100)
+      // Lower percentile = lower avg ATH (worse performance)
+      // Higher percentile = higher avg ATH (better performance)
+      let percentileRank: number | null = null;
+      if (avgAthMcap !== null && avgAthMcap > 0 && allAvgAthValues.length > 0) {
+        percentileRank = calculatePercentile(avgAthMcap, allAvgAthValues);
+      }
+      
+      // Determine which percentile thresholds this creator has reached
+      // If at 20th percentile (bottom 20%), they're in the 25th percentile bucket
+      // If at 60th percentile, they're in the 75th and 90th percentile buckets
+      // Show checkmarks/indicators for which thresholds they've reached
+      let percentile25th: boolean = false;
+      let percentile50th: boolean = false;
+      let percentile75th: boolean = false;
+      let percentile90th: boolean = false;
+      
+      if (percentileRank !== null) {
+        // If percentile rank is <= 25, they're in the 25th percentile bucket (bottom 25%)
+        // If percentile rank is <= 50, they're in the 50th percentile bucket (bottom 50%)
+        // If percentile rank is <= 75, they're in the 75th percentile bucket (bottom 75%)
+        // If percentile rank is <= 90, they're in the 90th percentile bucket (bottom 90%)
+        // Higher percentile rank = better, so we show which thresholds they've exceeded
+        if (percentileRank >= 25) percentile25th = true; // Reached at least 25th percentile
+        if (percentileRank >= 50) percentile50th = true; // Reached at least 50th percentile
+        if (percentileRank >= 75) percentile75th = true; // Reached at least 75th percentile
+        if (percentileRank >= 90) percentile90th = true; // Reached at least 90th percentile
+      }
       
       // Get tokens for this creator and calculate multiplier percentages
       const tokens = tokensByCreator.get(row.address) || [];
@@ -1008,6 +1037,13 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
         winRate,
         avgAthMcap,
         medianAthMcap,
+        athMcapPercentileRank: percentileRank !== null ? Math.round(percentileRank * 100) / 100 : null,
+        athMcapPercentiles: {
+          percentile25th,
+          percentile50th,
+          percentile75th,
+          percentile90th
+        },
         validTokenCount,
         avgRugRate: Math.round(avgRugRate * 100) / 100,
         avgRugTime: avgRugTime !== null ? Math.round(avgRugTime * 100) / 100 : null,
