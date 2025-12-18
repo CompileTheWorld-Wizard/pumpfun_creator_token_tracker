@@ -61,10 +61,28 @@ export interface CreatorWalletsResponse {
   pagination: PaginationInfo;
 }
 
+export interface FilterParams {
+  totalTokens?: { min?: number; max?: number };
+  bondedTokens?: { min?: number; max?: number };
+  winRate?: {
+    type: 'percent' | 'score';
+    percentMin?: number;
+    percentMax?: number;
+    scoreMin?: number;
+    scoreMax?: number;
+  };
+  avgMcap?: Array<{
+    type: 'mcap' | 'percentile' | 'score';
+    min?: number;
+    max?: number;
+  }>;
+}
+
 export async function getCreatorWalletsAnalytics(
   page: number = 1,
   limit: number = 20,
-  viewAll: boolean = false
+  viewAll: boolean = false,
+  filters?: FilterParams
 ): Promise<CreatorWalletsResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -74,14 +92,18 @@ export async function getCreatorWalletsAnalytics(
   if (viewAll) {
     params.append('viewAll', 'true');
   }
-  
-  const response = await fetch(`${API_BASE_URL}/tokens/creators/analytics?${params.toString()}`, {
-    method: 'GET',
+
+  // Add filters to request body if provided
+  const requestOptions: RequestInit = {
+    method: 'POST',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
-  });
+    body: JSON.stringify({ filters: filters || {} })
+  };
+  
+  const response = await fetch(`${API_BASE_URL}/tokens/creators/analytics?${params.toString()}`, requestOptions);
 
   if (!response.ok) {
     if (response.status === 401) {

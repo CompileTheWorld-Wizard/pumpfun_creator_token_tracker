@@ -1,7 +1,25 @@
 <template>
   <div class="w-full">
-    <!-- Filter Section -->
+    <!-- Filter Section Header -->
     <div class="mb-3 flex items-center gap-3 flex-wrap">
+      <button
+        @click="filtersExpanded = !filtersExpanded"
+        class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-lg transition flex items-center gap-2"
+      >
+        <svg 
+          class="w-4 h-4 transition-transform"
+          :class="{ 'rotate-180': filtersExpanded }"
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+        <span>Filters</span>
+        <span v-if="hasActiveFilters" class="ml-1 px-1.5 py-0.5 bg-purple-600 text-white rounded text-[10px]">
+          {{ activeFilterCount }}
+        </span>
+      </button>
       <label class="text-xs text-gray-400 font-medium">Items per page:</label>
       <select
         v-model="itemsPerPage"
@@ -50,6 +68,205 @@
         </svg>
         <span>{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
       </button>
+    </div>
+
+    <!-- Filters Panel (Collapsible) -->
+    <div v-if="filtersExpanded" class="mb-3 bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+      <div class="space-y-4">
+        <!-- Filter Presets -->
+        <div class="flex items-center gap-2 pb-3 border-b border-gray-700">
+          <label class="text-xs text-gray-400 font-medium">Filter Preset:</label>
+          <select
+            v-model="selectedFilterPreset"
+            @change="loadFilterPreset"
+            class="px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          >
+            <option value="">-- Select Preset --</option>
+            <option v-for="preset in filterPresets" :key="preset.id" :value="preset.id">
+              {{ preset.name }}
+            </option>
+          </select>
+          <button
+            @click="showSavePresetDialog = true"
+            class="px-2 py-1 text-xs bg-blue-600/90 hover:bg-blue-600 text-white font-semibold rounded transition"
+          >
+            Save Preset
+          </button>
+          <button
+            @click="clearFilters"
+            class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold rounded transition"
+          >
+            Clear All
+          </button>
+        </div>
+
+        <!-- Total Tokens Filter -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <label class="block text-xs font-semibold text-gray-300 mb-2">Total Tokens</label>
+          <div class="flex items-center gap-2">
+            <input
+              v-model.number="filters.totalTokens.min"
+              type="number"
+              min="1"
+              max="150"
+              placeholder="Min"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+            />
+            <span class="text-xs text-gray-400">to</span>
+            <input
+              v-model.number="filters.totalTokens.max"
+              type="number"
+              min="1"
+              max="150"
+              placeholder="Max"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+            />
+          </div>
+        </div>
+
+        <!-- Bonded Tokens Filter -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <label class="block text-xs font-semibold text-gray-300 mb-2">Bonded Tokens</label>
+          <div class="flex items-center gap-2">
+            <input
+              v-model.number="filters.bondedTokens.min"
+              type="number"
+              min="0"
+              max="150"
+              placeholder="Min"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+            />
+            <span class="text-xs text-gray-400">to</span>
+            <input
+              v-model.number="filters.bondedTokens.max"
+              type="number"
+              min="0"
+              max="150"
+              placeholder="Max"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+            />
+          </div>
+        </div>
+
+        <!-- Win Rate Filter -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <label class="block text-xs font-semibold text-gray-300 mb-2">Win Rate (% Bonded)</label>
+          <div class="space-y-2">
+            <select
+              v-model="filters.winRate.type"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-full"
+            >
+              <option value="">-- Select Type --</option>
+              <option value="percent">Percentage (%)</option>
+              <option value="score">Score</option>
+            </select>
+            <div v-if="filters.winRate.type === 'percent'" class="flex items-center gap-2">
+              <input
+                v-model.number="filters.winRate.percentMin"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="Min %"
+                class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.winRate.percentMax"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="Max %"
+                class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+            </div>
+            <div v-if="filters.winRate.type === 'score'" class="flex items-center gap-2">
+              <input
+                v-model.number="filters.winRate.scoreMin"
+                type="number"
+                step="0.1"
+                placeholder="Min Score"
+                class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.winRate.scoreMax"
+                type="number"
+                step="0.1"
+                placeholder="Max Score"
+                class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Average Market Cap Filters -->
+        <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
+          <div class="flex items-center justify-between mb-2">
+            <label class="block text-xs font-semibold text-gray-300">Average Market Cap</label>
+            <select
+              v-model="newAvgMcapFilterType"
+              class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+            >
+              <option value="">-- Add Filter --</option>
+              <option value="mcap">MCap Amount</option>
+              <option value="percentile">Percentile</option>
+              <option value="score">Score</option>
+            </select>
+            <button
+              @click="addAvgMcapFilter"
+              :disabled="!newAvgMcapFilterType"
+              class="px-2 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Add
+            </button>
+          </div>
+          <div class="space-y-2">
+            <div
+              v-for="(filter, index) in filters.avgMcap"
+              :key="index"
+              class="flex items-center gap-2 p-2 bg-gray-900/50 rounded"
+            >
+              <span class="text-xs text-gray-400 font-medium">{{ filter.type === 'mcap' ? 'MCap' : filter.type === 'percentile' ? 'Percentile' : 'Score' }}:</span>
+              <input
+                v-model.number="filter.min"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :placeholder="filter.type === 'mcap' ? 'Min $' : 'Min'"
+                class="px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filter.max"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :placeholder="filter.type === 'mcap' ? 'Max $' : 'Max'"
+                class="px-2 py-1 text-xs bg-gray-800 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
+              />
+              <button
+                @click="removeAvgMcapFilter(index)"
+                class="px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
+              >
+                Remove
+              </button>
+            </div>
+            <p v-if="filters.avgMcap.length === 0" class="text-xs text-gray-500 text-center py-1">
+              No filters added. Select a filter type and click "Add" to add one.
+            </p>
+          </div>
+        </div>
+
+        <!-- Apply Filters Button -->
+        <div class="flex justify-end gap-2 pt-2 border-t border-gray-700">
+          <button
+            @click="applyFilters"
+            class="px-4 py-2 text-xs bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 text-white font-semibold rounded-lg transition"
+          >
+            Apply Filters
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -364,12 +581,64 @@
         </div>
       </div>
     </div>
+
+    <!-- Save Preset Dialog -->
+    <div
+      v-if="showSavePresetDialog"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      @click.self="showSavePresetDialog = false"
+    >
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-md mx-4">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-bold text-gray-100">Save Filter Preset</h3>
+          <button
+            @click="showSavePresetDialog = false"
+            class="text-gray-400 hover:text-gray-200 transition"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <form @submit.prevent="saveFilterPreset" class="space-y-4">
+          <div>
+            <label for="presetName" class="block text-sm font-semibold text-gray-300 mb-1.5">
+              Preset Name
+            </label>
+            <input
+              id="presetName"
+              v-model="newPresetName"
+              type="text"
+              required
+              class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
+              placeholder="Enter preset name"
+            />
+          </div>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              @click="showSavePresetDialog = false"
+              class="flex-1 px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-semibold rounded-lg transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition"
+            >
+              Save
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } from '../services/creatorWallets'
+import { getAppliedSettings, type ScoringSettings } from '../services/settings'
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 
@@ -394,6 +663,161 @@ const pagination = ref<PaginationInfo>({
   totalPages: 0
 })
 const refreshing = ref(false)
+
+// Filter state
+const filtersExpanded = ref(false)
+const scoringSettings = ref<ScoringSettings | null>(null)
+const newAvgMcapFilterType = ref<'mcap' | 'percentile' | 'score' | ''>('')
+
+interface FilterPreset {
+  id: string
+  name: string
+  filters: any
+}
+
+const filterPresets = ref<FilterPreset[]>([])
+const selectedFilterPreset = ref<string>('')
+const showSavePresetDialog = ref(false)
+const newPresetName = ref('')
+
+interface Filters {
+  totalTokens: { min?: number; max?: number }
+  bondedTokens: { min?: number; max?: number }
+  winRate: {
+    type: 'percent' | 'score' | ''
+    percentMin?: number
+    percentMax?: number
+    scoreMin?: number
+    scoreMax?: number
+  }
+  avgMcap: Array<{
+    type: 'mcap' | 'percentile' | 'score'
+    min?: number
+    max?: number
+  }>
+}
+
+const filters = ref<Filters>({
+  totalTokens: {},
+  bondedTokens: {},
+  winRate: { type: '' },
+  avgMcap: []
+})
+
+// Load filter presets from localStorage
+const loadFilterPresets = () => {
+  try {
+    const stored = localStorage.getItem('creatorWalletFilterPresets')
+    if (stored) {
+      filterPresets.value = JSON.parse(stored)
+    }
+  } catch (e) {
+    console.error('Error loading filter presets:', e)
+  }
+}
+
+// Save filter presets to localStorage
+const saveFilterPresets = () => {
+  try {
+    localStorage.setItem('creatorWalletFilterPresets', JSON.stringify(filterPresets.value))
+  } catch (e) {
+    console.error('Error saving filter presets:', e)
+  }
+}
+
+// Load scoring settings to get score ranges
+const loadScoringSettings = async () => {
+  try {
+    const applied = await getAppliedSettings()
+    if (applied.settings) {
+      scoringSettings.value = applied.settings
+    }
+  } catch (e) {
+    console.error('Error loading scoring settings:', e)
+  }
+}
+
+
+// Add average market cap filter
+const addAvgMcapFilter = () => {
+  if (!newAvgMcapFilterType.value) return
+  filters.value.avgMcap.push({
+    type: newAvgMcapFilterType.value as 'mcap' | 'percentile' | 'score',
+    min: undefined,
+    max: undefined
+  })
+  newAvgMcapFilterType.value = ''
+}
+
+// Remove average market cap filter
+const removeAvgMcapFilter = (index: number) => {
+  filters.value.avgMcap.splice(index, 1)
+}
+
+// Clear all filters
+const clearFilters = () => {
+  filters.value = {
+    totalTokens: {},
+    bondedTokens: {},
+    winRate: { type: '' },
+    avgMcap: []
+  }
+  selectedFilterPreset.value = ''
+  applyFilters()
+}
+
+// Check if filters are active
+const hasActiveFilters = computed(() => {
+  return !!(
+    (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) ||
+    (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) ||
+    filters.value.winRate.type ||
+    filters.value.avgMcap.length > 0
+  )
+})
+
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) count++
+  if (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) count++
+  if (filters.value.winRate.type) count++
+  count += filters.value.avgMcap.length
+  return count
+})
+
+// Load filter preset
+const loadFilterPreset = () => {
+  if (!selectedFilterPreset.value) return
+  const preset = filterPresets.value.find(p => p.id === selectedFilterPreset.value)
+  if (preset) {
+    filters.value = JSON.parse(JSON.stringify(preset.filters))
+    applyFilters()
+  }
+}
+
+// Save filter preset
+const saveFilterPreset = () => {
+  if (!newPresetName.value.trim()) {
+    alert('Please enter a preset name')
+    return
+  }
+  const newPreset: FilterPreset = {
+    id: Date.now().toString(),
+    name: newPresetName.value.trim(),
+    filters: JSON.parse(JSON.stringify(filters.value))
+  }
+  filterPresets.value.push(newPreset)
+  saveFilterPresets()
+  selectedFilterPreset.value = newPreset.id
+  newPresetName.value = ''
+  showSavePresetDialog.value = false
+}
+
+// Apply filters
+const applyFilters = () => {
+  pagination.value.page = 1
+  loadWallets()
+}
 
 const visiblePages = computed(() => {
   const pages: number[] = []
@@ -517,10 +941,43 @@ const loadWallets = async () => {
   
   try {
     const limit = itemsPerPage.value === 'all' ? 1000000 : (itemsPerPage.value as number)
+    
+    // Build filter object
+    const filterParams: any = {}
+    
+    if (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) {
+      filterParams.totalTokens = {
+        min: filters.value.totalTokens.min,
+        max: filters.value.totalTokens.max
+      }
+    }
+    
+    if (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) {
+      filterParams.bondedTokens = {
+        min: filters.value.bondedTokens.min,
+        max: filters.value.bondedTokens.max
+      }
+    }
+    
+    if (filters.value.winRate.type) {
+      filterParams.winRate = {
+        type: filters.value.winRate.type,
+        percentMin: filters.value.winRate.percentMin,
+        percentMax: filters.value.winRate.percentMax,
+        scoreMin: filters.value.winRate.scoreMin,
+        scoreMax: filters.value.winRate.scoreMax
+      }
+    }
+    
+    if (filters.value.avgMcap.length > 0) {
+      filterParams.avgMcap = filters.value.avgMcap
+    }
+    
     const response = await getCreatorWalletsAnalytics(
       pagination.value.page,
       limit,
-      false // viewAll - can be made configurable later
+      false, // viewAll - can be made configurable later
+      filterParams
     )
     wallets.value = response.wallets
     pagination.value = response.pagination
@@ -548,6 +1005,8 @@ const handleRefresh = async () => {
 }
 
 onMounted(async () => {
+  loadFilterPresets()
+  await loadScoringSettings()
   await loadWallets()
 })
 

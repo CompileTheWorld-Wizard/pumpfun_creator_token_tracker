@@ -768,11 +768,12 @@ function calculateBuySellStats(
 }
 
 // Get creator wallets analytics with pagination
-router.get('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    const filters = req.body?.filters || {};
     
     const offset = (page - 1) * limit;
     
@@ -811,14 +812,6 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
     }
     
-    // Get total count
-    const countResult = await pool.query(
-      `SELECT COUNT(DISTINCT ct.creator) as total
-       FROM tbl_soltrack_created_tokens ct
-       ${whereClause}`
-    );
-    const total = parseInt(countResult.rows[0].total);
-    
     // Get rug threshold from settings (default 6000) - need this early for calculations
     const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
     
@@ -838,7 +831,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
     }));
     
-    // Get paginated creator wallets with statistics
+    // Get ALL creator wallets with statistics (we'll filter and paginate after)
     const result = await pool.query(
       `SELECT 
         ct.creator as address,
@@ -854,9 +847,7 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
       GROUP BY ct.creator
-      ORDER BY win_rate DESC, total_tokens DESC
-      LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      ORDER BY win_rate DESC, total_tokens DESC`
     );
     
     // Get token data for multiplier and rug rate calculations for the paginated creators
@@ -1098,18 +1089,99 @@ router.get('/creators/analytics', requireAuth, async (req: Request, res: Respons
       };
     });
     
+    // Apply filters if provided
+    let filteredWallets = walletsWithScores;
+    
+    if (filters && Object.keys(filters).length > 0) {
+      filteredWallets = walletsWithScores.filter(wallet => {
+        // Filter by total tokens
+        if (filters.totalTokens) {
+          if (filters.totalTokens.min !== undefined && wallet.totalTokens < filters.totalTokens.min) {
+            return false;
+          }
+          if (filters.totalTokens.max !== undefined && wallet.totalTokens > filters.totalTokens.max) {
+            return false;
+          }
+        }
+        
+        // Filter by bonded tokens
+        if (filters.bondedTokens) {
+          if (filters.bondedTokens.min !== undefined && wallet.bondedTokens < filters.bondedTokens.min) {
+            return false;
+          }
+          if (filters.bondedTokens.max !== undefined && wallet.bondedTokens > filters.bondedTokens.max) {
+            return false;
+          }
+        }
+        
+        // Filter by win rate
+        if (filters.winRate && filters.winRate.type) {
+          if (filters.winRate.type === 'percent') {
+            if (filters.winRate.percentMin !== undefined && wallet.winRate < filters.winRate.percentMin) {
+              return false;
+            }
+            if (filters.winRate.percentMax !== undefined && wallet.winRate > filters.winRate.percentMax) {
+              return false;
+            }
+          } else if (filters.winRate.type === 'score') {
+            if (filters.winRate.scoreMin !== undefined && wallet.scores.winRateScore < filters.winRate.scoreMin) {
+              return false;
+            }
+            if (filters.winRate.scoreMax !== undefined && wallet.scores.winRateScore > filters.winRate.scoreMax) {
+              return false;
+            }
+          }
+        }
+        
+        // Filter by average market cap (all filters must match - AND logic)
+        if (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.length > 0) {
+          for (const filter of filters.avgMcap) {
+            if (filter.type === 'mcap') {
+              if (wallet.avgAthMcap === null) return false;
+              const matches = (
+                (filter.min === undefined || wallet.avgAthMcap >= filter.min) &&
+                (filter.max === undefined || wallet.avgAthMcap <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'percentile') {
+              if (wallet.athMcapPercentileRank === null) return false;
+              const matches = (
+                (filter.min === undefined || wallet.athMcapPercentileRank >= filter.min) &&
+                (filter.max === undefined || wallet.athMcapPercentileRank <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'score') {
+              const matches = (
+                (filter.min === undefined || wallet.scores.avgAthMcapScore >= filter.min) &&
+                (filter.max === undefined || wallet.scores.avgAthMcapScore <= filter.max)
+              );
+              if (!matches) return false;
+            }
+          }
+        }
+        
+        return true;
+      });
+    }
+    
     // Sort by final score if scoring settings are available, otherwise keep original order
     const wallets = scoringSettings
-      ? walletsWithScores.sort((a, b) => b.scores.finalScore - a.scores.finalScore)
-      : walletsWithScores;
+      ? filteredWallets.sort((a, b) => b.scores.finalScore - a.scores.finalScore)
+      : filteredWallets;
+    
+    // Recalculate total count after filtering
+    const filteredTotal = wallets.length;
+    
+    // Apply pagination to filtered results
+    const paginatedWallets = wallets.slice(offset, offset + limit);
     
     res.json({
-      wallets,
+      wallets: paginatedWallets,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit)
+        total: filteredTotal,
+        totalPages: Math.ceil(filteredTotal / limit)
       }
     });
   } catch (error: any) {
