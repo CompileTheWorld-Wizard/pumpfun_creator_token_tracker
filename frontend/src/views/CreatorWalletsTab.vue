@@ -539,7 +539,7 @@
                   </svg>
                   Median ATH Market Cap
                 </div>
-                <div v-if="expandedGroups.medianMcap || (filterSearchQuery && (shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap'))" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.medianMcap || (filterSearchQuery && (shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')))" class="ml-4 space-y-1">
                   <div
                     v-if="shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap')"
                     @click="!isMedianMcapFilterAdded('mcap') && selectFilterType('medianMcapAmount')"
