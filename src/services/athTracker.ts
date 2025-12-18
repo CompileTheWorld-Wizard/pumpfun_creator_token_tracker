@@ -517,13 +517,14 @@ export async function handleAmmBuyEvent(
   const solPriceUsd = await getSolPriceUsd();
   if (solPriceUsd === 0) return;
 
-  // For AMM events, use pool reserves to calculate price
-  const poolQuoteReserves = buyData.pool_quote_token_reserves / 1e9; // SOL
-  const poolBaseReserves = buyData.pool_base_token_reserves / 1e6; // Token
+  // Calculate execution price from the actual trade amounts
+  const quoteAmountIn = buyData.quote_amount_in / 1e9; // SOL paid
+  const baseAmountOut = buyData.base_amount_out / 1e6; // Tokens received
   
-  if (poolBaseReserves === 0) return;
+  if (baseAmountOut === 0) return;
   
-  const priceSol = poolQuoteReserves / poolBaseReserves;
+  // Execution price = SOL paid / tokens received
+  const priceSol = quoteAmountIn / baseAmountOut;
   const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
 
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
@@ -542,12 +543,12 @@ export async function handleAmmBuyEvent(
       newAth: `$${currentMarketCapUsd.toFixed(2)}`,
       increase: `$${(currentMarketCapUsd - oldAth).toFixed(2)}`,
       increasePercent: `${((currentMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
-      poolQuoteReserves: `${poolQuoteReserves.toFixed(4)} SOL`,
-      poolBaseReserves: `${poolBaseReserves.toFixed(2)} tokens`,
-      priceSol: `${priceSol.toFixed(8)} SOL/token`,
+      executionPrice: `${priceSol.toFixed(8)} SOL/token`,
+      quoteAmountIn: `${quoteAmountIn.toFixed(4)} SOL`,
+      baseAmountOut: `${baseAmountOut.toFixed(2)} tokens`,
+      poolQuoteReserves: `${(buyData.pool_quote_token_reserves / 1e9).toFixed(4)} SOL`,
+      poolBaseReserves: `${(buyData.pool_base_token_reserves / 1e6).toFixed(2)} tokens`,
       solPriceUsd: `$${solPriceUsd.toFixed(2)}`,
-      baseAmountOut: buyData.base_amount_out / 1e6,
-      quoteAmountIn: buyData.quote_amount_in / 1e9,
       timestamp: new Date(buyData.timestamp * 1000).toISOString(),
     });
   }
@@ -578,13 +579,14 @@ export async function handleAmmSellEvent(
   const solPriceUsd = await getSolPriceUsd();
   if (solPriceUsd === 0) return;
 
-  // For AMM events, use pool reserves to calculate price
-  const poolQuoteReserves = sellData.pool_quote_token_reserves / 1e9; // SOL
-  const poolBaseReserves = sellData.pool_base_token_reserves / 1e6; // Token
+  // Calculate execution price from the actual trade amounts
+  const baseAmountIn = sellData.base_amount_in / 1e6; // Tokens paid
+  const quoteAmountOut = sellData.quote_amount_out / 1e9; // SOL received
   
-  if (poolBaseReserves === 0) return;
+  if (baseAmountIn === 0) return;
   
-  const priceSol = poolQuoteReserves / poolBaseReserves;
+  // Execution price = SOL received / tokens paid
+  const priceSol = quoteAmountOut / baseAmountIn;
   const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
 
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
@@ -603,12 +605,12 @@ export async function handleAmmSellEvent(
       newAth: `$${currentMarketCapUsd.toFixed(2)}`,
       increase: `$${(currentMarketCapUsd - oldAth).toFixed(2)}`,
       increasePercent: `${((currentMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
-      poolQuoteReserves: `${poolQuoteReserves.toFixed(4)} SOL`,
-      poolBaseReserves: `${poolBaseReserves.toFixed(2)} tokens`,
-      priceSol: `${priceSol.toFixed(8)} SOL/token`,
+      executionPrice: `${priceSol.toFixed(8)} SOL/token`,
+      baseAmountIn: `${baseAmountIn.toFixed(2)} tokens`,
+      quoteAmountOut: `${quoteAmountOut.toFixed(4)} SOL`,
+      poolQuoteReserves: `${(sellData.pool_quote_token_reserves / 1e9).toFixed(4)} SOL`,
+      poolBaseReserves: `${(sellData.pool_base_token_reserves / 1e6).toFixed(2)} tokens`,
       solPriceUsd: `$${solPriceUsd.toFixed(2)}`,
-      baseAmountIn: sellData.base_amount_in / 1e6,
-      quoteAmountOut: sellData.quote_amount_out / 1e9,
       timestamp: new Date(sellData.timestamp * 1000).toISOString(),
     });
   }
