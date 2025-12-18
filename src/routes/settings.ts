@@ -5,7 +5,7 @@ import { pool } from '../db.js';
 const router = Router();
 
 // Get all scoring settings presets
-router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -78,7 +78,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
 });
 
 // Get default preset
-router.get('/default/get', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/default/get', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -274,7 +274,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<
       return;
     }
     
-    const result = await pool.query(
+    await pool.query(
       'DELETE FROM tbl_soltrack_scoring_settings WHERE id = $1 RETURNING id',
       [id]
     );
@@ -336,7 +336,7 @@ router.post('/:id/set-default', requireAuth, async (req: Request, res: Response)
 });
 
 // Get currently applied settings
-router.get('/applied/get', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/applied/get', requireAuth, async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
