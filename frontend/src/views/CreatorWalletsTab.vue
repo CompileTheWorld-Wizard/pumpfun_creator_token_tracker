@@ -100,9 +100,9 @@
           </button>
         </div>
 
-        <!-- Active Filters List -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between mb-2">
+        <!-- Active Filters Widgets -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
             <label class="text-xs font-semibold text-gray-300">Active Filters:</label>
             <button
               @click="showAddFilterDialog = true"
@@ -115,81 +115,95 @@
             </button>
           </div>
           
-          <!-- Total Tokens Filter -->
-          <div v-if="filters.totalTokens.min !== undefined || filters.totalTokens.max !== undefined" class="flex items-center gap-2 p-2 bg-gray-800/50 border border-gray-700 rounded">
-            <span class="text-xs text-gray-300 font-medium">Total Tokens:</span>
-            <span class="text-xs text-gray-400">
-              {{ filters.totalTokens.min !== undefined ? filters.totalTokens.min : '1' }} - 
-              {{ filters.totalTokens.max !== undefined ? filters.totalTokens.max : '150' }}
-            </span>
-            <button
-              @click="removeFilter('totalTokens')"
-              class="ml-auto px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
-            >
-              Remove
-            </button>
-          </div>
+          <div class="flex flex-wrap gap-2">
+            <!-- Total Tokens Filter Widget -->
+            <div v-if="filters.totalTokens.min !== undefined || filters.totalTokens.max !== undefined" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg">
+              <span class="text-xs font-semibold text-purple-300">Total Tokens:</span>
+              <span class="text-xs text-gray-300">
+                {{ filters.totalTokens.min !== undefined ? filters.totalTokens.min : '1' }} - 
+                {{ filters.totalTokens.max !== undefined ? filters.totalTokens.max : '150' }}
+              </span>
+              <button
+                @click="removeFilter('totalTokens')"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
 
-          <!-- Bonded Tokens Filter -->
-          <div v-if="filters.bondedTokens.min !== undefined || filters.bondedTokens.max !== undefined" class="flex items-center gap-2 p-2 bg-gray-800/50 border border-gray-700 rounded">
-            <span class="text-xs text-gray-300 font-medium">Bonded Tokens:</span>
-            <span class="text-xs text-gray-400">
-              {{ filters.bondedTokens.min !== undefined ? filters.bondedTokens.min : '0' }} - 
-              {{ filters.bondedTokens.max !== undefined ? filters.bondedTokens.max : '150' }}
-            </span>
-            <button
-              @click="removeFilter('bondedTokens')"
-              class="ml-auto px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
-            >
-              Remove
-            </button>
-          </div>
+            <!-- Bonded Tokens Filter Widget -->
+            <div v-if="filters.bondedTokens.min !== undefined || filters.bondedTokens.max !== undefined" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+              <span class="text-xs font-semibold text-blue-300">Bonded Tokens:</span>
+              <span class="text-xs text-gray-300">
+                {{ filters.bondedTokens.min !== undefined ? filters.bondedTokens.min : '0' }} - 
+                {{ filters.bondedTokens.max !== undefined ? filters.bondedTokens.max : '150' }}
+              </span>
+              <button
+                @click="removeFilter('bondedTokens')"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
 
-          <!-- Win Rate Filter -->
-          <div v-if="filters.winRate.type" class="flex items-center gap-2 p-2 bg-gray-800/50 border border-gray-700 rounded">
-            <span class="text-xs text-gray-300 font-medium">Win Rate ({{ filters.winRate.type === 'percent' ? '%' : 'Score' }}):</span>
-            <span class="text-xs text-gray-400">
-              <template v-if="filters.winRate.type === 'percent'">
-                {{ filters.winRate.percentMin !== undefined ? filters.winRate.percentMin : '0' }}% - 
-                {{ filters.winRate.percentMax !== undefined ? filters.winRate.percentMax : '100' }}%
-              </template>
-              <template v-else>
-                {{ filters.winRate.scoreMin !== undefined ? filters.winRate.scoreMin : 'Min' }} - 
-                {{ filters.winRate.scoreMax !== undefined ? filters.winRate.scoreMax : 'Max' }}
-              </template>
-            </span>
-            <button
-              @click="removeFilter('winRate')"
-              class="ml-auto px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
-            >
-              Remove
-            </button>
-          </div>
+            <!-- Win Rate Filter Widget -->
+            <div v-if="filters.winRate.type" class="inline-flex items-center gap-2 px-3 py-2 bg-green-600/20 border border-green-500/30 rounded-lg">
+              <span class="text-xs font-semibold text-green-300">Win Rate ({{ filters.winRate.type === 'percent' ? '%' : 'Score' }}):</span>
+              <span class="text-xs text-gray-300">
+                <template v-if="filters.winRate.type === 'percent'">
+                  {{ filters.winRate.percentMin !== undefined ? filters.winRate.percentMin : '0' }}% - 
+                  {{ filters.winRate.percentMax !== undefined ? filters.winRate.percentMax : '100' }}%
+                </template>
+                <template v-else>
+                  {{ filters.winRate.scoreMin !== undefined ? filters.winRate.scoreMin : 'Min' }} - 
+                  {{ filters.winRate.scoreMax !== undefined ? filters.winRate.scoreMax : 'Max' }}
+                </template>
+              </span>
+              <button
+                @click="removeFilter('winRate')"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
 
-          <!-- Average Market Cap Filters -->
-          <div
-            v-for="(filter, index) in filters.avgMcap"
-            :key="index"
-            class="flex items-center gap-2 p-2 bg-gray-800/50 border border-gray-700 rounded"
-          >
-            <span class="text-xs text-gray-300 font-medium">
-              Avg MCap ({{ filter.type === 'mcap' ? 'Amount' : filter.type === 'percentile' ? 'Percentile' : 'Score' }}):
-            </span>
-            <span class="text-xs text-gray-400">
-              {{ filter.min !== undefined ? filter.min : 'Min' }} - 
-              {{ filter.max !== undefined ? filter.max : 'Max' }}
-            </span>
-            <button
-              @click="removeAvgMcapFilter(index)"
-              class="ml-auto px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
+            <!-- Average Market Cap Filter Widgets -->
+            <div
+              v-for="(filter, index) in filters.avgMcap"
+              :key="index"
+              class="inline-flex items-center gap-2 px-3 py-2 bg-cyan-600/20 border border-cyan-500/30 rounded-lg"
             >
-              Remove
-            </button>
-          </div>
+              <span class="text-xs font-semibold text-cyan-300">
+                Avg MCap ({{ filter.type === 'mcap' ? 'Amount' : filter.type === 'percentile' ? 'Percentile' : 'Score' }}):
+              </span>
+              <span class="text-xs text-gray-300">
+                {{ filter.min !== undefined ? filter.min : 'Min' }} - 
+                {{ filter.max !== undefined ? filter.max : 'Max' }}
+              </span>
+              <button
+                @click="removeAvgMcapFilter(index)"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
 
-          <p v-if="!hasActiveFilters" class="text-xs text-gray-500 text-center py-4">
-            No filters active. Click "Add Filter" to add filters.
-          </p>
+            <p v-if="!hasActiveFilters" class="text-xs text-gray-500 py-2">
+              No filters active. Click "Add Filter" to add filters.
+            </p>
+          </div>
         </div>
 
         <!-- Apply Filters Button -->
@@ -224,31 +238,153 @@
         </div>
         
         <div class="space-y-4">
-          <!-- Filter Type Selection (Tree/Select) -->
+          <!-- Filter Type Selection (Tree) -->
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2">Select Filter Type:</label>
-            <select
-              v-model="newFilterType"
-              class="w-full px-3 py-2.5 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
-            >
-              <option value="">-- Select Filter Type --</option>
-              <optgroup label="Token Count">
-                <option value="totalTokens">Total Tokens</option>
-                <option value="bondedTokens">Bonded Tokens</option>
-              </optgroup>
-              <optgroup label="Win Rate">
-                <option value="winRatePercent">Win Rate (Percentage)</option>
-                <option value="winRateScore">Win Rate (Score)</option>
-              </optgroup>
-              <optgroup label="Average Market Cap">
-                <option value="avgMcapAmount">Average MCap (Amount)</option>
-                <option value="avgMcapPercentile">Average MCap (Percentile)</option>
-                <option value="avgMcapScore">Average MCap (Score)</option>
-              </optgroup>
-            </select>
+            <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3 max-h-64 overflow-y-auto">
+              <!-- Token Count Group -->
+              <div class="mb-2">
+                <div 
+                  @click="expandedGroups.tokenCount = !expandedGroups.tokenCount"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.tokenCount }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Token Count
+                </div>
+                <div v-if="expandedGroups.tokenCount" class="ml-4 space-y-1">
+                  <div
+                    @click="selectFilterType('totalTokens')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'totalTokens' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Total Tokens
+                  </div>
+                  <div
+                    @click="selectFilterType('bondedTokens')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'bondedTokens' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Bonded Tokens
+                  </div>
+                </div>
+              </div>
+
+              <!-- Win Rate Group -->
+              <div class="mb-2">
+                <div 
+                  @click="expandedGroups.winRate = !expandedGroups.winRate"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.winRate }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Win Rate
+                </div>
+                <div v-if="expandedGroups.winRate" class="ml-4 space-y-1">
+                  <div
+                    @click="selectFilterType('winRatePercent')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'winRatePercent' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Win Rate (Percentage)
+                  </div>
+                  <div
+                    @click="selectFilterType('winRateScore')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'winRateScore' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Win Rate (Score)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Average Market Cap Group -->
+              <div>
+                <div 
+                  @click="expandedGroups.avgMcap = !expandedGroups.avgMcap"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.avgMcap }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Average Market Cap
+                </div>
+                <div v-if="expandedGroups.avgMcap" class="ml-4 space-y-1">
+                  <div
+                    @click="selectFilterType('avgMcapAmount')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'avgMcapAmount' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Average MCap (Amount)
+                  </div>
+                  <div
+                    @click="selectFilterType('avgMcapPercentile')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'avgMcapPercentile' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Average MCap (Percentile)
+                  </div>
+                  <div
+                    @click="selectFilterType('avgMcapScore')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'avgMcapScore' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Average MCap (Score)
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Filter Configuration Based on Type -->
+          <!-- Filter Configuration Based on Type (Only show when selected) -->
           <div v-if="newFilterType" class="space-y-3">
             <!-- Total Tokens Configuration -->
             <div v-if="newFilterType === 'totalTokens'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
@@ -838,6 +974,13 @@ const scoringSettings = ref<ScoringSettings | null>(null)
 const showAddFilterDialog = ref(false)
 const newFilterType = ref<string>('')
 
+// Tree expansion state
+const expandedGroups = ref({
+  tokenCount: true,
+  winRate: false,
+  avgMcap: false
+})
+
 // New filter configuration state
 const newFilterConfig = ref({
   totalTokens: { min: undefined as number | undefined, max: undefined as number | undefined },
@@ -918,6 +1061,11 @@ const loadScoringSettings = async () => {
 }
 
 
+// Select filter type from tree
+const selectFilterType = (filterType: string) => {
+  newFilterType.value = filterType
+}
+
 // Confirm adding filter from dialog
 const confirmAddFilter = () => {
   if (!newFilterType.value) return
@@ -973,6 +1121,8 @@ const confirmAddFilter = () => {
   }
 
   cancelAddFilter()
+  // Auto-apply filters after adding
+  applyFilters()
 }
 
 // Cancel adding filter
@@ -988,6 +1138,12 @@ const cancelAddFilter = () => {
     avgMcapAmount: { min: undefined, max: undefined },
     avgMcapPercentile: { min: undefined, max: undefined },
     avgMcapScore: { min: undefined, max: undefined }
+  }
+  // Reset tree expansion
+  expandedGroups.value = {
+    tokenCount: true,
+    winRate: false,
+    avgMcap: false
   }
 }
 
