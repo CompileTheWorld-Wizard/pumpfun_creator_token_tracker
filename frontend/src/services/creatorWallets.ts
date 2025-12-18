@@ -79,6 +79,11 @@ export interface FilterParams {
     min?: number;
     max?: number;
   }>;
+  avgBuySells?: Array<{
+    type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol';
+    min?: number;
+    max?: number;
+  }>;
 }
 
 export async function getCreatorWalletsAnalytics(

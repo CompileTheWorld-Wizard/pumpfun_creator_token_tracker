@@ -1180,6 +1180,37 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by avg buy/sells (all filters must match - AND logic)
+        if (filters.avgBuySells && Array.isArray(filters.avgBuySells) && filters.avgBuySells.length > 0) {
+          for (const filter of filters.avgBuySells) {
+            if (filter.type === 'buyCount') {
+              const matches = (
+                (filter.min === undefined || wallet.buySellStats.avgBuyCount >= filter.min) &&
+                (filter.max === undefined || wallet.buySellStats.avgBuyCount <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'buySol') {
+              const matches = (
+                (filter.min === undefined || wallet.buySellStats.avgBuyTotalSol >= filter.min) &&
+                (filter.max === undefined || wallet.buySellStats.avgBuyTotalSol <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'sellCount') {
+              const matches = (
+                (filter.min === undefined || wallet.buySellStats.avgSellCount >= filter.min) &&
+                (filter.max === undefined || wallet.buySellStats.avgSellCount <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'sellSol') {
+              const matches = (
+                (filter.min === undefined || wallet.buySellStats.avgSellTotalSol >= filter.min) &&
+                (filter.max === undefined || wallet.buySellStats.avgSellTotalSol <= filter.max)
+              );
+              if (!matches) return false;
+            }
+          }
+        }
+        
         return true;
       });
     }
