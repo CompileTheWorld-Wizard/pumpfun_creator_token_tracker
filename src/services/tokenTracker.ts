@@ -246,7 +246,9 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
              ON CONFLICT (mint) DO UPDATE SET
                name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
                symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-               bonded = EXCLUDED.bonded,
+               -- Don't update bonded status - it should only be set by migrate events
+               -- Preserve existing bonded status to avoid overwriting migrate event updates
+               bonded = tbl_soltrack_created_tokens.bonded,
                is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
                updated_at = NOW()`,
             [
@@ -254,7 +256,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               tokenData.name,
               tokenData.symbol,
               creatorAddress,
-              isBonded,
+              isBonded, // Only used for new inserts, not for updates
               new Date(tokenData.blockTime * 1000),
               true, // is_fetched = true (from Solscan API)
             ]
@@ -654,8 +656,9 @@ async function saveTokenTrackingResult(
         peak_market_cap_usd,
         final_market_cap_usd,
         trade_count_15s,
-        is_fetched
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        is_fetched,
+        bonded
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       ON CONFLICT (mint) DO UPDATE SET
         market_cap_time_series = EXCLUDED.market_cap_time_series,
         initial_market_cap_usd = EXCLUDED.initial_market_cap_usd,
@@ -663,6 +666,9 @@ async function saveTokenTrackingResult(
         final_market_cap_usd = EXCLUDED.final_market_cap_usd,
         trade_count_15s = EXCLUDED.trade_count_15s,
         is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
+        -- Don't update bonded field - it should only be set by migrate events or bonding tracker
+        -- This preserves bonding status set by handleMigrateEvent or bonding tracker
+        bonded = tbl_soltrack_created_tokens.bonded,
         -- Ensure ATH is at least as high as peak_market_cap_usd
         ath_market_cap_usd = GREATEST(
           COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
@@ -683,6 +689,7 @@ async function saveTokenTrackingResult(
         result.finalMarketCapUsd,
         result.tradeCount,
         false, // is_fetched = false (from streaming)
+        false, // bonded = false (newly created tokens are not bonded)
       ]
     );
   } catch (error) {
