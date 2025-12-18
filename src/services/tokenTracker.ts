@@ -240,6 +240,23 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       
       if (tokenData) {
         try {
+          // Check if token already exists to determine if this is insert or update
+          const existingToken = await pool.query(
+            'SELECT bonded, created_at FROM tbl_soltrack_created_tokens WHERE mint = $1',
+            [mint]
+          );
+          
+          const isNewInsert = existingToken.rows.length === 0;
+          const existingBonded = existingToken.rows.length > 0 ? existingToken.rows[0].bonded : null;
+          const tokenCreatedAt = existingToken.rows.length > 0 ? existingToken.rows[0].created_at : null;
+          
+          console.log(`[TokenTracker] Saving token ${mint} from fetchCreatorTokensAndBondingStatus:`);
+          console.log(`  - Is new insert: ${isNewInsert}`);
+          console.log(`  - Shyft API bonding status: ${isBonded}`);
+          console.log(`  - Existing bonded status: ${existingBonded}`);
+          console.log(`  - Token created at: ${tokenCreatedAt}`);
+          console.log(`  - Will set bonded to: ${isNewInsert ? isBonded : 'PRESERVED (existing: ' + existingBonded + ')'}`);
+          
           await pool.query(
             `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -261,6 +278,15 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               true, // is_fetched = true (from Solscan API)
             ]
           );
+          
+          // Verify what was actually saved
+          const verifyResult = await pool.query(
+            'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+            [mint]
+          );
+          if (verifyResult.rows.length > 0) {
+            console.log(`  - Actual bonded status in DB after save: ${verifyResult.rows[0].bonded}`);
+          }
 
           // Register token in ATH tracker (for real-time tracking)
           // Only register if creator is not blacklisted (registerToken checks this internally)
@@ -642,6 +668,22 @@ async function saveTokenTrackingResult(
   createTxSignature: string
 ): Promise<void> {
   try {
+    // Check if token already exists to determine if this is insert or update
+    const existingToken = await pool.query(
+      'SELECT bonded, created_at FROM tbl_soltrack_created_tokens WHERE mint = $1',
+      [result.mint]
+    );
+    
+    const isNewInsert = existingToken.rows.length === 0;
+    const existingBonded = existingToken.rows.length > 0 ? existingToken.rows[0].bonded : null;
+    const tokenCreatedAt = existingToken.rows.length > 0 ? existingToken.rows[0].created_at : null;
+    
+    console.log(`[TokenTracker] Saving token ${result.mint} from saveTokenTrackingResult:`);
+    console.log(`  - Is new insert: ${isNewInsert}`);
+    console.log(`  - Will set bonded to: ${isNewInsert ? 'false (new token)' : 'PRESERVED (existing: ' + existingBonded + ')'}`);
+    console.log(`  - Existing bonded status: ${existingBonded}`);
+    console.log(`  - Token created at: ${tokenCreatedAt}`);
+    
     await pool.query(
       `INSERT INTO tbl_soltrack_created_tokens (
         mint,
@@ -692,6 +734,15 @@ async function saveTokenTrackingResult(
         false, // bonded = false (newly created tokens are not bonded)
       ]
     );
+    
+    // Verify what was actually saved
+    const verifyResult = await pool.query(
+      'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+      [result.mint]
+    );
+    if (verifyResult.rows.length > 0) {
+      console.log(`  - Actual bonded status in DB after save: ${verifyResult.rows[0].bonded}`);
+    }
   } catch (error) {
     console.error('[TokenTracker] Error saving to database:', error);
     throw error;

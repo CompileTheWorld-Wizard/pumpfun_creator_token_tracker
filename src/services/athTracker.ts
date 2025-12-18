@@ -632,6 +632,17 @@ async function saveAthDataToDb(): Promise<void> {
     try {
       if (athColumnsExist) {
         // Try with ATH columns
+        // Check current status before update
+        const beforeResult = await pool.query(
+          'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+          [token.mint]
+        );
+        const beforeBonded = beforeResult.rows.length > 0 ? beforeResult.rows[0].bonded : 'NOT_FOUND';
+        
+        console.log(`[AthTracker] Saving token ${token.mint} to database:`);
+        console.log(`  - ATH tracker bonded value: ${token.bonded}`);
+        console.log(`  - Existing bonded in DB: ${beforeBonded}`);
+        
         await pool.query(
           `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at, is_fetched)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -662,6 +673,19 @@ async function saveAthDataToDb(): Promise<void> {
             false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
           ]
         );
+        
+        // Verify what was actually saved
+        const afterResult = await pool.query(
+          'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+          [token.mint]
+        );
+        if (afterResult.rows.length > 0) {
+          const afterBonded = afterResult.rows[0].bonded;
+          console.log(`  - Bonded status after ATH tracker save: ${afterBonded}`);
+          if (beforeBonded !== 'NOT_FOUND' && beforeBonded !== afterBonded) {
+            console.log(`  - WARNING: Bonded status changed from ${beforeBonded} to ${afterBonded}`);
+          }
+        }
       } else {
         // Fallback: save without ATH columns
         await pool.query(

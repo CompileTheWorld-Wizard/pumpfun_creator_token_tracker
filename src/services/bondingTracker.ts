@@ -111,19 +111,27 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<Map
     const pools = result.data?.pump_fun_amm_Pool || [];
     const bondedMints = new Set<string>();
 
+    console.log(`[BondingTracker] fetchBondingStatusBatch: Processing ${tokenMints.length} tokens, found ${pools.length} pools`);
+    
     for (const pool of pools) {
       // Both base_mint and quote_mint could be our tracked tokens
       if (tokenMints.includes(pool.base_mint)) {
         bondedMints.add(pool.base_mint);
+        console.log(`[BondingTracker] Found pool for base_mint: ${pool.base_mint}`);
       }
       if (tokenMints.includes(pool.quote_mint)) {
         bondedMints.add(pool.quote_mint);
+        console.log(`[BondingTracker] Found pool for quote_mint: ${pool.quote_mint}`);
       }
     }
 
     // Set bonding status for all tokens in the batch
     for (const mint of tokenMints) {
-      bondingStatusMap.set(mint, bondedMints.has(mint));
+      const isBonded = bondedMints.has(mint);
+      bondingStatusMap.set(mint, isBonded);
+      if (isBonded) {
+        console.log(`[BondingTracker] Token ${mint} marked as BONDED by Shyft API`);
+      }
     }
 
   } catch (error) {
@@ -166,6 +174,18 @@ async function updateBondingStatus(
   }
 
   try {
+    // Log before update
+    const beforeResult = await pool.query(
+      `SELECT mint, bonded FROM tbl_soltrack_created_tokens WHERE mint IN (${mintAddresses.map((_, i) => `$${i + 1}`).join(', ')})`,
+      mintAddresses
+    );
+    console.log(`[BondingTracker] updateBondingStatus called:`);
+    console.log(`  - Setting bonded to: ${bonded}`);
+    console.log(`  - Tokens to update: ${mintAddresses.length}`);
+    beforeResult.rows.forEach(row => {
+      console.log(`  - Token ${row.mint} current bonded: ${row.bonded}`);
+    });
+    
     // Update multiple tokens at once using IN clause
     const placeholders = mintAddresses.map((_, i) => `$${i + 1}`).join(', ');
     await pool.query(
@@ -175,6 +195,15 @@ async function updateBondingStatus(
        WHERE mint IN (${placeholders})`,
       [...mintAddresses, bonded]
     );
+    
+    // Verify after update
+    const afterResult = await pool.query(
+      `SELECT mint, bonded FROM tbl_soltrack_created_tokens WHERE mint IN (${mintAddresses.map((_, i) => `$${i + 1}`).join(', ')})`,
+      mintAddresses
+    );
+    afterResult.rows.forEach(row => {
+      console.log(`  - Token ${row.mint} bonded after update: ${row.bonded}`);
+    });
 
   } catch (error) {
     console.error('[BondingTracker] Error updating bonding status:', error);
@@ -235,8 +264,27 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
  */
 export async function handleMigrateEvent(mintAddress: string): Promise<void> {
   try {
+    console.log(`[BondingTracker] handleMigrateEvent called for ${mintAddress}`);
+    
+    // Check current status before update
+    const beforeResult = await pool.query(
+      'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+      [mintAddress]
+    );
+    const beforeBonded = beforeResult.rows.length > 0 ? beforeResult.rows[0].bonded : 'NOT_FOUND';
+    console.log(`  - Bonded status before migrate event: ${beforeBonded}`);
+    
     // Update bonding status to true
     await updateBondingStatus([mintAddress], true);
+    
+    // Verify what was actually saved
+    const afterResult = await pool.query(
+      'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
+      [mintAddress]
+    );
+    if (afterResult.rows.length > 0) {
+      console.log(`  - Bonded status after migrate event: ${afterResult.rows[0].bonded}`);
+    }
   } catch (error) {
     console.error(`[BondingTracker] Error handling migrate event for ${mintAddress}:`, error);
   }
