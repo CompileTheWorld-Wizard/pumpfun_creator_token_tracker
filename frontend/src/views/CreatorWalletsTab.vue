@@ -93,6 +93,13 @@
             Save Preset
           </button>
           <button
+            v-if="selectedFilterPreset"
+            @click="removeFilterPreset"
+            class="px-2 py-1 text-xs bg-red-600/90 hover:bg-red-600 text-white font-semibold rounded transition"
+          >
+            Remove Preset
+          </button>
+          <button
             @click="clearFilters"
             class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold rounded transition"
           >
@@ -2060,6 +2067,22 @@ const saveFilterPreset = () => {
   selectedFilterPreset.value = newPreset.id
   newPresetName.value = ''
   showSavePresetDialog.value = false
+}
+
+// Remove filter preset
+const removeFilterPreset = () => {
+  if (!selectedFilterPreset.value) return
+  
+  if (confirm('Are you sure you want to remove this preset?')) {
+    const index = filterPresets.value.findIndex(p => p.id === selectedFilterPreset.value)
+    if (index !== -1) {
+      filterPresets.value.splice(index, 1)
+      saveFilterPresets()
+      selectedFilterPreset.value = ''
+      // Clear filters when preset is removed
+      clearFilters()
+    }
+  }
 }
 
 // Apply filters
