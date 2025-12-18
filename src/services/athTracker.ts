@@ -481,11 +481,8 @@ export async function handleAmmBuyEvent(
     console.log(`[AthTracker] New ATH (AMM Buy) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
   }
 
-  // Mark as bonded (on AMM means bonded)
-  if (!tokenInfo.bonded) {
-    tokenInfo.bonded = true;
-    tokenInfo.dirty = true;
-  }
+  // Note: Bonding status should be managed by bonding tracker, not ATH tracker
+  // AMM events indicate bonding, but we let bonding tracker handle that via migrate events
 
   tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
   tokenInfo.lastUpdated = Date.now();
@@ -525,11 +522,8 @@ export async function handleAmmSellEvent(
     console.log(`[AthTracker] New ATH (AMM Sell) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
   }
 
-  // Mark as bonded
-  if (!tokenInfo.bonded) {
-    tokenInfo.bonded = true;
-    tokenInfo.dirty = true;
-  }
+  // Note: Bonding status should be managed by bonding tracker, not ATH tracker
+  // AMM events indicate bonding, but we let bonding tracker handle that via migrate events
 
   tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
   tokenInfo.lastUpdated = Date.now();
@@ -632,29 +626,16 @@ async function saveAthDataToDb(): Promise<void> {
     try {
       if (athColumnsExist) {
         // Try with ATH columns
-        // Check current status before update
-        const beforeResult = await pool.query(
-          'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
-          [token.mint]
-        );
-        const beforeBonded = beforeResult.rows.length > 0 ? beforeResult.rows[0].bonded : 'NOT_FOUND';
-        
-        console.log(`[AthTracker] Saving token ${token.mint} to database:`);
-        console.log(`  - ATH tracker bonded value: ${token.bonded}`);
-        console.log(`  - Existing bonded in DB: ${beforeBonded}`);
+        console.log(`[AthTracker] Saving token ${token.mint} to database (ATH: $${token.athMarketCapUsd.toFixed(2)})`);
         
         await pool.query(
-          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, ath_market_cap_usd, created_at, is_fetched)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, ath_market_cap_usd, created_at, is_fetched)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (mint) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
              symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-             -- Only update bonded to true if ATH tracker detected it, otherwise preserve existing value
-             -- This prevents overwriting bonded status set by bonding tracker
-             bonded = CASE 
-               WHEN EXCLUDED.bonded = true THEN true
-               ELSE tbl_soltrack_created_tokens.bonded
-             END,
+             -- ATH tracker does NOT update bonded status - that's handled by bonding tracker
+             -- bonded field is preserved as-is
              ath_market_cap_usd = GREATEST(
                EXCLUDED.ath_market_cap_usd, 
                COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
@@ -667,25 +648,12 @@ async function saveAthDataToDb(): Promise<void> {
             token.name,
             token.symbol,
             token.creator,
-            token.bonded,
             token.athMarketCapUsd,
             new Date(token.createdAt),
             false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
           ]
         );
         
-        // Verify what was actually saved
-        const afterResult = await pool.query(
-          'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
-          [token.mint]
-        );
-        if (afterResult.rows.length > 0) {
-          const afterBonded = afterResult.rows[0].bonded;
-          console.log(`  - Bonded status after ATH tracker save: ${afterBonded}`);
-          if (beforeBonded !== 'NOT_FOUND' && beforeBonded !== afterBonded) {
-            console.log(`  - WARNING: Bonded status changed from ${beforeBonded} to ${afterBonded}`);
-          }
-        }
       } else {
         // Fallback: save without ATH columns
         await pool.query(
