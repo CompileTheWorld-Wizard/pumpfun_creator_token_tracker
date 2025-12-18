@@ -359,6 +359,70 @@
               </button>
             </div>
 
+            <!-- Rug Rate Filter Widget -->
+            <div v-if="addedFilterTypes.has('rugRate')" class="inline-flex items-center gap-2 px-3 py-2 bg-red-600/20 border border-red-500/30 rounded-lg">
+              <span class="text-xs font-semibold text-red-300">Rug Rate (%):</span>
+              <input
+                v-model.number="filters.rugRate.min"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="Min %"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-red-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.rugRate.max"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                placeholder="Max %"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-red-500 w-20"
+              />
+              <button
+                @click="removeFilter('rugRate')"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Avg Rug Time Filter Widget -->
+            <div v-if="addedFilterTypes.has('avgRugTime')" class="inline-flex items-center gap-2 px-3 py-2 bg-red-600/20 border border-red-500/30 rounded-lg">
+              <span class="text-xs font-semibold text-red-300">Avg Rug Time (seconds):</span>
+              <input
+                v-model.number="filters.avgRugTime.min"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Min"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-red-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.avgRugTime.max"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="Max"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-red-500 w-20"
+              />
+              <button
+                @click="removeFilter('avgRugTime')"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
             <p v-if="!hasActiveFilters" class="text-xs text-gray-500 py-2">
               No filters active. Click "Add Filter" to add filters.
             </p>
@@ -778,6 +842,40 @@
                   >
                     Expected ROI (3rd)
                   </div>
+                </div>
+              </div>
+
+              <!-- Rug Rate Group -->
+              <div v-if="shouldShowFilterItem('Rug Rate', 'Rug Rate')" class="mb-2">
+                <div
+                  @click="!isFilterAdded('rugRate') && selectFilterType('rugRate')"
+                  :class="[
+                    'px-2 py-1.5 text-xs rounded transition',
+                    isFilterAdded('rugRate')
+                      ? 'text-gray-500 cursor-not-allowed opacity-50'
+                      : newFilterType === 'rugRate' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                        : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                  ]"
+                >
+                  Rug Rate (%)
+                </div>
+              </div>
+
+              <!-- Avg Rug Time Group -->
+              <div v-if="shouldShowFilterItem('Avg Rug Time', 'Avg Rug Time')" class="mb-2">
+                <div
+                  @click="!isFilterAdded('avgRugTime') && selectFilterType('avgRugTime')"
+                  :class="[
+                    'px-2 py-1.5 text-xs rounded transition',
+                    isFilterAdded('avgRugTime')
+                      ? 'text-gray-500 cursor-not-allowed opacity-50'
+                      : newFilterType === 'avgRugTime' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                        : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                  ]"
+                >
+                  Avg Rug Time (seconds)
                 </div>
               </div>
 
@@ -1273,6 +1371,8 @@ interface Filters {
     min?: number
     max?: number
   }>
+  rugRate: { min?: number; max?: number }
+  avgRugTime: { min?: number; max?: number }
 }
 
 const filters = ref<Filters>({
@@ -1282,7 +1382,9 @@ const filters = ref<Filters>({
   avgMcap: [],
   medianMcap: [],
   avgBuySells: [],
-  expectedROI: []
+  expectedROI: [],
+  rugRate: {},
+  avgRugTime: {}
 })
 
 // Load filter presets from localStorage
@@ -1342,6 +1444,10 @@ const isSelectedFilterAlreadyAdded = computed(() => {
       return isFilterAdded('totalTokens')
     case 'bondedTokens':
       return isFilterAdded('bondedTokens')
+    case 'rugRate':
+      return isFilterAdded('rugRate')
+    case 'avgRugTime':
+      return isFilterAdded('avgRugTime')
     case 'winRatePercent':
       return isWinRateFilterAdded('percent')
     case 'winRateScore':
@@ -1431,8 +1537,10 @@ const hasVisibleFilterItems = computed(() => {
   const hasMedianMcap = shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')
   const hasAvgBuySells = shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells')
   const hasExpectedROI = shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')
+  const hasRugRate = shouldShowFilterItem('Rug Rate', 'Rug Rate')
+  const hasAvgRugTime = shouldShowFilterItem('Avg Rug Time', 'Avg Rug Time')
   
-  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells || hasExpectedROI
+  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells || hasExpectedROI || hasRugRate || hasAvgRugTime
 })
 
 // Confirm adding filter from dialog
@@ -1453,6 +1561,20 @@ const confirmAddFilter = () => {
         max: undefined
       }
       addedFilterTypes.value.add('bondedTokens')
+      break
+    case 'rugRate':
+      filters.value.rugRate = {
+        min: undefined,
+        max: undefined
+      }
+      addedFilterTypes.value.add('rugRate')
+      break
+    case 'avgRugTime':
+      filters.value.avgRugTime = {
+        min: undefined,
+        max: undefined
+      }
+      addedFilterTypes.value.add('avgRugTime')
       break
     case 'winRatePercent':
       filters.value.winRate.push({
@@ -1586,7 +1708,7 @@ const cancelAddFilter = () => {
 }
 
 // Remove a specific filter
-const removeFilter = (filterType: 'totalTokens' | 'bondedTokens') => {
+const removeFilter = (filterType: 'totalTokens' | 'bondedTokens' | 'rugRate' | 'avgRugTime') => {
   switch (filterType) {
     case 'totalTokens':
       filters.value.totalTokens = {}
@@ -1595,6 +1717,14 @@ const removeFilter = (filterType: 'totalTokens' | 'bondedTokens') => {
     case 'bondedTokens':
       filters.value.bondedTokens = {}
       addedFilterTypes.value.delete('bondedTokens')
+      break
+    case 'rugRate':
+      filters.value.rugRate = {}
+      addedFilterTypes.value.delete('rugRate')
+      break
+    case 'avgRugTime':
+      filters.value.avgRugTime = {}
+      addedFilterTypes.value.delete('avgRugTime')
       break
   }
 }
@@ -1633,7 +1763,9 @@ const clearFilters = () => {
     avgMcap: [],
     medianMcap: [],
     avgBuySells: [],
-    expectedROI: []
+    expectedROI: [],
+    rugRate: {},
+    avgRugTime: {}
   }
   addedFilterTypes.value.clear()
   selectedFilterPreset.value = ''
@@ -1645,6 +1777,8 @@ const hasActiveFilters = computed(() => {
   return !!(
     addedFilterTypes.value.has('totalTokens') ||
     addedFilterTypes.value.has('bondedTokens') ||
+    addedFilterTypes.value.has('rugRate') ||
+    addedFilterTypes.value.has('avgRugTime') ||
     filters.value.winRate.length > 0 ||
     filters.value.avgMcap.length > 0 ||
     filters.value.medianMcap.length > 0 ||
@@ -1657,6 +1791,8 @@ const activeFilterCount = computed(() => {
   let count = 0
   if (addedFilterTypes.value.has('totalTokens')) count++
   if (addedFilterTypes.value.has('bondedTokens')) count++
+  if (addedFilterTypes.value.has('rugRate')) count++
+  if (addedFilterTypes.value.has('avgRugTime')) count++
   count += filters.value.winRate.length
   count += filters.value.avgMcap.length
   count += filters.value.medianMcap.length
@@ -1865,6 +2001,20 @@ const loadWallets = async () => {
     
     if (filters.value.expectedROI.length > 0) {
       filterParams.expectedROI = filters.value.expectedROI
+    }
+    
+    if (filters.value.rugRate.min !== undefined || filters.value.rugRate.max !== undefined) {
+      filterParams.rugRate = {
+        min: filters.value.rugRate.min,
+        max: filters.value.rugRate.max
+      }
+    }
+    
+    if (filters.value.avgRugTime.min !== undefined || filters.value.avgRugTime.max !== undefined) {
+      filterParams.avgRugTime = {
+        min: filters.value.avgRugTime.min,
+        max: filters.value.avgRugTime.max
+      }
     }
     
     const response = await getCreatorWalletsAnalytics(

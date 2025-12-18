@@ -1236,6 +1236,27 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by rug rate
+        if (filters.rugRate) {
+          if (filters.rugRate.min !== undefined && wallet.avgRugRate < filters.rugRate.min) {
+            return false;
+          }
+          if (filters.rugRate.max !== undefined && wallet.avgRugRate > filters.rugRate.max) {
+            return false;
+          }
+        }
+        
+        // Filter by avg rug time
+        if (filters.avgRugTime) {
+          if (wallet.avgRugTime === null) return false;
+          if (filters.avgRugTime.min !== undefined && wallet.avgRugTime < filters.avgRugTime.min) {
+            return false;
+          }
+          if (filters.avgRugTime.max !== undefined && wallet.avgRugTime > filters.avgRugTime.max) {
+            return false;
+          }
+        }
+        
         return true;
       });
     }

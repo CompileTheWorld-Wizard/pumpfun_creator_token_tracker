@@ -89,6 +89,8 @@ export interface FilterParams {
     min?: number;
     max?: number;
   }>;
+  rugRate?: { min?: number; max?: number };
+  avgRugTime?: { min?: number; max?: number };
 }
 
 export async function getCreatorWalletsAnalytics(
