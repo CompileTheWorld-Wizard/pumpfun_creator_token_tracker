@@ -199,10 +199,28 @@ export async function fetchAthForTokens(
             const effectiveAth = Math.max(athData.athMarketCapUsd, peakMcap);
             // Only update if effective ATH is higher than current (or if current is 0 and we have data)
             if (effectiveAth >= existing.athMarketCapUsd && effectiveAth > 0) {
+              const oldAth = existing.athMarketCapUsd;
               existing.athMarketCapUsd = effectiveAth;
               existing.dirty = true;
               updatedCount++;
-              console.log(`[AthTracker] Updated ATH for ${mint} (${athData.symbol}): $${effectiveAth.toFixed(2)}${peakMcap > athData.athMarketCapUsd ? ` (using peak: $${peakMcap.toFixed(2)})` : ''}`);
+              
+              // Log ATH update with debugging information
+              console.log(`[AthTracker] ATH UPDATE - fetchAthForTokens (Bitquery)`, {
+                source: 'Bitquery batch fetch',
+                mint,
+                symbol: athData.symbol || existing.symbol,
+                name: athData.name || existing.name,
+                creator: existing.creator,
+                oldAth: `$${oldAth.toFixed(2)}`,
+                newAth: `$${effectiveAth.toFixed(2)}`,
+                increase: `$${(effectiveAth - oldAth).toFixed(2)}`,
+                increasePercent: oldAth > 0 ? `${((effectiveAth / oldAth - 1) * 100).toFixed(2)}%` : 'N/A',
+                bitqueryAth: `$${athData.athMarketCapUsd.toFixed(2)}`,
+                peakMcap: `$${peakMcap.toFixed(2)}`,
+                usedPeak: peakMcap > athData.athMarketCapUsd,
+                startingMarketCap: athData.startingMarketCapUsd ? `$${athData.startingMarketCapUsd.toFixed(2)}` : 'N/A',
+                batchNumber: Math.floor(i / 100) + 1,
+              });
             }
             // Update name/symbol if missing
             if (!existing.name && athData.name) existing.name = athData.name;
@@ -210,10 +228,24 @@ export async function fetchAthForTokens(
           } else if (peakMcap > 0) {
             // No Bitquery data, but we have peak - use it as minimum ATH
             if (peakMcap > existing.athMarketCapUsd) {
+              const oldAth = existing.athMarketCapUsd;
               existing.athMarketCapUsd = peakMcap;
               existing.dirty = true;
               updatedCount++;
-              console.log(`[AthTracker] Updated ATH for ${mint} using peak (no Bitquery data): $${peakMcap.toFixed(2)}`);
+              
+              // Log ATH update with debugging information
+              console.log(`[AthTracker] ATH UPDATE - fetchAthForTokens (Peak fallback)`, {
+                source: 'Peak market cap fallback (no Bitquery data)',
+                mint,
+                symbol: existing.symbol,
+                name: existing.name,
+                creator: existing.creator,
+                oldAth: `$${oldAth.toFixed(2)}`,
+                newAth: `$${peakMcap.toFixed(2)}`,
+                increase: `$${(peakMcap - oldAth).toFixed(2)}`,
+                increasePercent: oldAth > 0 ? `${((peakMcap / oldAth - 1) * 100).toFixed(2)}%` : 'N/A',
+                batchNumber: Math.floor(i / 100) + 1,
+              });
             }
           }
         } else if (tokenInfo) {
@@ -412,7 +444,7 @@ function calculateMarketCapUsd(
  */
 export async function handleTradeEvent(
   tradeData: TradeEventData,
-  _txSignature: string
+  txSignature: string
 ): Promise<void> {
   const mint = tradeData.mint;
   
@@ -439,8 +471,27 @@ export async function handleTradeEvent(
 
   // Update ATH if new high
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    const oldAth = tokenInfo.athMarketCapUsd;
     tokenInfo.athMarketCapUsd = currentMarketCapUsd;
     tokenInfo.dirty = true;
+    
+    // Log ATH update with transaction ID and debugging information
+    console.log(`[AthTracker] ATH UPDATE - TradeEvent`, {
+      transactionId: txSignature,
+      mint,
+      symbol: tokenInfo.symbol,
+      name: tokenInfo.name,
+      creator: tokenInfo.creator,
+      oldAth: `$${oldAth.toFixed(2)}`,
+      newAth: `$${currentMarketCapUsd.toFixed(2)}`,
+      increase: `$${(currentMarketCapUsd - oldAth).toFixed(2)}`,
+      increasePercent: `${((currentMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
+      solAmount: tradeData.sol_amount / 1e9,
+      tokenAmount: tradeData.token_amount / 1e6,
+      isBuy: tradeData.is_buy,
+      solPriceUsd: `$${solPriceUsd.toFixed(2)}`,
+      timestamp: new Date(tradeData.timestamp * 1000).toISOString(),
+    });
   }
 
   tokenInfo.currentMarketCapUsd = currentMarketCapUsd;
@@ -454,7 +505,7 @@ export async function handleTradeEvent(
 export async function handleAmmBuyEvent(
   buyData: AmmBuyEventData,
   mint: string,
-  _txSignature: string
+  txSignature: string
 ): Promise<void> {
   let tokenInfo: TokenAthInfo | undefined = tokenAthMap.get(mint);
   
@@ -476,9 +527,29 @@ export async function handleAmmBuyEvent(
   const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
 
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    const oldAth = tokenInfo.athMarketCapUsd;
     tokenInfo.athMarketCapUsd = currentMarketCapUsd;
     tokenInfo.dirty = true;
-    console.log(`[AthTracker] New ATH (AMM Buy) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
+    
+    // Log ATH update with transaction ID and debugging information
+    console.log(`[AthTracker] ATH UPDATE - AMM BuyEvent`, {
+      transactionId: txSignature,
+      mint,
+      symbol: tokenInfo.symbol,
+      name: tokenInfo.name,
+      creator: tokenInfo.creator,
+      oldAth: `$${oldAth.toFixed(2)}`,
+      newAth: `$${currentMarketCapUsd.toFixed(2)}`,
+      increase: `$${(currentMarketCapUsd - oldAth).toFixed(2)}`,
+      increasePercent: `${((currentMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
+      poolQuoteReserves: `${poolQuoteReserves.toFixed(4)} SOL`,
+      poolBaseReserves: `${poolBaseReserves.toFixed(2)} tokens`,
+      priceSol: `${priceSol.toFixed(8)} SOL/token`,
+      solPriceUsd: `$${solPriceUsd.toFixed(2)}`,
+      baseAmountOut: buyData.base_amount_out / 1e6,
+      quoteAmountIn: buyData.quote_amount_in / 1e9,
+      timestamp: new Date(buyData.timestamp * 1000).toISOString(),
+    });
   }
 
   // Note: Bonding status should be managed by bonding tracker, not ATH tracker
@@ -495,7 +566,7 @@ export async function handleAmmBuyEvent(
 export async function handleAmmSellEvent(
   sellData: AmmSellEventData,
   mint: string,
-  _txSignature: string
+  txSignature: string
 ): Promise<void> {
   let tokenInfo: TokenAthInfo | undefined = tokenAthMap.get(mint);
   
@@ -517,9 +588,29 @@ export async function handleAmmSellEvent(
   const currentMarketCapUsd = priceSol * TOKEN_SUPPLY * solPriceUsd;
 
   if (currentMarketCapUsd > tokenInfo.athMarketCapUsd) {
+    const oldAth = tokenInfo.athMarketCapUsd;
     tokenInfo.athMarketCapUsd = currentMarketCapUsd;
     tokenInfo.dirty = true;
-    console.log(`[AthTracker] New ATH (AMM Sell) for ${tokenInfo.symbol}: $${currentMarketCapUsd.toFixed(2)}`);
+    
+    // Log ATH update with transaction ID and debugging information
+    console.log(`[AthTracker] ATH UPDATE - AMM SellEvent`, {
+      transactionId: txSignature,
+      mint,
+      symbol: tokenInfo.symbol,
+      name: tokenInfo.name,
+      creator: tokenInfo.creator,
+      oldAth: `$${oldAth.toFixed(2)}`,
+      newAth: `$${currentMarketCapUsd.toFixed(2)}`,
+      increase: `$${(currentMarketCapUsd - oldAth).toFixed(2)}`,
+      increasePercent: `${((currentMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
+      poolQuoteReserves: `${poolQuoteReserves.toFixed(4)} SOL`,
+      poolBaseReserves: `${poolBaseReserves.toFixed(2)} tokens`,
+      priceSol: `${priceSol.toFixed(8)} SOL/token`,
+      solPriceUsd: `$${solPriceUsd.toFixed(2)}`,
+      baseAmountIn: sellData.base_amount_in / 1e6,
+      quoteAmountOut: sellData.quote_amount_out / 1e9,
+      timestamp: new Date(sellData.timestamp * 1000).toISOString(),
+    });
   }
 
   // Note: Bonding status should be managed by bonding tracker, not ATH tracker
@@ -584,10 +675,24 @@ export function updateAthFromExternal(athDataList: TokenAthData[]): void {
   for (const athData of athDataList) {
     const tokenInfo = tokenAthMap.get(athData.mintAddress);
     if (tokenInfo && athData.athMarketCapUsd > tokenInfo.athMarketCapUsd) {
+      const oldAth = tokenInfo.athMarketCapUsd;
       tokenInfo.athMarketCapUsd = athData.athMarketCapUsd;
       tokenInfo.lastUpdated = Date.now();
       tokenInfo.dirty = true;
-      console.log(`[AthTracker] Updated ATH from Bitquery for ${tokenInfo.symbol}: $${athData.athMarketCapUsd.toFixed(2)}`);
+      
+      // Log ATH update with debugging information
+      console.log(`[AthTracker] ATH UPDATE - External Source (Bitquery)`, {
+        source: 'Bitquery',
+        mint: athData.mintAddress,
+        symbol: tokenInfo.symbol || athData.symbol,
+        name: tokenInfo.name || athData.name,
+        creator: tokenInfo.creator,
+        oldAth: `$${oldAth.toFixed(2)}`,
+        newAth: `$${athData.athMarketCapUsd.toFixed(2)}`,
+        increase: `$${(athData.athMarketCapUsd - oldAth).toFixed(2)}`,
+        increasePercent: `${((athData.athMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%`,
+        startingMarketCap: athData.startingMarketCapUsd ? `$${athData.startingMarketCapUsd.toFixed(2)}` : 'N/A',
+      });
     }
   }
 }
@@ -790,34 +895,48 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
 
     console.log(`[AthTracker] Received ATH data for ${athDataList.length} tokens from Bitquery`);
 
-    // Update database with ATH data (only if higher than current)
-    let updatedCount = 0;
-    for (const athData of athDataList) {
-      const tokenInfo = tokenDataMap.get(athData.mintAddress);
-      const startingMarketCap = athData.startingMarketCapUsd || 0;
-      if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
-        try {
-          await pool.query(
-            `UPDATE tbl_soltrack_created_tokens 
-             SET ath_market_cap_usd = GREATEST(
-               $1::DECIMAL, 
-               COALESCE(ath_market_cap_usd, 0),
-               COALESCE(peak_market_cap_usd, 0)
-             ),
-                 initial_market_cap_usd = CASE 
-                   WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
-                   ELSE initial_market_cap_usd
-                 END,
-                 updated_at = NOW()
-             WHERE mint = $2`,
-            [athData.athMarketCapUsd, athData.mintAddress, startingMarketCap]
-          );
-          updatedCount++;
-          console.log(`[AthTracker] Updated ATH for ${athData.symbol || athData.mintAddress}: $${athData.athMarketCapUsd.toFixed(2)}`);
-        } catch (error) {
-          console.error(`[AthTracker] Error updating ATH for ${athData.mintAddress}:`, error);
-        }
-      } else if (tokenInfo && startingMarketCap > 0) {
+      // Update database with ATH data (only if higher than current)
+      let updatedCount = 0;
+      for (const athData of athDataList) {
+        const tokenInfo = tokenDataMap.get(athData.mintAddress);
+        const startingMarketCap = athData.startingMarketCapUsd || 0;
+        if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
+          try {
+            const oldAth = tokenInfo.currentAth;
+            await pool.query(
+              `UPDATE tbl_soltrack_created_tokens 
+               SET ath_market_cap_usd = GREATEST(
+                 $1::DECIMAL, 
+                 COALESCE(ath_market_cap_usd, 0),
+                 COALESCE(peak_market_cap_usd, 0)
+               ),
+                   initial_market_cap_usd = CASE 
+                     WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
+                     ELSE initial_market_cap_usd
+                   END,
+                   updated_at = NOW()
+               WHERE mint = $2`,
+              [athData.athMarketCapUsd, athData.mintAddress, startingMarketCap]
+            );
+            updatedCount++;
+            
+            // Log ATH update with debugging information
+            console.log(`[AthTracker] ATH UPDATE - updateAthMcapForCreator (Bitquery)`, {
+              source: 'Bitquery creator update',
+              mint: athData.mintAddress,
+              symbol: athData.symbol || tokenInfo.symbol,
+              name: tokenInfo.name,
+              creator: creatorAddress,
+              oldAth: `$${oldAth.toFixed(2)}`,
+              newAth: `$${athData.athMarketCapUsd.toFixed(2)}`,
+              increase: `$${(athData.athMarketCapUsd - oldAth).toFixed(2)}`,
+              increasePercent: oldAth > 0 ? `${((athData.athMarketCapUsd / oldAth - 1) * 100).toFixed(2)}%` : 'N/A',
+              startingMarketCap: startingMarketCap > 0 ? `$${startingMarketCap.toFixed(2)}` : 'N/A',
+            });
+          } catch (error) {
+            console.error(`[AthTracker] Error updating ATH for ${athData.mintAddress}:`, error);
+          }
+        } else if (tokenInfo && startingMarketCap > 0) {
         // ATH didn't change, but we might have starting market cap to update
         try {
           console.log(`[AthTracker] Updating initial_market_cap_usd for ${athData.mintAddress} (${athData.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
