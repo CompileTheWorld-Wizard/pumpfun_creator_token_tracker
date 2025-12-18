@@ -91,6 +91,12 @@ export interface FilterParams {
   }>;
   rugRate?: { min?: number; max?: number };
   avgRugTime?: { min?: number; max?: number };
+  multiplierScores?: Array<{
+    multiplier: number;
+    type: 'percent' | 'score';
+    min?: number;
+    max?: number;
+  }>;
 }
 
 export async function getCreatorWalletsAnalytics(

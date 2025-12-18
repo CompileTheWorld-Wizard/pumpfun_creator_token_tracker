@@ -1257,6 +1257,29 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by multiplier scores (all filters must match - AND logic)
+        if (filters.multiplierScores && Array.isArray(filters.multiplierScores) && filters.multiplierScores.length > 0) {
+          for (const filter of filters.multiplierScores) {
+            if (filter.type === 'percent') {
+              const percentage = wallet.multiplierPercentages[filter.multiplier];
+              if (percentage === undefined || percentage === null) return false;
+              const matches = (
+                (filter.min === undefined || percentage >= filter.min) &&
+                (filter.max === undefined || percentage <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'score') {
+              const score = wallet.scores.individualMultiplierScores[filter.multiplier];
+              if (score === undefined || score === null) return false;
+              const matches = (
+                (filter.min === undefined || score >= filter.min) &&
+                (filter.max === undefined || score <= filter.max)
+              );
+              if (!matches) return false;
+            }
+          }
+        }
+        
         return true;
       });
     }

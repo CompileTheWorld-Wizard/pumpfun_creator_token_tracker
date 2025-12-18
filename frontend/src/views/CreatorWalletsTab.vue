@@ -423,6 +423,45 @@
               </button>
             </div>
 
+            <!-- Multiplier Scores Filter Widgets -->
+            <div
+              v-for="(filter, index) in filters.multiplierScores"
+              :key="index"
+              class="inline-flex items-center gap-2 px-3 py-2 bg-yellow-600/20 border border-yellow-500/30 rounded-lg"
+            >
+              <span class="text-xs font-semibold text-yellow-300">
+                Multiplier {{ filter.multiplier }}x ({{ filter.type === 'percent' ? '%' : 'Score' }}):
+              </span>
+              <input
+                v-model.number="filter.min"
+                type="number"
+                :min="filter.type === 'percent' ? '0' : undefined"
+                :max="filter.type === 'percent' ? '100' : undefined"
+                :step="filter.type === 'percent' ? '0.1' : '0.1'"
+                :placeholder="filter.type === 'percent' ? 'Min %' : 'Min Score'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filter.max"
+                type="number"
+                :min="filter.type === 'percent' ? '0' : undefined"
+                :max="filter.type === 'percent' ? '100' : undefined"
+                :step="filter.type === 'percent' ? '0.1' : '0.1'"
+                :placeholder="filter.type === 'percent' ? 'Max %' : 'Max Score'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-yellow-500 w-20"
+              />
+              <button
+                @click="removeMultiplierFilter(index)"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
             <p v-if="!hasActiveFilters" class="text-xs text-gray-500 py-2">
               No filters active. Click "Add Filter" to add filters.
             </p>
@@ -879,6 +918,57 @@
                 </div>
               </div>
 
+              <!-- Multiplier Scores Group -->
+              <div v-if="shouldShowMultiplierGroup()" class="mb-2">
+                <div 
+                  @click="expandedGroups.multiplierScores = !expandedGroups.multiplierScores"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.multiplierScores || (filterSearchQuery && shouldShowMultiplierGroup()) }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Multiplier Scores
+                </div>
+                <div v-if="expandedGroups.multiplierScores || (filterSearchQuery && shouldShowMultiplierGroup())" class="ml-4 space-y-1">
+                  <template v-for="config in scoringSettings?.multiplierConfigs || []" :key="config.multiplier">
+                    <div
+                      v-if="shouldShowFilterItem(`Multiplier ${config.multiplier}x (Percentage)`, 'Multiplier Scores')"
+                      @click="!isMultiplierFilterAdded(config.multiplier, 'percent') && selectFilterType(`multiplier${config.multiplier}Percent`)"
+                      :class="[
+                        'px-2 py-1.5 text-xs rounded transition',
+                        isMultiplierFilterAdded(config.multiplier, 'percent')
+                          ? 'text-gray-500 cursor-not-allowed opacity-50'
+                          : newFilterType === `multiplier${config.multiplier}Percent` 
+                            ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                            : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                      ]"
+                    >
+                      Multiplier {{ config.multiplier }}x (Percentage)
+                    </div>
+                    <div
+                      v-if="shouldShowFilterItem(`Multiplier ${config.multiplier}x (Score)`, 'Multiplier Scores')"
+                      @click="!isMultiplierFilterAdded(config.multiplier, 'score') && selectFilterType(`multiplier${config.multiplier}Score`)"
+                      :class="[
+                        'px-2 py-1.5 text-xs rounded transition',
+                        isMultiplierFilterAdded(config.multiplier, 'score')
+                          ? 'text-gray-500 cursor-not-allowed opacity-50'
+                          : newFilterType === `multiplier${config.multiplier}Score` 
+                            ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                            : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                      ]"
+                    >
+                      Multiplier {{ config.multiplier }}x (Score)
+                    </div>
+                  </template>
+                </div>
+              </div>
+
               <!-- No results message -->
               <div v-if="filterSearchQuery && !hasVisibleFilterItems" class="text-center py-4 text-gray-400 text-xs">
                 No data metric
@@ -1316,7 +1406,8 @@ const expandedGroups = ref({
   avgMcap: false,
   medianMcap: false,
   avgBuySells: false,
-  expectedROI: false
+  expectedROI: false,
+  multiplierScores: false
 })
 
 // New filter configuration state
@@ -1373,6 +1464,12 @@ interface Filters {
   }>
   rugRate: { min?: number; max?: number }
   avgRugTime: { min?: number; max?: number }
+  multiplierScores: Array<{
+    multiplier: number
+    type: 'percent' | 'score'
+    min?: number
+    max?: number
+  }>
 }
 
 const filters = ref<Filters>({
@@ -1384,7 +1481,8 @@ const filters = ref<Filters>({
   avgBuySells: [],
   expectedROI: [],
   rugRate: {},
-  avgRugTime: {}
+  avgRugTime: {},
+  multiplierScores: []
 })
 
 // Load filter presets from localStorage
@@ -1477,6 +1575,15 @@ const isSelectedFilterAlreadyAdded = computed(() => {
     case 'expectedROI3rd':
       return isExpectedROIFilterAdded('3rd')
     default:
+      // Handle multiplier filters
+      if (newFilterType.value.startsWith('multiplier')) {
+        const match = newFilterType.value.match(/^multiplier([\d.]+)(Percent|Score)$/)
+        if (match) {
+          const multiplier = parseFloat(match[1])
+          const type = match[2] === 'Percent' ? 'percent' : 'score'
+          return isMultiplierFilterAdded(multiplier, type)
+        }
+      }
       return false
   }
 })
@@ -1511,6 +1618,24 @@ const isExpectedROIFilterAdded = (filterType: '1st' | '2nd' | '3rd'): boolean =>
   return filters.value.expectedROI.some(f => f.type === filterType)
 }
 
+// Check if a multiplier filter is already added
+const isMultiplierFilterAdded = (multiplier: number, filterType: 'percent' | 'score'): boolean => {
+  return filters.value.multiplierScores.some(f => f.multiplier === multiplier && f.type === filterType)
+}
+
+// Check if multiplier group should be shown
+const shouldShowMultiplierGroup = (): boolean => {
+  if (!scoringSettings.value?.multiplierConfigs || scoringSettings.value.multiplierConfigs.length === 0) {
+    return false
+  }
+  if (!filterSearchQuery.value) return true
+  
+  return scoringSettings.value.multiplierConfigs.some(config => 
+    shouldShowFilterItem(`Multiplier ${config.multiplier}x (Percentage)`, 'Multiplier Scores') ||
+    shouldShowFilterItem(`Multiplier ${config.multiplier}x (Score)`, 'Multiplier Scores')
+  )
+}
+
 // Get label for avg buy/sells filter
 const getAvgBuySellsFilterLabel = (type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'): string => {
   switch (type) {
@@ -1539,8 +1664,9 @@ const hasVisibleFilterItems = computed(() => {
   const hasExpectedROI = shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')
   const hasRugRate = shouldShowFilterItem('Rug Rate', 'Rug Rate')
   const hasAvgRugTime = shouldShowFilterItem('Avg Rug Time', 'Avg Rug Time')
+  const hasMultiplierScores = shouldShowMultiplierGroup()
   
-  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells || hasExpectedROI || hasRugRate || hasAvgRugTime
+  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells || hasExpectedROI || hasRugRate || hasAvgRugTime || hasMultiplierScores
 })
 
 // Confirm adding filter from dialog
@@ -1674,6 +1800,22 @@ const confirmAddFilter = () => {
         max: undefined
       })
       break
+    default:
+      // Handle multiplier filters (format: multiplier1.5Percent, multiplier2Score, etc.)
+      if (newFilterType.value.startsWith('multiplier')) {
+        const match = newFilterType.value.match(/^multiplier([\d.]+)(Percent|Score)$/)
+        if (match) {
+          const multiplier = parseFloat(match[1])
+          const type = match[2] === 'Percent' ? 'percent' : 'score'
+          filters.value.multiplierScores.push({
+            multiplier,
+            type,
+            min: undefined,
+            max: undefined
+          })
+        }
+      }
+      break
   }
 
   cancelAddFilter()
@@ -1703,7 +1845,8 @@ const cancelAddFilter = () => {
     avgMcap: false,
     medianMcap: false,
     avgBuySells: false,
-    expectedROI: false
+    expectedROI: false,
+    multiplierScores: false
   }
 }
 
@@ -1754,6 +1897,11 @@ const removeExpectedROIFilter = (index: number) => {
   filters.value.expectedROI.splice(index, 1)
 }
 
+// Remove multiplier filter
+const removeMultiplierFilter = (index: number) => {
+  filters.value.multiplierScores.splice(index, 1)
+}
+
 // Clear all filters
 const clearFilters = () => {
   filters.value = {
@@ -1765,7 +1913,8 @@ const clearFilters = () => {
     avgBuySells: [],
     expectedROI: [],
     rugRate: {},
-    avgRugTime: {}
+    avgRugTime: {},
+    multiplierScores: []
   }
   addedFilterTypes.value.clear()
   selectedFilterPreset.value = ''
@@ -1783,7 +1932,8 @@ const hasActiveFilters = computed(() => {
     filters.value.avgMcap.length > 0 ||
     filters.value.medianMcap.length > 0 ||
     filters.value.avgBuySells.length > 0 ||
-    filters.value.expectedROI.length > 0
+    filters.value.expectedROI.length > 0 ||
+    filters.value.multiplierScores.length > 0
   )
 })
 
@@ -1798,6 +1948,7 @@ const activeFilterCount = computed(() => {
   count += filters.value.medianMcap.length
   count += filters.value.avgBuySells.length
   count += filters.value.expectedROI.length
+  count += filters.value.multiplierScores.length
   return count
 })
 
@@ -2015,6 +2166,10 @@ const loadWallets = async () => {
         min: filters.value.avgRugTime.min,
         max: filters.value.avgRugTime.max
       }
+    }
+    
+    if (filters.value.multiplierScores.length > 0) {
+      filterParams.multiplierScores = filters.value.multiplierScores
     }
     
     const response = await getCreatorWalletsAnalytics(
