@@ -638,7 +638,12 @@ async function saveAthDataToDb(): Promise<void> {
            ON CONFLICT (mint) DO UPDATE SET
              name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
              symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-             bonded = EXCLUDED.bonded,
+             -- Only update bonded to true if ATH tracker detected it, otherwise preserve existing value
+             -- This prevents overwriting bonded status set by bonding tracker
+             bonded = CASE 
+               WHEN EXCLUDED.bonded = true THEN true
+               ELSE tbl_soltrack_created_tokens.bonded
+             END,
              ath_market_cap_usd = GREATEST(
                EXCLUDED.ath_market_cap_usd, 
                COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
