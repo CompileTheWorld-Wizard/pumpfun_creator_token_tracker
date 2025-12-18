@@ -91,6 +91,7 @@ export interface FilterParams {
   }>;
   rugRate?: { min?: number; max?: number };
   avgRugTime?: { min?: number; max?: number };
+  finalScore?: { min?: number; max?: number };
   multiplierScores?: Array<{
     multiplier: number;
     type: 'percent' | 'score';

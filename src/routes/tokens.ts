@@ -1257,6 +1257,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by final score
+        if (filters.finalScore) {
+          if (filters.finalScore.min !== undefined && wallet.scores.finalScore < filters.finalScore.min) {
+            return false;
+          }
+          if (filters.finalScore.max !== undefined && wallet.scores.finalScore > filters.finalScore.max) {
+            return false;
+          }
+        }
+        
         // Filter by multiplier scores (all filters must match - AND logic)
         if (filters.multiplierScores && Array.isArray(filters.multiplierScores) && filters.multiplierScores.length > 0) {
           for (const filter of filters.multiplierScores) {
