@@ -64,13 +64,11 @@ export interface CreatorWalletsResponse {
 export interface FilterParams {
   totalTokens?: { min?: number; max?: number };
   bondedTokens?: { min?: number; max?: number };
-  winRate?: {
+  winRate?: Array<{
     type: 'percent' | 'score';
-    percentMin?: number;
-    percentMax?: number;
-    scoreMin?: number;
-    scoreMax?: number;
-  };
+    min?: number;
+    max?: number;
+  }>;
   avgMcap?: Array<{
     type: 'mcap' | 'percentile' | 'score';
     min?: number;

@@ -1114,21 +1114,21 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
-        // Filter by win rate
-        if (filters.winRate && filters.winRate.type) {
-          if (filters.winRate.type === 'percent') {
-            if (filters.winRate.percentMin !== undefined && wallet.winRate < filters.winRate.percentMin) {
-              return false;
-            }
-            if (filters.winRate.percentMax !== undefined && wallet.winRate > filters.winRate.percentMax) {
-              return false;
-            }
-          } else if (filters.winRate.type === 'score') {
-            if (filters.winRate.scoreMin !== undefined && wallet.scores.winRateScore < filters.winRate.scoreMin) {
-              return false;
-            }
-            if (filters.winRate.scoreMax !== undefined && wallet.scores.winRateScore > filters.winRate.scoreMax) {
-              return false;
+        // Filter by win rate (all filters must match - AND logic)
+        if (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.length > 0) {
+          for (const filter of filters.winRate) {
+            if (filter.type === 'percent') {
+              const matches = (
+                (filter.min === undefined || wallet.winRate >= filter.min) &&
+                (filter.max === undefined || wallet.winRate <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'score') {
+              const matches = (
+                (filter.min === undefined || wallet.scores.winRateScore >= filter.min) &&
+                (filter.max === undefined || wallet.scores.winRateScore <= filter.max)
+              );
+              if (!matches) return false;
             }
           }
         }
