@@ -117,7 +117,7 @@
           
           <div class="flex flex-wrap gap-2">
             <!-- Total Tokens Filter Widget -->
-            <div v-if="filters.totalTokens.min !== undefined || filters.totalTokens.max !== undefined || Object.keys(filters.totalTokens).length > 0" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg">
+            <div v-if="isFilterAdded('totalTokens')" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg">
               <span class="text-xs font-semibold text-purple-300">Total Tokens:</span>
               <input
                 v-model.number="filters.totalTokens.min"
@@ -148,7 +148,7 @@
             </div>
 
             <!-- Bonded Tokens Filter Widget -->
-            <div v-if="filters.bondedTokens.min !== undefined || filters.bondedTokens.max !== undefined || Object.keys(filters.bondedTokens).length > 0" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+            <div v-if="isFilterAdded('bondedTokens')" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
               <span class="text-xs font-semibold text-blue-300">Bonded Tokens:</span>
               <input
                 v-model.number="filters.bondedTokens.min"
@@ -880,6 +880,7 @@ const filtersExpanded = ref(false)
 const scoringSettings = ref<ScoringSettings | null>(null)
 const showAddFilterDialog = ref(false)
 const newFilterType = ref<string>('')
+const addedFilterTypes = ref<Set<string>>(new Set())
 
 // Tree expansion state
 const expandedGroups = ref({
@@ -975,17 +976,7 @@ const selectFilterType = (filterType: string) => {
 
 // Check if a filter is already added
 const isFilterAdded = (filterType: string): boolean => {
-  switch (filterType) {
-    case 'totalTokens':
-      return filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined
-    case 'bondedTokens':
-      return filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined
-    case 'winRatePercent':
-    case 'winRateScore':
-      return filters.value.winRate.type !== ''
-    default:
-      return false
-  }
+  return addedFilterTypes.value.has(filterType)
 }
 
 // Check if an avg mcap filter type is already added
@@ -1003,12 +994,14 @@ const confirmAddFilter = () => {
         min: undefined,
         max: undefined
       }
+      addedFilterTypes.value.add('totalTokens')
       break
     case 'bondedTokens':
       filters.value.bondedTokens = {
         min: undefined,
         max: undefined
       }
+      addedFilterTypes.value.add('bondedTokens')
       break
     case 'winRatePercent':
       filters.value.winRate = {
@@ -1016,6 +1009,7 @@ const confirmAddFilter = () => {
         percentMin: undefined,
         percentMax: undefined
       }
+      addedFilterTypes.value.add('winRate')
       break
     case 'winRateScore':
       filters.value.winRate = {
@@ -1023,6 +1017,7 @@ const confirmAddFilter = () => {
         scoreMin: undefined,
         scoreMax: undefined
       }
+      addedFilterTypes.value.add('winRate')
       break
     case 'avgMcapAmount':
       filters.value.avgMcap.push({
@@ -1077,12 +1072,15 @@ const removeFilter = (filterType: 'totalTokens' | 'bondedTokens' | 'winRate') =>
   switch (filterType) {
     case 'totalTokens':
       filters.value.totalTokens = {}
+      addedFilterTypes.value.delete('totalTokens')
       break
     case 'bondedTokens':
       filters.value.bondedTokens = {}
+      addedFilterTypes.value.delete('bondedTokens')
       break
     case 'winRate':
       filters.value.winRate = { type: '' }
+      addedFilterTypes.value.delete('winRate')
       break
   }
 }
@@ -1100,6 +1098,7 @@ const clearFilters = () => {
     winRate: { type: '' },
     avgMcap: []
   }
+  addedFilterTypes.value.clear()
   selectedFilterPreset.value = ''
   applyFilters()
 }
@@ -1107,18 +1106,18 @@ const clearFilters = () => {
 // Check if filters are active
 const hasActiveFilters = computed(() => {
   return !!(
-    Object.keys(filters.value.totalTokens).length > 0 ||
-    Object.keys(filters.value.bondedTokens).length > 0 ||
-    filters.value.winRate.type ||
+    addedFilterTypes.value.has('totalTokens') ||
+    addedFilterTypes.value.has('bondedTokens') ||
+    addedFilterTypes.value.has('winRate') ||
     filters.value.avgMcap.length > 0
   )
 })
 
 const activeFilterCount = computed(() => {
   let count = 0
-  if (Object.keys(filters.value.totalTokens).length > 0) count++
-  if (Object.keys(filters.value.bondedTokens).length > 0) count++
-  if (filters.value.winRate.type) count++
+  if (addedFilterTypes.value.has('totalTokens')) count++
+  if (addedFilterTypes.value.has('bondedTokens')) count++
+  if (addedFilterTypes.value.has('winRate')) count++
   count += filters.value.avgMcap.length
   return count
 })
@@ -1129,6 +1128,17 @@ const loadFilterPreset = () => {
   const preset = filterPresets.value.find(p => p.id === selectedFilterPreset.value)
   if (preset) {
     filters.value = JSON.parse(JSON.stringify(preset.filters))
+    // Update addedFilterTypes based on loaded filters
+    addedFilterTypes.value.clear()
+    if (filters.value.totalTokens && (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined)) {
+      addedFilterTypes.value.add('totalTokens')
+    }
+    if (filters.value.bondedTokens && (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined)) {
+      addedFilterTypes.value.add('bondedTokens')
+    }
+    if (filters.value.winRate && filters.value.winRate.type) {
+      addedFilterTypes.value.add('winRate')
+    }
     applyFilters()
   }
 }
