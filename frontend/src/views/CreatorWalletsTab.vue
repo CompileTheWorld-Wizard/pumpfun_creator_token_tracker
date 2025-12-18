@@ -117,12 +117,25 @@
           
           <div class="flex flex-wrap gap-2">
             <!-- Total Tokens Filter Widget -->
-            <div v-if="filters.totalTokens.min !== undefined || filters.totalTokens.max !== undefined" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg">
+            <div v-if="filters.totalTokens.min !== undefined || filters.totalTokens.max !== undefined || Object.keys(filters.totalTokens).length > 0" class="inline-flex items-center gap-2 px-3 py-2 bg-purple-600/20 border border-purple-500/30 rounded-lg">
               <span class="text-xs font-semibold text-purple-300">Total Tokens:</span>
-              <span class="text-xs text-gray-300">
-                {{ filters.totalTokens.min !== undefined ? filters.totalTokens.min : '1' }} - 
-                {{ filters.totalTokens.max !== undefined ? filters.totalTokens.max : '150' }}
-              </span>
+              <input
+                v-model.number="filters.totalTokens.min"
+                type="number"
+                min="1"
+                max="150"
+                placeholder="Min"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.totalTokens.max"
+                type="number"
+                min="1"
+                max="150"
+                placeholder="Max"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-20"
+              />
               <button
                 @click="removeFilter('totalTokens')"
                 class="ml-1 text-gray-400 hover:text-red-400 transition"
@@ -135,12 +148,25 @@
             </div>
 
             <!-- Bonded Tokens Filter Widget -->
-            <div v-if="filters.bondedTokens.min !== undefined || filters.bondedTokens.max !== undefined" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
+            <div v-if="filters.bondedTokens.min !== undefined || filters.bondedTokens.max !== undefined || Object.keys(filters.bondedTokens).length > 0" class="inline-flex items-center gap-2 px-3 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
               <span class="text-xs font-semibold text-blue-300">Bonded Tokens:</span>
-              <span class="text-xs text-gray-300">
-                {{ filters.bondedTokens.min !== undefined ? filters.bondedTokens.min : '0' }} - 
-                {{ filters.bondedTokens.max !== undefined ? filters.bondedTokens.max : '150' }}
-              </span>
+              <input
+                v-model.number="filters.bondedTokens.min"
+                type="number"
+                min="0"
+                max="150"
+                placeholder="Min"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filters.bondedTokens.max"
+                type="number"
+                min="0"
+                max="150"
+                placeholder="Max"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+              />
               <button
                 @click="removeFilter('bondedTokens')"
                 class="ml-1 text-gray-400 hover:text-red-400 transition"
@@ -155,16 +181,44 @@
             <!-- Win Rate Filter Widget -->
             <div v-if="filters.winRate.type" class="inline-flex items-center gap-2 px-3 py-2 bg-green-600/20 border border-green-500/30 rounded-lg">
               <span class="text-xs font-semibold text-green-300">Win Rate ({{ filters.winRate.type === 'percent' ? '%' : 'Score' }}):</span>
-              <span class="text-xs text-gray-300">
-                <template v-if="filters.winRate.type === 'percent'">
-                  {{ filters.winRate.percentMin !== undefined ? filters.winRate.percentMin : '0' }}% - 
-                  {{ filters.winRate.percentMax !== undefined ? filters.winRate.percentMax : '100' }}%
-                </template>
-                <template v-else>
-                  {{ filters.winRate.scoreMin !== undefined ? filters.winRate.scoreMin : 'Min' }} - 
-                  {{ filters.winRate.scoreMax !== undefined ? filters.winRate.scoreMax : 'Max' }}
-                </template>
-              </span>
+              <template v-if="filters.winRate.type === 'percent'">
+                <input
+                  v-model.number="filters.winRate.percentMin"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Min %"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-green-500 w-20"
+                />
+                <span class="text-xs text-gray-400">to</span>
+                <input
+                  v-model.number="filters.winRate.percentMax"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  placeholder="Max %"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-green-500 w-20"
+                />
+              </template>
+              <template v-else>
+                <input
+                  v-model.number="filters.winRate.scoreMin"
+                  type="number"
+                  step="0.1"
+                  placeholder="Min Score"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-green-500 w-20"
+                />
+                <span class="text-xs text-gray-400">to</span>
+                <input
+                  v-model.number="filters.winRate.scoreMax"
+                  type="number"
+                  step="0.1"
+                  placeholder="Max Score"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-green-500 w-20"
+                />
+              </template>
               <button
                 @click="removeFilter('winRate')"
                 class="ml-1 text-gray-400 hover:text-red-400 transition"
@@ -185,10 +239,25 @@
               <span class="text-xs font-semibold text-cyan-300">
                 Avg MCap ({{ filter.type === 'mcap' ? 'Amount' : filter.type === 'percentile' ? 'Percentile' : 'Score' }}):
               </span>
-              <span class="text-xs text-gray-300">
-                {{ filter.min !== undefined ? filter.min : 'Min' }} - 
-                {{ filter.max !== undefined ? filter.max : 'Max' }}
-              </span>
+              <input
+                v-model.number="filter.min"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :min="filter.type === 'percentile' ? '0' : undefined"
+                :max="filter.type === 'percentile' ? '100' : undefined"
+                :placeholder="filter.type === 'mcap' ? 'Min $' : 'Min'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filter.max"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :min="filter.type === 'percentile' ? '0' : undefined"
+                :max="filter.type === 'percentile' ? '100' : undefined"
+                :placeholder="filter.type === 'mcap' ? 'Max $' : 'Max'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-500 w-20"
+              />
               <button
                 @click="removeAvgMcapFilter(index)"
                 class="ml-1 text-gray-400 hover:text-red-400 transition"
@@ -261,6 +330,7 @@
                 </div>
                 <div v-if="expandedGroups.tokenCount" class="ml-4 space-y-1">
                   <div
+                    v-if="!isFilterAdded('totalTokens')"
                     @click="selectFilterType('totalTokens')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -272,6 +342,7 @@
                     Total Tokens
                   </div>
                   <div
+                    v-if="!isFilterAdded('bondedTokens')"
                     @click="selectFilterType('bondedTokens')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -304,6 +375,7 @@
                 </div>
                 <div v-if="expandedGroups.winRate" class="ml-4 space-y-1">
                   <div
+                    v-if="!isFilterAdded('winRatePercent') && !isFilterAdded('winRateScore')"
                     @click="selectFilterType('winRatePercent')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -315,6 +387,7 @@
                     Win Rate (Percentage)
                   </div>
                   <div
+                    v-if="!isFilterAdded('winRatePercent') && !isFilterAdded('winRateScore')"
                     @click="selectFilterType('winRateScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -347,6 +420,7 @@
                 </div>
                 <div v-if="expandedGroups.avgMcap" class="ml-4 space-y-1">
                   <div
+                    v-if="!isAvgMcapFilterAdded('mcap')"
                     @click="selectFilterType('avgMcapAmount')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -358,6 +432,7 @@
                     Average MCap (Amount)
                   </div>
                   <div
+                    v-if="!isAvgMcapFilterAdded('percentile')"
                     @click="selectFilterType('avgMcapPercentile')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -369,6 +444,7 @@
                     Average MCap (Percentile)
                   </div>
                   <div
+                    v-if="!isAvgMcapFilterAdded('score')"
                     @click="selectFilterType('avgMcapScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -380,175 +456,6 @@
                     Average MCap (Score)
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Filter Configuration Based on Type (Only show when selected) -->
-          <div v-if="newFilterType" class="space-y-3">
-            <!-- Total Tokens Configuration -->
-            <div v-if="newFilterType === 'totalTokens'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Total Tokens Range (1-150)</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.totalTokens.min"
-                  type="number"
-                  min="1"
-                  max="150"
-                  placeholder="Min"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.totalTokens.max"
-                  type="number"
-                  min="1"
-                  max="150"
-                  placeholder="Max"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Bonded Tokens Configuration -->
-            <div v-if="newFilterType === 'bondedTokens'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Bonded Tokens Range (0-150)</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.bondedTokens.min"
-                  type="number"
-                  min="0"
-                  max="150"
-                  placeholder="Min"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.bondedTokens.max"
-                  type="number"
-                  min="0"
-                  max="150"
-                  placeholder="Max"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Win Rate Percentage Configuration -->
-            <div v-if="newFilterType === 'winRatePercent'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Win Rate Percentage Range (0-100%)</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.winRatePercent.min"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="Min %"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.winRatePercent.max"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="Max %"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Win Rate Score Configuration -->
-            <div v-if="newFilterType === 'winRateScore'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Win Rate Score Range</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.winRateScore.min"
-                  type="number"
-                  step="0.1"
-                  placeholder="Min Score"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.winRateScore.max"
-                  type="number"
-                  step="0.1"
-                  placeholder="Max Score"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Average MCap Amount Configuration -->
-            <div v-if="newFilterType === 'avgMcapAmount'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Average Market Cap Amount ($)</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.avgMcapAmount.min"
-                  type="number"
-                  step="100"
-                  placeholder="Min $"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.avgMcapAmount.max"
-                  type="number"
-                  step="100"
-                  placeholder="Max $"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Average MCap Percentile Configuration -->
-            <div v-if="newFilterType === 'avgMcapPercentile'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Average Market Cap Percentile (0-100)</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.avgMcapPercentile.min"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="Min"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.avgMcapPercentile.max"
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.1"
-                  placeholder="Max"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-              </div>
-            </div>
-
-            <!-- Average MCap Score Configuration -->
-            <div v-if="newFilterType === 'avgMcapScore'" class="bg-gray-800/50 border border-gray-700 rounded-lg p-3">
-              <label class="block text-xs font-semibold text-gray-300 mb-2">Average Market Cap Score</label>
-              <div class="flex items-center gap-2">
-                <input
-                  v-model.number="newFilterConfig.avgMcapScore.min"
-                  type="number"
-                  step="0.1"
-                  placeholder="Min Score"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
-                <span class="text-xs text-gray-400">to</span>
-                <input
-                  v-model.number="newFilterConfig.avgMcapScore.max"
-                  type="number"
-                  step="0.1"
-                  placeholder="Max Score"
-                  class="px-2 py-1 text-xs bg-gray-900 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500 w-24"
-                />
               </div>
             </div>
           </div>
@@ -1066,6 +973,26 @@ const selectFilterType = (filterType: string) => {
   newFilterType.value = filterType
 }
 
+// Check if a filter is already added
+const isFilterAdded = (filterType: string): boolean => {
+  switch (filterType) {
+    case 'totalTokens':
+      return filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined
+    case 'bondedTokens':
+      return filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined
+    case 'winRatePercent':
+    case 'winRateScore':
+      return filters.value.winRate.type !== ''
+    default:
+      return false
+  }
+}
+
+// Check if an avg mcap filter type is already added
+const isAvgMcapFilterAdded = (filterType: 'mcap' | 'percentile' | 'score'): boolean => {
+  return filters.value.avgMcap.some(f => f.type === filterType)
+}
+
 // Confirm adding filter from dialog
 const confirmAddFilter = () => {
   if (!newFilterType.value) return
@@ -1073,56 +1000,54 @@ const confirmAddFilter = () => {
   switch (newFilterType.value) {
     case 'totalTokens':
       filters.value.totalTokens = {
-        min: newFilterConfig.value.totalTokens.min,
-        max: newFilterConfig.value.totalTokens.max
+        min: undefined,
+        max: undefined
       }
       break
     case 'bondedTokens':
       filters.value.bondedTokens = {
-        min: newFilterConfig.value.bondedTokens.min,
-        max: newFilterConfig.value.bondedTokens.max
+        min: undefined,
+        max: undefined
       }
       break
     case 'winRatePercent':
       filters.value.winRate = {
         type: 'percent',
-        percentMin: newFilterConfig.value.winRatePercent.min,
-        percentMax: newFilterConfig.value.winRatePercent.max
+        percentMin: undefined,
+        percentMax: undefined
       }
       break
     case 'winRateScore':
       filters.value.winRate = {
         type: 'score',
-        scoreMin: newFilterConfig.value.winRateScore.min,
-        scoreMax: newFilterConfig.value.winRateScore.max
+        scoreMin: undefined,
+        scoreMax: undefined
       }
       break
     case 'avgMcapAmount':
       filters.value.avgMcap.push({
         type: 'mcap',
-        min: newFilterConfig.value.avgMcapAmount.min,
-        max: newFilterConfig.value.avgMcapAmount.max
+        min: undefined,
+        max: undefined
       })
       break
     case 'avgMcapPercentile':
       filters.value.avgMcap.push({
         type: 'percentile',
-        min: newFilterConfig.value.avgMcapPercentile.min,
-        max: newFilterConfig.value.avgMcapPercentile.max
+        min: undefined,
+        max: undefined
       })
       break
     case 'avgMcapScore':
       filters.value.avgMcap.push({
         type: 'score',
-        min: newFilterConfig.value.avgMcapScore.min,
-        max: newFilterConfig.value.avgMcapScore.max
+        min: undefined,
+        max: undefined
       })
       break
   }
 
   cancelAddFilter()
-  // Auto-apply filters after adding
-  applyFilters()
 }
 
 // Cancel adding filter
@@ -1182,8 +1107,8 @@ const clearFilters = () => {
 // Check if filters are active
 const hasActiveFilters = computed(() => {
   return !!(
-    (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) ||
-    (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) ||
+    Object.keys(filters.value.totalTokens).length > 0 ||
+    Object.keys(filters.value.bondedTokens).length > 0 ||
     filters.value.winRate.type ||
     filters.value.avgMcap.length > 0
   )
@@ -1191,8 +1116,8 @@ const hasActiveFilters = computed(() => {
 
 const activeFilterCount = computed(() => {
   let count = 0
-  if (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) count++
-  if (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) count++
+  if (Object.keys(filters.value.totalTokens).length > 0) count++
+  if (Object.keys(filters.value.bondedTokens).length > 0) count++
   if (filters.value.winRate.type) count++
   count += filters.value.avgMcap.length
   return count
