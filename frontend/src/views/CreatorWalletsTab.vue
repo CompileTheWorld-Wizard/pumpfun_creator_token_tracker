@@ -327,19 +327,49 @@
         </div>
         
         <div class="space-y-4">
+          <!-- Search Box -->
+          <div>
+            <label class="block text-sm font-semibold text-gray-300 mb-2">Search Filter Type:</label>
+            <div class="relative">
+              <input
+                v-model="filterSearchQuery"
+                type="text"
+                placeholder="Search filters..."
+                class="w-full px-3 py-2.5 pl-10 bg-gray-800/80 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-1 focus:ring-purple-500 focus:border-purple-500 outline-none transition text-sm"
+              />
+              <svg 
+                class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+              </svg>
+              <button
+                v-if="filterSearchQuery"
+                @click="filterSearchQuery = ''"
+                class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-200 transition"
+              >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
           <!-- Filter Type Selection (Tree) -->
           <div>
             <label class="block text-sm font-semibold text-gray-300 mb-2">Select Filter Type:</label>
             <div class="bg-gray-800/50 border border-gray-700 rounded-lg p-3 max-h-64 overflow-y-auto">
               <!-- Token Count Group -->
-              <div class="mb-2">
+              <div v-if="shouldShowFilterItem('Total Tokens', 'Token Count') || shouldShowFilterItem('Bonded Tokens', 'Token Count')" class="mb-2">
                 <div 
                   @click="expandedGroups.tokenCount = !expandedGroups.tokenCount"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
                 >
                   <svg 
                     class="w-3 h-3 transition-transform"
-                    :class="{ 'rotate-90': expandedGroups.tokenCount }"
+                    :class="{ 'rotate-90': expandedGroups.tokenCount || (filterSearchQuery && (shouldShowFilterItem('Total Tokens', 'Token Count') || shouldShowFilterItem('Bonded Tokens', 'Token Count'))) }"
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -348,8 +378,9 @@
                   </svg>
                   Token Count
                 </div>
-                <div v-if="expandedGroups.tokenCount" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.tokenCount || (filterSearchQuery && (shouldShowFilterItem('Total Tokens', 'Token Count') || shouldShowFilterItem('Bonded Tokens', 'Token Count')))" class="ml-4 space-y-1">
                   <div
+                    v-if="shouldShowFilterItem('Total Tokens', 'Token Count')"
                     @click="!isFilterAdded('totalTokens') && selectFilterType('totalTokens')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -363,6 +394,7 @@
                     Total Tokens
                   </div>
                   <div
+                    v-if="shouldShowFilterItem('Bonded Tokens', 'Token Count')"
                     @click="!isFilterAdded('bondedTokens') && selectFilterType('bondedTokens')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -379,14 +411,14 @@
               </div>
 
               <!-- Win Rate Group -->
-              <div class="mb-2">
+              <div v-if="shouldShowFilterItem('Win Rate (Percentage)', 'Win Rate') || shouldShowFilterItem('Win Rate (Score)', 'Win Rate')" class="mb-2">
                 <div 
                   @click="expandedGroups.winRate = !expandedGroups.winRate"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
                 >
                   <svg 
                     class="w-3 h-3 transition-transform"
-                    :class="{ 'rotate-90': expandedGroups.winRate }"
+                    :class="{ 'rotate-90': expandedGroups.winRate || (filterSearchQuery && (shouldShowFilterItem('Win Rate (Percentage)', 'Win Rate') || shouldShowFilterItem('Win Rate (Score)', 'Win Rate'))) }"
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -395,8 +427,9 @@
                   </svg>
                   Win Rate
                 </div>
-                <div v-if="expandedGroups.winRate" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.winRate || (filterSearchQuery && (shouldShowFilterItem('Win Rate (Percentage)', 'Win Rate') || shouldShowFilterItem('Win Rate (Score)', 'Win Rate')))" class="ml-4 space-y-1">
                   <div
+                    v-if="shouldShowFilterItem('Win Rate (Percentage)', 'Win Rate')"
                     @click="!isWinRateFilterAdded('percent') && selectFilterType('winRatePercent')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -410,6 +443,7 @@
                     Win Rate (Percentage)
                   </div>
                   <div
+                    v-if="shouldShowFilterItem('Win Rate (Score)', 'Win Rate')"
                     @click="!isWinRateFilterAdded('score') && selectFilterType('winRateScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -426,14 +460,14 @@
               </div>
 
               <!-- Average Market Cap Group -->
-              <div class="mb-2">
+              <div v-if="shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap')" class="mb-2">
                 <div 
                   @click="expandedGroups.avgMcap = !expandedGroups.avgMcap"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
                 >
                   <svg 
                     class="w-3 h-3 transition-transform"
-                    :class="{ 'rotate-90': expandedGroups.avgMcap }"
+                    :class="{ 'rotate-90': expandedGroups.avgMcap || (filterSearchQuery && (shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap'))) }"
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -442,8 +476,9 @@
                   </svg>
                   Average Market Cap
                 </div>
-                <div v-if="expandedGroups.avgMcap" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.avgMcap || (filterSearchQuery && (shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap')))" class="ml-4 space-y-1">
                   <div
+                    v-if="shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap')"
                     @click="!isAvgMcapFilterAdded('mcap') && selectFilterType('avgMcapAmount')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -457,6 +492,7 @@
                     Average MCap (Amount)
                   </div>
                   <div
+                    v-if="shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap')"
                     @click="!isAvgMcapFilterAdded('percentile') && selectFilterType('avgMcapPercentile')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -470,6 +506,7 @@
                     Average MCap (Percentile)
                   </div>
                   <div
+                    v-if="shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap')"
                     @click="!isAvgMcapFilterAdded('score') && selectFilterType('avgMcapScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -486,14 +523,14 @@
               </div>
 
               <!-- Median ATH Market Cap Group -->
-              <div>
+              <div v-if="shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')">
                 <div 
                   @click="expandedGroups.medianMcap = !expandedGroups.medianMcap"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
                 >
                   <svg 
                     class="w-3 h-3 transition-transform"
-                    :class="{ 'rotate-90': expandedGroups.medianMcap }"
+                    :class="{ 'rotate-90': expandedGroups.medianMcap || (filterSearchQuery && (shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap'))) }"
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -502,8 +539,9 @@
                   </svg>
                   Median ATH Market Cap
                 </div>
-                <div v-if="expandedGroups.medianMcap" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.medianMcap || (filterSearchQuery && (shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap'))" class="ml-4 space-y-1">
                   <div
+                    v-if="shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap')"
                     @click="!isMedianMcapFilterAdded('mcap') && selectFilterType('medianMcapAmount')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -517,6 +555,7 @@
                     Median MCap (Amount)
                   </div>
                   <div
+                    v-if="shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')"
                     @click="!isMedianMcapFilterAdded('score') && selectFilterType('medianMcapScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded transition',
@@ -544,7 +583,7 @@
             </button>
             <button
               @click="confirmAddFilter"
-              :disabled="!newFilterType"
+              :disabled="!newFilterType || isSelectedFilterAlreadyAdded"
               class="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add Filter
@@ -955,6 +994,7 @@ const scoringSettings = ref<ScoringSettings | null>(null)
 const showAddFilterDialog = ref(false)
 const newFilterType = ref<string>('')
 const addedFilterTypes = ref<Set<string>>(new Set())
+const filterSearchQuery = ref<string>('')
 
 // Tree expansion state
 const expandedGroups = ref({
@@ -1055,6 +1095,43 @@ const selectFilterType = (filterType: string) => {
   newFilterType.value = filterType
 }
 
+// Check if a filter item should be shown based on search
+const shouldShowFilterItem = (itemName: string, groupName?: string): boolean => {
+  if (!filterSearchQuery.value) return true
+  const query = filterSearchQuery.value.toLowerCase().trim()
+  const itemMatches = itemName.toLowerCase().includes(query)
+  const groupMatches = groupName ? groupName.toLowerCase().includes(query) : false
+  return itemMatches || groupMatches
+}
+
+// Check if the currently selected filter is already added
+const isSelectedFilterAlreadyAdded = computed(() => {
+  if (!newFilterType.value) return false
+  
+  switch (newFilterType.value) {
+    case 'totalTokens':
+      return isFilterAdded('totalTokens')
+    case 'bondedTokens':
+      return isFilterAdded('bondedTokens')
+    case 'winRatePercent':
+      return isWinRateFilterAdded('percent')
+    case 'winRateScore':
+      return isWinRateFilterAdded('score')
+    case 'avgMcapAmount':
+      return isAvgMcapFilterAdded('mcap')
+    case 'avgMcapPercentile':
+      return isAvgMcapFilterAdded('percentile')
+    case 'avgMcapScore':
+      return isAvgMcapFilterAdded('score')
+    case 'medianMcapAmount':
+      return isMedianMcapFilterAdded('mcap')
+    case 'medianMcapScore':
+      return isMedianMcapFilterAdded('score')
+    default:
+      return false
+  }
+})
+
 // Check if a filter is already added
 const isFilterAdded = (filterType: string): boolean => {
   return addedFilterTypes.value.has(filterType)
@@ -1152,6 +1229,7 @@ const confirmAddFilter = () => {
 const cancelAddFilter = () => {
   showAddFilterDialog.value = false
   newFilterType.value = ''
+  filterSearchQuery.value = ''
   // Reset all config values
   newFilterConfig.value = {
     totalTokens: { min: undefined, max: undefined },
