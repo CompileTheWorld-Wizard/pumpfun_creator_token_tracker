@@ -375,7 +375,7 @@
                 </div>
                 <div v-if="expandedGroups.winRate" class="ml-4 space-y-1">
                   <div
-                    v-if="!isFilterAdded('winRatePercent') && !isFilterAdded('winRateScore')"
+                    v-if="!addedFilterTypes.has('winRate')"
                     @click="selectFilterType('winRatePercent')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -387,7 +387,7 @@
                     Win Rate (Percentage)
                   </div>
                   <div
-                    v-if="!isFilterAdded('winRatePercent') && !isFilterAdded('winRateScore')"
+                    v-if="!addedFilterTypes.has('winRate')"
                     @click="selectFilterType('winRateScore')"
                     :class="[
                       'px-2 py-1.5 text-xs rounded cursor-pointer transition',
@@ -976,6 +976,10 @@ const selectFilterType = (filterType: string) => {
 
 // Check if a filter is already added
 const isFilterAdded = (filterType: string): boolean => {
+  // Handle winRate sub-types
+  if (filterType === 'winRatePercent' || filterType === 'winRateScore') {
+    return addedFilterTypes.value.has('winRate')
+  }
   return addedFilterTypes.value.has(filterType)
 }
 
