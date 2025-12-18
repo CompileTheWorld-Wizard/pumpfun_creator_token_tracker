@@ -1160,6 +1160,26 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by median market cap (all filters must match - AND logic)
+        if (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.length > 0) {
+          for (const filter of filters.medianMcap) {
+            if (filter.type === 'mcap') {
+              if (wallet.medianAthMcap === null) return false;
+              const matches = (
+                (filter.min === undefined || wallet.medianAthMcap >= filter.min) &&
+                (filter.max === undefined || wallet.medianAthMcap <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'score') {
+              const matches = (
+                (filter.min === undefined || wallet.scores.medianAthMcapScore >= filter.min) &&
+                (filter.max === undefined || wallet.scores.medianAthMcapScore <= filter.max)
+              );
+              if (!matches) return false;
+            }
+          }
+        }
+        
         return true;
       });
     }

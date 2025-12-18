@@ -269,6 +269,41 @@
               </button>
             </div>
 
+            <!-- Median ATH Market Cap Filter Widgets -->
+            <div
+              v-for="(filter, index) in filters.medianMcap"
+              :key="index"
+              class="inline-flex items-center gap-2 px-3 py-2 bg-orange-600/20 border border-orange-500/30 rounded-lg"
+            >
+              <span class="text-xs font-semibold text-orange-300">
+                Median MCap ({{ filter.type === 'mcap' ? 'Amount' : 'Score' }}):
+              </span>
+              <input
+                v-model.number="filter.min"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :placeholder="filter.type === 'mcap' ? 'Min $' : 'Min Score'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filter.max"
+                type="number"
+                :step="filter.type === 'mcap' ? '100' : '0.1'"
+                :placeholder="filter.type === 'mcap' ? 'Max $' : 'Max Score'"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 w-20"
+              />
+              <button
+                @click="removeMedianMcapFilter(index)"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
             <p v-if="!hasActiveFilters" class="text-xs text-gray-500 py-2">
               No filters active. Click "Add Filter" to add filters.
             </p>
@@ -402,7 +437,7 @@
               </div>
 
               <!-- Average Market Cap Group -->
-              <div>
+              <div class="mb-2">
                 <div 
                   @click="expandedGroups.avgMcap = !expandedGroups.avgMcap"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
@@ -454,6 +489,51 @@
                     ]"
                   >
                     Average MCap (Score)
+                  </div>
+                </div>
+              </div>
+
+              <!-- Median ATH Market Cap Group -->
+              <div>
+                <div 
+                  @click="expandedGroups.medianMcap = !expandedGroups.medianMcap"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.medianMcap }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Median ATH Market Cap
+                </div>
+                <div v-if="expandedGroups.medianMcap" class="ml-4 space-y-1">
+                  <div
+                    v-if="!isMedianMcapFilterAdded('mcap')"
+                    @click="selectFilterType('medianMcapAmount')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'medianMcapAmount' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Median MCap (Amount)
+                  </div>
+                  <div
+                    v-if="!isMedianMcapFilterAdded('score')"
+                    @click="selectFilterType('medianMcapScore')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded cursor-pointer transition',
+                      newFilterType === 'medianMcapScore' 
+                        ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50' 
+                        : 'text-gray-300 hover:bg-gray-700/50'
+                    ]"
+                  >
+                    Median MCap (Score)
                   </div>
                 </div>
               </div>
@@ -886,7 +966,8 @@ const addedFilterTypes = ref<Set<string>>(new Set())
 const expandedGroups = ref({
   tokenCount: true,
   winRate: false,
-  avgMcap: false
+  avgMcap: false,
+  medianMcap: false
 })
 
 // New filter configuration state
@@ -897,7 +978,9 @@ const newFilterConfig = ref({
   winRateScore: { min: undefined as number | undefined, max: undefined as number | undefined },
   avgMcapAmount: { min: undefined as number | undefined, max: undefined as number | undefined },
   avgMcapPercentile: { min: undefined as number | undefined, max: undefined as number | undefined },
-  avgMcapScore: { min: undefined as number | undefined, max: undefined as number | undefined }
+  avgMcapScore: { min: undefined as number | undefined, max: undefined as number | undefined },
+  medianMcapAmount: { min: undefined as number | undefined, max: undefined as number | undefined },
+  medianMcapScore: { min: undefined as number | undefined, max: undefined as number | undefined }
 })
 
 interface FilterPreset {
@@ -926,13 +1009,19 @@ interface Filters {
     min?: number
     max?: number
   }>
+  medianMcap: Array<{
+    type: 'mcap' | 'score'
+    min?: number
+    max?: number
+  }>
 }
 
 const filters = ref<Filters>({
   totalTokens: {},
   bondedTokens: {},
   winRate: { type: '' },
-  avgMcap: []
+  avgMcap: [],
+  medianMcap: []
 })
 
 // Load filter presets from localStorage
@@ -986,6 +1075,11 @@ const isFilterAdded = (filterType: string): boolean => {
 // Check if an avg mcap filter type is already added
 const isAvgMcapFilterAdded = (filterType: 'mcap' | 'percentile' | 'score'): boolean => {
   return filters.value.avgMcap.some(f => f.type === filterType)
+}
+
+// Check if a median mcap filter type is already added
+const isMedianMcapFilterAdded = (filterType: 'mcap' | 'score'): boolean => {
+  return filters.value.medianMcap.some(f => f.type === filterType)
 }
 
 // Confirm adding filter from dialog
@@ -1044,6 +1138,20 @@ const confirmAddFilter = () => {
         max: undefined
       })
       break
+    case 'medianMcapAmount':
+      filters.value.medianMcap.push({
+        type: 'mcap',
+        min: undefined,
+        max: undefined
+      })
+      break
+    case 'medianMcapScore':
+      filters.value.medianMcap.push({
+        type: 'score',
+        min: undefined,
+        max: undefined
+      })
+      break
   }
 
   cancelAddFilter()
@@ -1061,13 +1169,16 @@ const cancelAddFilter = () => {
     winRateScore: { min: undefined, max: undefined },
     avgMcapAmount: { min: undefined, max: undefined },
     avgMcapPercentile: { min: undefined, max: undefined },
-    avgMcapScore: { min: undefined, max: undefined }
+    avgMcapScore: { min: undefined, max: undefined },
+    medianMcapAmount: { min: undefined, max: undefined },
+    medianMcapScore: { min: undefined, max: undefined }
   }
   // Reset tree expansion
   expandedGroups.value = {
     tokenCount: true,
     winRate: false,
-    avgMcap: false
+    avgMcap: false,
+    medianMcap: false
   }
 }
 
@@ -1094,13 +1205,19 @@ const removeAvgMcapFilter = (index: number) => {
   filters.value.avgMcap.splice(index, 1)
 }
 
+// Remove median market cap filter
+const removeMedianMcapFilter = (index: number) => {
+  filters.value.medianMcap.splice(index, 1)
+}
+
 // Clear all filters
 const clearFilters = () => {
   filters.value = {
     totalTokens: {},
     bondedTokens: {},
     winRate: { type: '' },
-    avgMcap: []
+    avgMcap: [],
+    medianMcap: []
   }
   addedFilterTypes.value.clear()
   selectedFilterPreset.value = ''
@@ -1113,7 +1230,8 @@ const hasActiveFilters = computed(() => {
     addedFilterTypes.value.has('totalTokens') ||
     addedFilterTypes.value.has('bondedTokens') ||
     addedFilterTypes.value.has('winRate') ||
-    filters.value.avgMcap.length > 0
+    filters.value.avgMcap.length > 0 ||
+    filters.value.medianMcap.length > 0
   )
 })
 
@@ -1123,6 +1241,7 @@ const activeFilterCount = computed(() => {
   if (addedFilterTypes.value.has('bondedTokens')) count++
   if (addedFilterTypes.value.has('winRate')) count++
   count += filters.value.avgMcap.length
+  count += filters.value.medianMcap.length
   return count
 })
 
@@ -1323,6 +1442,10 @@ const loadWallets = async () => {
     
     if (filters.value.avgMcap.length > 0) {
       filterParams.avgMcap = filters.value.avgMcap
+    }
+    
+    if (filters.value.medianMcap.length > 0) {
+      filterParams.medianMcap = filters.value.medianMcap
     }
     
     const response = await getCreatorWalletsAnalytics(

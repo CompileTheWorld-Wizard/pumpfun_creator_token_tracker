@@ -76,6 +76,11 @@ export interface FilterParams {
     min?: number;
     max?: number;
   }>;
+  medianMcap?: Array<{
+    type: 'mcap' | 'score';
+    min?: number;
+    max?: number;
+  }>;
 }
 
 export async function getCreatorWalletsAnalytics(
