@@ -324,6 +324,41 @@
               </button>
             </div>
 
+            <!-- Expected ROI Filter Widgets -->
+            <div
+              v-for="(filter, index) in filters.expectedROI"
+              :key="index"
+              class="inline-flex items-center gap-2 px-3 py-2 bg-pink-600/20 border border-pink-500/30 rounded-lg"
+            >
+              <span class="text-xs font-semibold text-pink-300">
+                Expected ROI ({{ filter.type === '1st' ? '1st' : filter.type === '2nd' ? '2nd' : '3rd' }}):
+              </span>
+              <input
+                v-model.number="filter.min"
+                type="number"
+                step="0.1"
+                placeholder="Min %"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-pink-500 w-20"
+              />
+              <span class="text-xs text-gray-400">to</span>
+              <input
+                v-model.number="filter.max"
+                type="number"
+                step="0.1"
+                placeholder="Max %"
+                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-pink-500 w-20"
+              />
+              <button
+                @click="removeExpectedROIFilter(index)"
+                class="ml-1 text-gray-400 hover:text-red-400 transition"
+                title="Remove filter"
+              >
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
             <p v-if="!hasActiveFilters" class="text-xs text-gray-500 py-2">
               No filters active. Click "Add Filter" to add filters.
             </p>
@@ -679,6 +714,69 @@
                     ]"
                   >
                     Sell SOLs
+                  </div>
+                </div>
+              </div>
+
+              <!-- Expected ROI Group -->
+              <div v-if="shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')" class="mb-2">
+                <div 
+                  @click="expandedGroups.expectedROI = !expandedGroups.expectedROI"
+                  class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
+                >
+                  <svg 
+                    class="w-3 h-3 transition-transform"
+                    :class="{ 'rotate-90': expandedGroups.expectedROI || (filterSearchQuery && (shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI'))) }"
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                  </svg>
+                  Expected ROI
+                </div>
+                <div v-if="expandedGroups.expectedROI || (filterSearchQuery && (shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')))" class="ml-4 space-y-1">
+                  <div
+                    v-if="shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI')"
+                    @click="!isExpectedROIFilterAdded('1st') && selectFilterType('expectedROI1st')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded transition',
+                      isExpectedROIFilterAdded('1st')
+                        ? 'text-gray-500 cursor-not-allowed opacity-50'
+                        : newFilterType === 'expectedROI1st' 
+                          ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                          : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                    ]"
+                  >
+                    Expected ROI (1st)
+                  </div>
+                  <div
+                    v-if="shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI')"
+                    @click="!isExpectedROIFilterAdded('2nd') && selectFilterType('expectedROI2nd')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded transition',
+                      isExpectedROIFilterAdded('2nd')
+                        ? 'text-gray-500 cursor-not-allowed opacity-50'
+                        : newFilterType === 'expectedROI2nd' 
+                          ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                          : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                    ]"
+                  >
+                    Expected ROI (2nd)
+                  </div>
+                  <div
+                    v-if="shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')"
+                    @click="!isExpectedROIFilterAdded('3rd') && selectFilterType('expectedROI3rd')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded transition',
+                      isExpectedROIFilterAdded('3rd')
+                        ? 'text-gray-500 cursor-not-allowed opacity-50'
+                        : newFilterType === 'expectedROI3rd' 
+                          ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                          : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                    ]"
+                  >
+                    Expected ROI (3rd)
                   </div>
                 </div>
               </div>
@@ -1119,7 +1217,8 @@ const expandedGroups = ref({
   winRate: false,
   avgMcap: false,
   medianMcap: false,
-  avgBuySells: false
+  avgBuySells: false,
+  expectedROI: false
 })
 
 // New filter configuration state
@@ -1169,6 +1268,11 @@ interface Filters {
     min?: number
     max?: number
   }>
+  expectedROI: Array<{
+    type: '1st' | '2nd' | '3rd'
+    min?: number
+    max?: number
+  }>
 }
 
 const filters = ref<Filters>({
@@ -1177,7 +1281,8 @@ const filters = ref<Filters>({
   winRate: [],
   avgMcap: [],
   medianMcap: [],
-  avgBuySells: []
+  avgBuySells: [],
+  expectedROI: []
 })
 
 // Load filter presets from localStorage
@@ -1259,6 +1364,12 @@ const isSelectedFilterAlreadyAdded = computed(() => {
       return isAvgBuySellsFilterAdded('sellCount')
     case 'avgSellSol':
       return isAvgBuySellsFilterAdded('sellSol')
+    case 'expectedROI1st':
+      return isExpectedROIFilterAdded('1st')
+    case 'expectedROI2nd':
+      return isExpectedROIFilterAdded('2nd')
+    case 'expectedROI3rd':
+      return isExpectedROIFilterAdded('3rd')
     default:
       return false
   }
@@ -1289,6 +1400,11 @@ const isAvgBuySellsFilterAdded = (filterType: 'buyCount' | 'buySol' | 'sellCount
   return filters.value.avgBuySells.some(f => f.type === filterType)
 }
 
+// Check if an expected ROI filter type is already added
+const isExpectedROIFilterAdded = (filterType: '1st' | '2nd' | '3rd'): boolean => {
+  return filters.value.expectedROI.some(f => f.type === filterType)
+}
+
 // Get label for avg buy/sells filter
 const getAvgBuySellsFilterLabel = (type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'): string => {
   switch (type) {
@@ -1314,8 +1430,9 @@ const hasVisibleFilterItems = computed(() => {
   const hasAvgMcap = shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap')
   const hasMedianMcap = shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')
   const hasAvgBuySells = shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells')
+  const hasExpectedROI = shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')
   
-  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells
+  return hasTokenCount || hasWinRate || hasAvgMcap || hasMedianMcap || hasAvgBuySells || hasExpectedROI
 })
 
 // Confirm adding filter from dialog
@@ -1414,6 +1531,27 @@ const confirmAddFilter = () => {
         max: undefined
       })
       break
+    case 'expectedROI1st':
+      filters.value.expectedROI.push({
+        type: '1st',
+        min: undefined,
+        max: undefined
+      })
+      break
+    case 'expectedROI2nd':
+      filters.value.expectedROI.push({
+        type: '2nd',
+        min: undefined,
+        max: undefined
+      })
+      break
+    case 'expectedROI3rd':
+      filters.value.expectedROI.push({
+        type: '3rd',
+        min: undefined,
+        max: undefined
+      })
+      break
   }
 
   cancelAddFilter()
@@ -1442,7 +1580,8 @@ const cancelAddFilter = () => {
     winRate: false,
     avgMcap: false,
     medianMcap: false,
-    avgBuySells: false
+    avgBuySells: false,
+    expectedROI: false
   }
 }
 
@@ -1480,6 +1619,11 @@ const removeAvgBuySellsFilter = (index: number) => {
   filters.value.avgBuySells.splice(index, 1)
 }
 
+// Remove expected ROI filter
+const removeExpectedROIFilter = (index: number) => {
+  filters.value.expectedROI.splice(index, 1)
+}
+
 // Clear all filters
 const clearFilters = () => {
   filters.value = {
@@ -1488,7 +1632,8 @@ const clearFilters = () => {
     winRate: [],
     avgMcap: [],
     medianMcap: [],
-    avgBuySells: []
+    avgBuySells: [],
+    expectedROI: []
   }
   addedFilterTypes.value.clear()
   selectedFilterPreset.value = ''
@@ -1503,7 +1648,8 @@ const hasActiveFilters = computed(() => {
     filters.value.winRate.length > 0 ||
     filters.value.avgMcap.length > 0 ||
     filters.value.medianMcap.length > 0 ||
-    filters.value.avgBuySells.length > 0
+    filters.value.avgBuySells.length > 0 ||
+    filters.value.expectedROI.length > 0
   )
 })
 
@@ -1515,6 +1661,7 @@ const activeFilterCount = computed(() => {
   count += filters.value.avgMcap.length
   count += filters.value.medianMcap.length
   count += filters.value.avgBuySells.length
+  count += filters.value.expectedROI.length
   return count
 })
 
@@ -1714,6 +1861,10 @@ const loadWallets = async () => {
     
     if (filters.value.avgBuySells.length > 0) {
       filterParams.avgBuySells = filters.value.avgBuySells
+    }
+    
+    if (filters.value.expectedROI.length > 0) {
+      filterParams.expectedROI = filters.value.expectedROI
     }
     
     const response = await getCreatorWalletsAnalytics(

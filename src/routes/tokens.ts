@@ -1211,6 +1211,31 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
         }
         
+        // Filter by expected ROI (all filters must match - AND logic)
+        if (filters.expectedROI && Array.isArray(filters.expectedROI) && filters.expectedROI.length > 0) {
+          for (const filter of filters.expectedROI) {
+            if (filter.type === '1st') {
+              const matches = (
+                (filter.min === undefined || wallet.expectedROI.avgRoi1stBuy >= filter.min) &&
+                (filter.max === undefined || wallet.expectedROI.avgRoi1stBuy <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === '2nd') {
+              const matches = (
+                (filter.min === undefined || wallet.expectedROI.avgRoi2ndBuy >= filter.min) &&
+                (filter.max === undefined || wallet.expectedROI.avgRoi2ndBuy <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === '3rd') {
+              const matches = (
+                (filter.min === undefined || wallet.expectedROI.avgRoi3rdBuy >= filter.min) &&
+                (filter.max === undefined || wallet.expectedROI.avgRoi3rdBuy <= filter.max)
+              );
+              if (!matches) return false;
+            }
+          }
+        }
+        
         return true;
       });
     }

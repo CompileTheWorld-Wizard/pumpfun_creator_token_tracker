@@ -84,6 +84,11 @@ export interface FilterParams {
     min?: number;
     max?: number;
   }>;
+  expectedROI?: Array<{
+    type: '1st' | '2nd' | '3rd';
+    min?: number;
+    max?: number;
+  }>;
 }
 
 export async function getCreatorWalletsAnalytics(
