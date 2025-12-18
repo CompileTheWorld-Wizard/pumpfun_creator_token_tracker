@@ -111,55 +111,119 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
     // Fetch latest 100 tokens created by this wallet from Solscan
     const response = await getCreatedTokens(creatorAddress) as any;
     
-    if (!response?.data || !Array.isArray(response.data)) {
-      console.log(`[TokenTracker] No tokens found for creator: ${creatorAddress}`);
-      return;
-    }
-    
     const tokenMintsSet = new Set<string>();
     const tokenDataMap = new Map<string, { name: string; symbol: string; blockTime: number }>();
     const MAX_TOKENS = 100; // Limit to 100 tokens as per requirements
     
-    // Extract token mints from the response (limit to 100)
-    for (const activity of response.data) {
-      // Try multiple possible fields for token mint address in INIT_MINT activities
-      const tokenMint = activity.token || 
-                       activity.mint || 
-                       activity.token_address ||
-                       activity.routers?.token1 ||
-                       activity.routers?.token0;
-      
-      if (tokenMint && 
-          typeof tokenMint === 'string' &&
-          tokenMint !== 'So11111111111111111111111111111111111111111' &&
-          tokenMint !== 'So11111111111111111111111111111111111111112') {
+    // Extract token mints from the response (limit to 100) if Solscan returned data
+    if (response?.data && Array.isArray(response.data)) {
+      for (const activity of response.data) {
+        // Try multiple possible fields for token mint address in INIT_MINT activities
+        const tokenMint = activity.token || 
+                         activity.mint || 
+                         activity.token_address ||
+                         activity.routers?.token1 ||
+                         activity.routers?.token0;
         
-        // Limit to 100 tokens
-        if (tokenMintsSet.size >= MAX_TOKENS) {
-          break;
-        }
-        
-        if (!tokenMintsSet.has(tokenMint)) {
-          tokenMintsSet.add(tokenMint);
+        if (tokenMint && 
+            typeof tokenMint === 'string' &&
+            tokenMint !== 'So11111111111111111111111111111111111111111' &&
+            tokenMint !== 'So11111111111111111111111111111111111111112') {
           
-          // Get token metadata from response
-          const tokenMeta = response.metadata?.tokens?.[tokenMint] || {};
-          const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
+          // Limit to 100 tokens
+          if (tokenMintsSet.size >= MAX_TOKENS) {
+            break;
+          }
           
-          tokenDataMap.set(tokenMint, {
-            name: tokenMeta?.token_name || tokenMeta?.name || '',
-            symbol: tokenMeta?.token_symbol || tokenMeta?.symbol || '',
-            blockTime,
-          });
+          if (!tokenMintsSet.has(tokenMint)) {
+            tokenMintsSet.add(tokenMint);
+            
+            // Get token metadata from response
+            const tokenMeta = response.metadata?.tokens?.[tokenMint] || {};
+            const blockTime = activity.block_time || Math.floor(Date.now() / 1000);
+            
+            tokenDataMap.set(tokenMint, {
+              name: tokenMeta?.token_name || tokenMeta?.name || '',
+              symbol: tokenMeta?.token_symbol || tokenMeta?.symbol || '',
+              blockTime,
+            });
+          }
         }
       }
+    } else {
+      console.log(`[TokenTracker] No tokens found in Solscan response for creator: ${creatorAddress}`);
     }
     
     const tokenMints = Array.from(tokenMintsSet);
     
+    // If Solscan didn't return valid tokens, check database for tokens from this creator
     if (tokenMints.length === 0) {
-      console.log(`[TokenTracker] No valid tokens found for creator: ${creatorAddress}`);
-      return;
+      console.log(`[TokenTracker] No valid tokens found from Solscan for creator: ${creatorAddress}, checking database...`);
+      
+      try {
+        // Get tokens from database for this creator
+        const dbResult = await pool.query(
+          `SELECT mint, name, symbol, created_at, bonded
+           FROM tbl_soltrack_created_tokens
+           WHERE creator = $1
+           ORDER BY created_at DESC
+           LIMIT $2`,
+          [creatorAddress, MAX_TOKENS]
+        );
+        
+        if (dbResult.rows.length === 0) {
+          console.log(`[TokenTracker] No tokens found in database for creator: ${creatorAddress}`);
+          return;
+        }
+        
+        // Extract token mints from database
+        const dbTokenMints = dbResult.rows.map(row => row.mint);
+        console.log(`[TokenTracker] Found ${dbTokenMints.length} tokens in database for creator ${creatorAddress}`);
+        
+        // Fetch bonding status for database tokens
+        const bondingStatusMap = await fetchBondingStatusBatch(dbTokenMints);
+        
+        // Update bonding status in database based on Shyft API response
+        const bondedTokens: string[] = [];
+        const unbondedTokens: string[] = [];
+        
+        for (const mint of dbTokenMints) {
+          const isBonded = bondingStatusMap.get(mint) || false;
+          if (isBonded) {
+            bondedTokens.push(mint);
+          } else {
+            unbondedTokens.push(mint);
+          }
+        }
+        
+        // Update database with latest bonding status from Shyft API
+        if (bondedTokens.length > 0) {
+          const bondedPlaceholders = bondedTokens.map((_, i) => `$${i + 1}`).join(', ');
+          await pool.query(
+            `UPDATE tbl_soltrack_created_tokens 
+             SET bonded = true, updated_at = NOW()
+             WHERE mint IN (${bondedPlaceholders})`,
+            bondedTokens
+          );
+        }
+        
+        if (unbondedTokens.length > 0) {
+          const unbondedPlaceholders = unbondedTokens.map((_, i) => `$${i + 1}`).join(', ');
+          await pool.query(
+            `UPDATE tbl_soltrack_created_tokens 
+             SET bonded = false, updated_at = NOW()
+             WHERE mint IN (${unbondedPlaceholders})`,
+            unbondedTokens
+          );
+        }
+        
+        console.log(`[TokenTracker] Updated bonding status for ${dbTokenMints.length} tokens from database (${bondedTokens.length} bonded, ${unbondedTokens.length} unbonded)`);
+        
+        return;
+      } catch (dbError) {
+        console.error(`[TokenTracker] Error checking database for creator ${creatorAddress}:`, dbError);
+        return;
+      }
     }
     
     console.log(`[TokenTracker] Found ${tokenMints.length} tokens for creator ${creatorAddress} (limited to ${MAX_TOKENS})`);
