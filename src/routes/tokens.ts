@@ -695,8 +695,6 @@ function calculateWhatIfPNL(
   avgPnlPercent: number;
   tokensSimulated: number;
 } {
-  const DEFAULT_TOKEN_SUPPLY = 1_000_000_000; // 1 billion tokens
-  
   if (tokens.length === 0) {
     return {
       avgPnl: 0,
