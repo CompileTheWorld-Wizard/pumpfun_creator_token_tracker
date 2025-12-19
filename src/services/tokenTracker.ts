@@ -68,7 +68,6 @@ export interface TokenTrackingResult {
  */
 export async function initializeTokenTracker(): Promise<void> {
   await refreshBlacklistedWallets();
-  console.log(`[TokenTracker] Initialized with ${blacklistedCreatorWallets.size} blacklisted wallets`);
 }
 
 /**
@@ -106,8 +105,6 @@ export function isBlacklistedCreator(walletAddress: string): boolean {
  */
 async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promise<void> {
   try {
-    console.log(`[TokenTracker] Fetching tokens for creator: ${creatorAddress}`);
-    
     // Fetch latest 100 tokens created by this wallet from Solscan
     const response = await getCreatedTokens(creatorAddress) as any;
     
@@ -150,16 +147,12 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
           }
         }
       }
-    } else {
-      console.log(`[TokenTracker] No tokens found in Solscan response for creator: ${creatorAddress}`);
     }
     
     const tokenMints = Array.from(tokenMintsSet);
     
     // If Solscan didn't return valid tokens, check database for tokens from this creator
     if (tokenMints.length === 0) {
-      console.log(`[TokenTracker] No valid tokens found from Solscan for creator: ${creatorAddress}, checking database...`);
-      
       try {
         // Get tokens from database for this creator
         const dbResult = await pool.query(
@@ -172,13 +165,11 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
         );
         
         if (dbResult.rows.length === 0) {
-          console.log(`[TokenTracker] No tokens found in database for creator: ${creatorAddress}`);
           return;
         }
         
         // Extract token mints from database
         const dbTokenMints = dbResult.rows.map(row => row.mint);
-        console.log(`[TokenTracker] Found ${dbTokenMints.length} tokens in database for creator ${creatorAddress}`);
         
         // Fetch bonding status for database tokens
         const bondingStatusMap = await fetchBondingStatusBatch(dbTokenMints);
@@ -217,16 +208,12 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
           );
         }
         
-        console.log(`[TokenTracker] Updated bonding status for ${dbTokenMints.length} tokens from database (${bondedTokens.length} bonded, ${unbondedTokens.length} unbonded)`);
-        
         return;
       } catch (dbError) {
         console.error(`[TokenTracker] Error checking database for creator ${creatorAddress}:`, dbError);
         return;
       }
     }
-    
-    console.log(`[TokenTracker] Found ${tokenMints.length} tokens for creator ${creatorAddress} (limited to ${MAX_TOKENS})`);
     
     // Fetch bonding status for all tokens using Shyft GraphQL API
     const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
@@ -240,23 +227,6 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       
       if (tokenData) {
         try {
-          // Check if token already exists to determine if this is insert or update
-          const existingToken = await pool.query(
-            'SELECT bonded, created_at FROM tbl_soltrack_created_tokens WHERE mint = $1',
-            [mint]
-          );
-          
-          const isNewInsert = existingToken.rows.length === 0;
-          const existingBonded = existingToken.rows.length > 0 ? existingToken.rows[0].bonded : null;
-          const tokenCreatedAt = existingToken.rows.length > 0 ? existingToken.rows[0].created_at : null;
-          
-          console.log(`[TokenTracker] Saving token ${mint} from fetchCreatorTokensAndBondingStatus:`);
-          console.log(`  - Is new insert: ${isNewInsert}`);
-          console.log(`  - Shyft API bonding status: ${isBonded}`);
-          console.log(`  - Existing bonded status: ${existingBonded}`);
-          console.log(`  - Token created at: ${tokenCreatedAt}`);
-          console.log(`  - Will set bonded to: ${isNewInsert ? isBonded : 'PRESERVED (existing: ' + existingBonded + ')'}`);
-          
           await pool.query(
             `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -278,15 +248,6 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               true, // is_fetched = true (from Solscan API)
             ]
           );
-          
-          // Verify what was actually saved
-          const verifyResult = await pool.query(
-            'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
-            [mint]
-          );
-          if (verifyResult.rows.length > 0) {
-            console.log(`  - Actual bonded status in DB after save: ${verifyResult.rows[0].bonded}`);
-          }
 
           // Register token in ATH tracker (for real-time tracking)
           // Only register if creator is not blacklisted (registerToken checks this internally)
@@ -308,8 +269,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
               blockTime: tokenData.blockTime,
             });
           } catch (athError) {
-            // Log but don't fail - ATH registration might fail if creator is blacklisted
-            console.log(`[TokenTracker] Token ${mint} not registered for ATH tracking (may be blacklisted)`);
+            // ATH registration might fail if creator is blacklisted - silently continue
           }
         } catch (error) {
           console.error(`[TokenTracker] Error saving token ${mint} to database:`, error);
@@ -317,14 +277,10 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
       }
     }
     
-    console.log(`[TokenTracker] Completed fetching tokens for creator ${creatorAddress}: ${tokenMints.length} tokens, ${Array.from(bondingStatusMap.values()).filter(b => b).length} bonded`);
-    
     // Fetch ATH for all tokens immediately
     if (tokensForAth.length > 0) {
-      console.log(`[TokenTracker] Fetching ATH for ${tokensForAth.length} tokens from Bitquery...`);
       try {
         await fetchAthForTokens(tokensForAth);
-        console.log(`[TokenTracker] Completed ATH fetching for ${tokensForAth.length} tokens`);
       } catch (error) {
         console.error(`[TokenTracker] Error fetching ATH for tokens:`, error);
       }
@@ -419,7 +375,6 @@ async function getSolPriceAtTime(timestamp: number): Promise<number | null> {
       const priceData = JSON.parse(anyPrice[0]);
       const price = priceData.price_usd;
       if (price != null && !isNaN(price) && isFinite(price) && price > 0) {
-        console.warn(`[TokenTracker] Using fallback SOL price ${price} for timestamp ${timestamp}`);
         return price;
       }
     }
@@ -439,7 +394,6 @@ async function getSolPriceAtTime(timestamp: number): Promise<number | null> {
       const priceData = JSON.parse(nearbyResults[0]);
       const price = priceData.price_usd;
       if (price != null && !isNaN(price) && isFinite(price) && price > 0) {
-        console.warn(`[TokenTracker] Using nearby SOL price ${price} for timestamp ${timestamp}`);
         return price;
       }
     }
@@ -503,12 +457,10 @@ function calculateMarketCap(
   
   // Validate inputs to prevent division by zero and invalid calculations
   if (tokenAmount === 0 || !isFinite(tokenAmount) || isNaN(tokenAmount)) {
-    console.warn(`[TokenTracker] Invalid token amount: ${tokenAmount} (raw: ${tradeData.token_amount})`);
     return null;
   }
   
   if (solAmount < 0 || !isFinite(solAmount) || isNaN(solAmount)) {
-    console.warn(`[TokenTracker] Invalid SOL amount: ${solAmount} (raw: ${tradeData.sol_amount})`);
     return null;
   }
   
@@ -516,7 +468,6 @@ function calculateMarketCap(
   
   // Validate calculated price
   if (!isFinite(executionPriceSol) || isNaN(executionPriceSol) || executionPriceSol <= 0) {
-    console.warn(`[TokenTracker] Invalid execution price: ${executionPriceSol}`);
     return null;
   }
   
@@ -530,12 +481,10 @@ function calculateMarketCap(
   
   // Final validation
   if (!isFinite(marketCapSol) || isNaN(marketCapSol) || marketCapSol < 0) {
-    console.warn(`[TokenTracker] Invalid market cap SOL: ${marketCapSol}`);
     return null;
   }
   
   if (solPriceUsd != null && (!isFinite(marketCapUsd) || isNaN(marketCapUsd) || marketCapUsd < 0)) {
-    console.warn(`[TokenTracker] Invalid market cap USD: ${marketCapUsd}`);
     return null;
   }
   
@@ -553,11 +502,6 @@ async function collectAndSaveTokenData(
 ): Promise<void> {
   const mint = createEventData.mint;
   const createdAt = createEventData.timestamp * 1000; // Convert to milliseconds
-  
-  console.log(`[TokenTracker] Collecting market cap data for ${mint}...`);
-  if (devBuyTradeEvent) {
-    console.log(`[TokenTracker] Dev buy TradeEvent found in same transaction - will be included as initial mcap`);
-  }
   
   // Define time window: first 15 seconds after creation
   const startTime = createdAt;
@@ -580,11 +524,8 @@ async function collectAndSaveTokenData(
         data: devBuyTradeEvent,
         signature: createTxSignature,
       });
-      console.log(`[TokenTracker] Added dev buy TradeEvent to trade events list`);
     }
   }
-  
-  console.log(`[TokenTracker] Found ${tradeEvents.length} trades in the first 15 seconds${devBuyTradeEvent ? ` (including dev buy)` : ''}`);
   
   // Build market cap time series
   const marketCapTimeSeries: MarketCapDataPoint[] = [];
@@ -603,9 +544,8 @@ async function collectAndSaveTokenData(
       tokenSupply
     );
     
-    // Skip invalid calculations but log the issue
+    // Skip invalid calculations
     if (marketCapResult === null) {
-      console.warn(`[TokenTracker] Skipping trade ${trade.signature} due to invalid calculation`);
       continue;
     }
     
@@ -655,9 +595,6 @@ async function collectAndSaveTokenData(
   
   // Save to database
   await saveTokenTrackingResult(result, createTxSignature);
-  
-  console.log(`[TokenTracker] Saved tracking data for ${mint}`);
-  console.log(`[TokenTracker] Initial: $${initialMarketCapUsd?.toFixed(2) || 'N/A'}, Peak: $${peakMarketCapUsd?.toFixed(2) || 'N/A'}, Final: $${finalMarketCapUsd?.toFixed(2) || 'N/A'}`);
 }
 
 /**
@@ -668,22 +605,6 @@ async function saveTokenTrackingResult(
   createTxSignature: string
 ): Promise<void> {
   try {
-    // Check if token already exists to determine if this is insert or update
-    const existingToken = await pool.query(
-      'SELECT bonded, created_at FROM tbl_soltrack_created_tokens WHERE mint = $1',
-      [result.mint]
-    );
-    
-    const isNewInsert = existingToken.rows.length === 0;
-    const existingBonded = existingToken.rows.length > 0 ? existingToken.rows[0].bonded : null;
-    const tokenCreatedAt = existingToken.rows.length > 0 ? existingToken.rows[0].created_at : null;
-    
-    console.log(`[TokenTracker] Saving token ${result.mint} from saveTokenTrackingResult:`);
-    console.log(`  - Is new insert: ${isNewInsert}`);
-    console.log(`  - Will set bonded to: ${isNewInsert ? 'false (new token)' : 'PRESERVED (existing: ' + existingBonded + ')'}`);
-    console.log(`  - Existing bonded status: ${existingBonded}`);
-    console.log(`  - Token created at: ${tokenCreatedAt}`);
-    
     await pool.query(
       `INSERT INTO tbl_soltrack_created_tokens (
         mint,
@@ -734,15 +655,6 @@ async function saveTokenTrackingResult(
         false, // bonded = false (newly created tokens are not bonded)
       ]
     );
-    
-    // Verify what was actually saved
-    const verifyResult = await pool.query(
-      'SELECT bonded FROM tbl_soltrack_created_tokens WHERE mint = $1',
-      [result.mint]
-    );
-    if (verifyResult.rows.length > 0) {
-      console.log(`  - Actual bonded status in DB after save: ${verifyResult.rows[0].bonded}`);
-    }
   } catch (error) {
     console.error('[TokenTracker] Error saving to database:', error);
     throw error;
@@ -776,12 +688,7 @@ export async function waitForPendingTrackingJobs(): Promise<void> {
       break;
     }
 
-    console.log(`[TokenTracker] Waiting for ${pendingTrackingJobs.size} pending tracking jobs to complete...`);
     await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL_MS));
-  }
-
-  if (pendingTrackingJobs.size === 0) {
-    console.log('[TokenTracker] All pending tracking jobs completed');
   }
 }
 
@@ -789,9 +696,8 @@ export async function waitForPendingTrackingJobs(): Promise<void> {
  * Cleanup pending tracking jobs (call on shutdown)
  */
 export function cleanup(): void {
-  for (const [mint, timeoutId] of pendingTrackingJobs) {
+  for (const [, timeoutId] of pendingTrackingJobs) {
     clearTimeout(timeoutId);
-    console.log(`[TokenTracker] Cancelled pending tracking for ${mint}`);
   }
   pendingTrackingJobs.clear();
   
