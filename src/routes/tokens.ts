@@ -1096,20 +1096,20 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       filteredWallets = walletsWithScores.filter(wallet => {
         // Filter by total tokens
         if (filters.totalTokens) {
-          if (filters.totalTokens.min !== undefined && wallet.totalTokens < filters.totalTokens.min) {
+          if (filters.totalTokens.min != null && wallet.totalTokens < filters.totalTokens.min) {
             return false;
           }
-          if (filters.totalTokens.max !== undefined && wallet.totalTokens > filters.totalTokens.max) {
+          if (filters.totalTokens.max != null && wallet.totalTokens > filters.totalTokens.max) {
             return false;
           }
         }
         
         // Filter by bonded tokens
         if (filters.bondedTokens) {
-          if (filters.bondedTokens.min !== undefined && wallet.bondedTokens < filters.bondedTokens.min) {
+          if (filters.bondedTokens.min != null && wallet.bondedTokens < filters.bondedTokens.min) {
             return false;
           }
-          if (filters.bondedTokens.max !== undefined && wallet.bondedTokens > filters.bondedTokens.max) {
+          if (filters.bondedTokens.max != null && wallet.bondedTokens > filters.bondedTokens.max) {
             return false;
           }
         }
@@ -1119,14 +1119,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           for (const filter of filters.winRate) {
             if (filter.type === 'percent') {
               const matches = (
-                (filter.min === undefined || wallet.winRate >= filter.min) &&
-                (filter.max === undefined || wallet.winRate <= filter.max)
+                (filter.min == null || wallet.winRate >= filter.min) &&
+                (filter.max == null || wallet.winRate <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'score') {
               const matches = (
-                (filter.min === undefined || wallet.scores.winRateScore >= filter.min) &&
-                (filter.max === undefined || wallet.scores.winRateScore <= filter.max)
+                (filter.min == null || wallet.scores.winRateScore >= filter.min) &&
+                (filter.max == null || wallet.scores.winRateScore <= filter.max)
               );
               if (!matches) return false;
             }
@@ -1139,21 +1139,21 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             if (filter.type === 'mcap') {
               if (wallet.avgAthMcap === null) return false;
               const matches = (
-                (filter.min === undefined || wallet.avgAthMcap >= filter.min) &&
-                (filter.max === undefined || wallet.avgAthMcap <= filter.max)
+                (filter.min == null || wallet.avgAthMcap >= filter.min) &&
+                (filter.max == null || wallet.avgAthMcap <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'percentile') {
               if (wallet.athMcapPercentileRank === null) return false;
               const matches = (
-                (filter.min === undefined || wallet.athMcapPercentileRank >= filter.min) &&
-                (filter.max === undefined || wallet.athMcapPercentileRank <= filter.max)
+                (filter.min == null || wallet.athMcapPercentileRank >= filter.min) &&
+                (filter.max == null || wallet.athMcapPercentileRank <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'score') {
               const matches = (
-                (filter.min === undefined || wallet.scores.avgAthMcapScore >= filter.min) &&
-                (filter.max === undefined || wallet.scores.avgAthMcapScore <= filter.max)
+                (filter.min == null || wallet.scores.avgAthMcapScore >= filter.min) &&
+                (filter.max == null || wallet.scores.avgAthMcapScore <= filter.max)
               );
               if (!matches) return false;
             }
@@ -1166,14 +1166,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             if (filter.type === 'mcap') {
               if (wallet.medianAthMcap === null) return false;
               const matches = (
-                (filter.min === undefined || wallet.medianAthMcap >= filter.min) &&
-                (filter.max === undefined || wallet.medianAthMcap <= filter.max)
+                (filter.min == null || wallet.medianAthMcap >= filter.min) &&
+                (filter.max == null || wallet.medianAthMcap <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'score') {
               const matches = (
-                (filter.min === undefined || wallet.scores.medianAthMcapScore >= filter.min) &&
-                (filter.max === undefined || wallet.scores.medianAthMcapScore <= filter.max)
+                (filter.min == null || wallet.scores.medianAthMcapScore >= filter.min) &&
+                (filter.max == null || wallet.scores.medianAthMcapScore <= filter.max)
               );
               if (!matches) return false;
             }
@@ -1185,26 +1185,26 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           for (const filter of filters.avgBuySells) {
             if (filter.type === 'buyCount') {
               const matches = (
-                (filter.min === undefined || wallet.buySellStats.avgBuyCount >= filter.min) &&
-                (filter.max === undefined || wallet.buySellStats.avgBuyCount <= filter.max)
+                (filter.min == null || wallet.buySellStats.avgBuyCount >= filter.min) &&
+                (filter.max == null || wallet.buySellStats.avgBuyCount <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'buySol') {
               const matches = (
-                (filter.min === undefined || wallet.buySellStats.avgBuyTotalSol >= filter.min) &&
-                (filter.max === undefined || wallet.buySellStats.avgBuyTotalSol <= filter.max)
+                (filter.min == null || wallet.buySellStats.avgBuyTotalSol >= filter.min) &&
+                (filter.max == null || wallet.buySellStats.avgBuyTotalSol <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'sellCount') {
               const matches = (
-                (filter.min === undefined || wallet.buySellStats.avgSellCount >= filter.min) &&
-                (filter.max === undefined || wallet.buySellStats.avgSellCount <= filter.max)
+                (filter.min == null || wallet.buySellStats.avgSellCount >= filter.min) &&
+                (filter.max == null || wallet.buySellStats.avgSellCount <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'sellSol') {
               const matches = (
-                (filter.min === undefined || wallet.buySellStats.avgSellTotalSol >= filter.min) &&
-                (filter.max === undefined || wallet.buySellStats.avgSellTotalSol <= filter.max)
+                (filter.min == null || wallet.buySellStats.avgSellTotalSol >= filter.min) &&
+                (filter.max == null || wallet.buySellStats.avgSellTotalSol <= filter.max)
               );
               if (!matches) return false;
             }
@@ -1216,20 +1216,20 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           for (const filter of filters.expectedROI) {
             if (filter.type === '1st') {
               const matches = (
-                (filter.min === undefined || wallet.expectedROI.avgRoi1stBuy >= filter.min) &&
-                (filter.max === undefined || wallet.expectedROI.avgRoi1stBuy <= filter.max)
+                (filter.min == null || wallet.expectedROI.avgRoi1stBuy >= filter.min) &&
+                (filter.max == null || wallet.expectedROI.avgRoi1stBuy <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === '2nd') {
               const matches = (
-                (filter.min === undefined || wallet.expectedROI.avgRoi2ndBuy >= filter.min) &&
-                (filter.max === undefined || wallet.expectedROI.avgRoi2ndBuy <= filter.max)
+                (filter.min == null || wallet.expectedROI.avgRoi2ndBuy >= filter.min) &&
+                (filter.max == null || wallet.expectedROI.avgRoi2ndBuy <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === '3rd') {
               const matches = (
-                (filter.min === undefined || wallet.expectedROI.avgRoi3rdBuy >= filter.min) &&
-                (filter.max === undefined || wallet.expectedROI.avgRoi3rdBuy <= filter.max)
+                (filter.min == null || wallet.expectedROI.avgRoi3rdBuy >= filter.min) &&
+                (filter.max == null || wallet.expectedROI.avgRoi3rdBuy <= filter.max)
               );
               if (!matches) return false;
             }
@@ -1238,10 +1238,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         
         // Filter by rug rate
         if (filters.rugRate) {
-          if (filters.rugRate.min !== undefined && wallet.avgRugRate < filters.rugRate.min) {
+          if (filters.rugRate.min != null && wallet.avgRugRate < filters.rugRate.min) {
             return false;
           }
-          if (filters.rugRate.max !== undefined && wallet.avgRugRate > filters.rugRate.max) {
+          if (filters.rugRate.max != null && wallet.avgRugRate > filters.rugRate.max) {
             return false;
           }
         }
@@ -1249,20 +1249,20 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         // Filter by avg rug time
         if (filters.avgRugTime) {
           if (wallet.avgRugTime === null) return false;
-          if (filters.avgRugTime.min !== undefined && wallet.avgRugTime < filters.avgRugTime.min) {
+          if (filters.avgRugTime.min != null && wallet.avgRugTime < filters.avgRugTime.min) {
             return false;
           }
-          if (filters.avgRugTime.max !== undefined && wallet.avgRugTime > filters.avgRugTime.max) {
+          if (filters.avgRugTime.max != null && wallet.avgRugTime > filters.avgRugTime.max) {
             return false;
           }
         }
         
         // Filter by final score
         if (filters.finalScore) {
-          if (filters.finalScore.min !== undefined && wallet.scores.finalScore < filters.finalScore.min) {
+          if (filters.finalScore.min != null && wallet.scores.finalScore < filters.finalScore.min) {
             return false;
           }
-          if (filters.finalScore.max !== undefined && wallet.scores.finalScore > filters.finalScore.max) {
+          if (filters.finalScore.max != null && wallet.scores.finalScore > filters.finalScore.max) {
             return false;
           }
         }
@@ -1274,16 +1274,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
               const percentage = wallet.multiplierPercentages[filter.multiplier];
               if (percentage === undefined || percentage === null) return false;
               const matches = (
-                (filter.min === undefined || percentage >= filter.min) &&
-                (filter.max === undefined || percentage <= filter.max)
+                (filter.min == null || percentage >= filter.min) &&
+                (filter.max == null || percentage <= filter.max)
               );
               if (!matches) return false;
             } else if (filter.type === 'score') {
               const score = wallet.scores.individualMultiplierScores[filter.multiplier];
               if (score === undefined || score === null) return false;
               const matches = (
-                (filter.min === undefined || score >= filter.min) &&
-                (filter.max === undefined || score <= filter.max)
+                (filter.min == null || score >= filter.min) &&
+                (filter.max == null || score <= filter.max)
               );
               if (!matches) return false;
             }

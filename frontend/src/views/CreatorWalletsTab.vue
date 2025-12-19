@@ -2218,16 +2218,22 @@ const loadWallets = async () => {
     const filterParams: any = {}
     
     if (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) {
-      filterParams.totalTokens = {
-        min: filters.value.totalTokens.min,
-        max: filters.value.totalTokens.max
+      filterParams.totalTokens = {}
+      if (filters.value.totalTokens.min !== undefined) {
+        filterParams.totalTokens.min = filters.value.totalTokens.min
+      }
+      if (filters.value.totalTokens.max !== undefined) {
+        filterParams.totalTokens.max = filters.value.totalTokens.max
       }
     }
     
     if (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) {
-      filterParams.bondedTokens = {
-        min: filters.value.bondedTokens.min,
-        max: filters.value.bondedTokens.max
+      filterParams.bondedTokens = {}
+      if (filters.value.bondedTokens.min !== undefined) {
+        filterParams.bondedTokens.min = filters.value.bondedTokens.min
+      }
+      if (filters.value.bondedTokens.max !== undefined) {
+        filterParams.bondedTokens.max = filters.value.bondedTokens.max
       }
     }
     
@@ -2252,23 +2258,32 @@ const loadWallets = async () => {
     }
     
     if (filters.value.rugRate.min !== undefined || filters.value.rugRate.max !== undefined) {
-      filterParams.rugRate = {
-        min: filters.value.rugRate.min,
-        max: filters.value.rugRate.max
+      filterParams.rugRate = {}
+      if (filters.value.rugRate.min !== undefined) {
+        filterParams.rugRate.min = filters.value.rugRate.min
+      }
+      if (filters.value.rugRate.max !== undefined) {
+        filterParams.rugRate.max = filters.value.rugRate.max
       }
     }
     
     if (filters.value.avgRugTime.min !== undefined || filters.value.avgRugTime.max !== undefined) {
-      filterParams.avgRugTime = {
-        min: filters.value.avgRugTime.min,
-        max: filters.value.avgRugTime.max
+      filterParams.avgRugTime = {}
+      if (filters.value.avgRugTime.min !== undefined) {
+        filterParams.avgRugTime.min = filters.value.avgRugTime.min
+      }
+      if (filters.value.avgRugTime.max !== undefined) {
+        filterParams.avgRugTime.max = filters.value.avgRugTime.max
       }
     }
     
     if (filters.value.finalScore.min !== undefined || filters.value.finalScore.max !== undefined) {
-      filterParams.finalScore = {
-        min: filters.value.finalScore.min,
-        max: filters.value.finalScore.max
+      filterParams.finalScore = {}
+      if (filters.value.finalScore.min !== undefined) {
+        filterParams.finalScore.min = filters.value.finalScore.min
+      }
+      if (filters.value.finalScore.max !== undefined) {
+        filterParams.finalScore.max = filters.value.finalScore.max
       }
     }
     
