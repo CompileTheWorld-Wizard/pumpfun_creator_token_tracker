@@ -1064,6 +1064,132 @@
       </div>
     </div>
 
+    <!-- What If Settings Panel (Collapsible) -->
+    <div v-if="whatIfExpanded" class="mb-3 bg-gray-900/80 border border-gray-800 rounded-lg p-4">
+      <div class="space-y-4">
+        <div class="flex items-center justify-between">
+          <label class="text-xs font-semibold text-gray-300">What If Simulation Settings</label>
+          <button
+            @click="clearWhatIfSettings"
+            class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold rounded transition"
+          >
+            Clear
+          </button>
+        </div>
+
+        <!-- Buy Position -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
+            Buy Position (after dev):
+          </label>
+          <input
+            v-model.number="whatIfSettings.buyPosition"
+            type="number"
+            min="1"
+            max="10"
+            placeholder="e.g., 2 = 2nd buy after dev"
+            class="w-full px-3 py-2 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+
+        <!-- Sell Strategy -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
+            Sell Strategy:
+          </label>
+          <select
+            v-model="whatIfSettings.sellStrategy"
+            class="w-full px-3 py-2 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          >
+            <option value="time">Sell at X seconds</option>
+            <option value="pnl">Sell at PNL marker</option>
+            <option value="multiple">Multiple sells</option>
+          </select>
+        </div>
+
+        <!-- Sell at X seconds -->
+        <div v-if="whatIfSettings.sellStrategy === 'time'">
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
+            Sell at (seconds):
+          </label>
+          <input
+            v-model.number="whatIfSettings.sellAtSeconds"
+            type="number"
+            min="0"
+            max="15"
+            placeholder="e.g., 5"
+            class="w-full px-3 py-2 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+
+        <!-- Sell at PNL marker -->
+        <div v-if="whatIfSettings.sellStrategy === 'pnl'">
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
+            Sell if PNL >= (%):
+          </label>
+          <input
+            v-model.number="whatIfSettings.sellAtPnlPercent"
+            type="number"
+            min="0"
+            step="0.1"
+            placeholder="e.g., 50"
+            class="w-full px-3 py-2 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+          />
+        </div>
+
+        <!-- Multiple sells -->
+        <div v-if="whatIfSettings.sellStrategy === 'multiple'">
+          <label class="block text-xs font-semibold text-gray-300 mb-1.5">
+            Multiple Sells:
+          </label>
+          <div class="space-y-2">
+            <div
+              v-for="(sell, index) in whatIfSettings.multipleSells"
+              :key="index"
+              class="flex items-center gap-2"
+            >
+              <input
+                v-model.number="sell.seconds"
+                type="number"
+                min="0"
+                max="15"
+                placeholder="Seconds"
+                class="flex-1 px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+              <input
+                v-model.number="sell.sizePercent"
+                type="number"
+                min="0"
+                max="100"
+                placeholder="Size %"
+                class="flex-1 px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+              <button
+                @click="removeMultipleSell(index)"
+                class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition"
+              >
+                Remove
+              </button>
+            </div>
+            <button
+              @click="addMultipleSell"
+              class="w-full px-3 py-1.5 text-xs bg-blue-600/90 hover:bg-blue-600 text-white font-semibold rounded transition"
+            >
+              Add Sell
+            </button>
+          </div>
+        </div>
+
+        <!-- Apply Button -->
+        <button
+          @click="applyWhatIfSettings"
+          class="w-full px-4 py-2.5 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 text-white text-sm font-semibold rounded-lg hover:from-purple-500 hover:via-blue-500 hover:to-cyan-500 transition"
+        >
+          Apply What If Settings
+        </button>
+      </div>
+    </div>
+
     <!-- Error State -->
     <div v-if="error" class="bg-red-900/20 border border-red-500/30 rounded p-2 mb-3">
       <p class="text-red-400 text-xs">{{ error }}</p>
