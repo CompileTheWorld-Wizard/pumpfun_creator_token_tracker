@@ -2396,14 +2396,7 @@ const removeMultipleSell = (index: number) => {
 
 const toggleWhatIfColumn = () => {
   showWhatIfColumn.value = !showWhatIfColumn.value
-  if (showWhatIfColumn.value) {
-    // If showing column, apply settings and reload
-    applyWhatIfSettings()
-  } else {
-    // If hiding column, just reload without What If settings
-    pagination.value.page = 1
-    loadWallets()
-  }
+  // Just toggle visibility, no API call needed
 }
 
 const visiblePages = computed(() => {
