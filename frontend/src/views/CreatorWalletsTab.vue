@@ -1069,12 +1069,23 @@
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <label class="text-xs font-semibold text-gray-300">What If Simulation Settings</label>
-          <button
-            @click="clearWhatIfSettings"
-            class="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 font-semibold rounded transition"
-          >
-            Clear
-          </button>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-gray-400">Show Column:</span>
+            <button
+              @click="toggleWhatIfColumn"
+              :class="[
+                'relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2',
+                showWhatIfColumn ? 'bg-purple-600' : 'bg-gray-600'
+              ]"
+            >
+              <span
+                :class="[
+                  'inline-block h-4 w-4 transform rounded-full bg-white transition-transform',
+                  showWhatIfColumn ? 'translate-x-6' : 'translate-x-1'
+                ]"
+              ></span>
+            </button>
+          </div>
         </div>
 
         <!-- Buy Position -->
@@ -1146,30 +1157,47 @@
             <div
               v-for="(sell, index) in whatIfSettings.multipleSells"
               :key="index"
-              class="flex items-center gap-2"
+              class="space-y-1"
             >
-              <input
-                v-model.number="sell.seconds"
-                type="number"
-                min="0"
-                max="15"
-                placeholder="Seconds"
-                class="flex-1 px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
-              />
-              <input
-                v-model.number="sell.sizePercent"
-                type="number"
-                min="0"
-                max="100"
-                placeholder="Size %"
-                class="flex-1 px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
-              />
-              <button
-                @click="removeMultipleSell(index)"
-                class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition"
-              >
-                Remove
-              </button>
+              <div class="flex items-center gap-2">
+                <div class="flex-1">
+                  <label class="block text-[10px] text-gray-400 mb-0.5">Seconds</label>
+                  <input
+                    v-model.number="sell.seconds"
+                    type="number"
+                    min="0"
+                    max="15"
+                    placeholder="e.g., 3"
+                    class="w-full px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+                <div class="flex-1">
+                  <label class="block text-[10px] text-gray-400 mb-0.5">Size %</label>
+                  <input
+                    v-model.number="sell.sizePercent"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="e.g., 50"
+                    class="w-full px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                    :class="getMultipleSellValidationClass()"
+                  />
+                </div>
+                <div class="flex items-end">
+                  <button
+                    @click="removeMultipleSell(index)"
+                    class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div v-if="whatIfSettings.multipleSells && whatIfSettings.multipleSells.length > 0" class="text-[10px] text-gray-400">
+              Total: {{ getTotalMultipleSellPercent().toFixed(1) }}%
+              <span v-if="getTotalMultipleSellPercent() > 100" class="text-red-400 ml-1">(Exceeds 100%)</span>
+              <span v-else-if="getTotalMultipleSellPercent() < 100" class="text-yellow-400 ml-1">({{ (100 - getTotalMultipleSellPercent()).toFixed(1) }}% remaining)</span>
             </div>
             <button
               @click="addMultipleSell"
@@ -1448,6 +1476,16 @@
                     <span class="text-gray-400">Total:</span> <span :class="getScoreColor(wallet.scores.multiplierScore)" class="font-bold">{{ wallet.scores.multiplierScore.toFixed(2) }}</span>
                   </span>
                 </div>
+              </td>
+              <td v-if="showWhatIfColumn" class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div v-if="wallet.whatIfPnl" class="text-xs font-semibold">
+                  <div class="text-gray-200">${{ formatCurrency(wallet.whatIfPnl.avgPnl) }}</div>
+                  <div class="text-[10px]" :class="getRoiColor(wallet.whatIfPnl.avgPnlPercent)">
+                    {{ wallet.whatIfPnl.avgPnlPercent >= 0 ? '+' : '' }}{{ wallet.whatIfPnl.avgPnlPercent.toFixed(2) }}%
+                  </div>
+                  <div class="text-[9px] text-gray-500">({{ wallet.whatIfPnl.tokensSimulated }} tokens)</div>
+                </div>
+                <div v-else class="text-xs text-gray-500">N/A</div>
               </td>
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold" :class="getScoreColor(wallet.scores.finalScore)">
@@ -2263,6 +2301,23 @@ const applyFilters = () => {
 }
 
 // What If functions
+const getTotalMultipleSellPercent = (): number => {
+  if (!whatIfSettings.value.multipleSells || whatIfSettings.value.multipleSells.length === 0) {
+    return 0
+  }
+  return whatIfSettings.value.multipleSells.reduce((sum, sell) => {
+    return sum + (sell.sizePercent || 0)
+  }, 0)
+}
+
+const getMultipleSellValidationClass = (): string => {
+  const total = getTotalMultipleSellPercent()
+  if (total > 100) {
+    return 'border-red-500 focus:ring-red-500'
+  }
+  return ''
+}
+
 const applyWhatIfSettings = () => {
   if (!whatIfSettings.value.buyPosition || !whatIfSettings.value.sellStrategy) {
     alert('Please configure buy position and sell strategy')
@@ -2279,9 +2334,45 @@ const applyWhatIfSettings = () => {
     return
   }
   
-  if (whatIfSettings.value.sellStrategy === 'multiple' && (!whatIfSettings.value.multipleSells || whatIfSettings.value.multipleSells.length === 0)) {
-    alert('Please add at least one multiple sell')
-    return
+  if (whatIfSettings.value.sellStrategy === 'multiple') {
+    if (!whatIfSettings.value.multipleSells || whatIfSettings.value.multipleSells.length === 0) {
+      alert('Please add at least one multiple sell')
+      return
+    }
+    
+    // Validate that all sells have seconds and size percent
+    for (let i = 0; i < whatIfSettings.value.multipleSells.length; i++) {
+      const sell = whatIfSettings.value.multipleSells[i]
+      if (!sell.seconds && sell.seconds !== 0) {
+        alert(`Please set seconds for sell ${i + 1}`)
+        return
+      }
+      if (!sell.sizePercent && sell.sizePercent !== 0) {
+        alert(`Please set size percent for sell ${i + 1}`)
+        return
+      }
+      if (sell.sizePercent < 0 || sell.sizePercent > 100) {
+        alert(`Size percent for sell ${i + 1} must be between 0 and 100`)
+        return
+      }
+    }
+    
+    // Validate total percentage doesn't exceed 100%
+    const total = getTotalMultipleSellPercent()
+    if (total > 100) {
+      alert(`Total sell percentage (${total.toFixed(1)}%) exceeds 100%. Please adjust the percentages.`)
+      return
+    }
+    
+    // Validate seconds are in ascending order
+    const sortedSells = [...whatIfSettings.value.multipleSells].sort((a, b) => a.seconds - b.seconds)
+    for (let i = 0; i < sortedSells.length; i++) {
+      if (i > 0 && sortedSells[i].seconds < sortedSells[i - 1].seconds) {
+        // This shouldn't happen after sorting, but just in case
+        alert('Sells should be ordered by time (seconds)')
+        return
+      }
+    }
   }
   
   showWhatIfColumn.value = true
@@ -2289,17 +2380,6 @@ const applyWhatIfSettings = () => {
   loadWallets()
 }
 
-const clearWhatIfSettings = () => {
-  whatIfSettings.value = {
-    buyPosition: 2,
-    sellStrategy: 'time',
-    sellAtSeconds: 5,
-    multipleSells: []
-  }
-  showWhatIfColumn.value = false
-  pagination.value.page = 1
-  loadWallets()
-}
 
 const addMultipleSell = () => {
   if (!whatIfSettings.value.multipleSells) {
@@ -2311,6 +2391,18 @@ const addMultipleSell = () => {
 const removeMultipleSell = (index: number) => {
   if (whatIfSettings.value.multipleSells) {
     whatIfSettings.value.multipleSells.splice(index, 1)
+  }
+}
+
+const toggleWhatIfColumn = () => {
+  showWhatIfColumn.value = !showWhatIfColumn.value
+  if (showWhatIfColumn.value) {
+    // If showing column, apply settings and reload
+    applyWhatIfSettings()
+  } else {
+    // If hiding column, just reload without What If settings
+    pagination.value.page = 1
+    loadWallets()
   }
 }
 
