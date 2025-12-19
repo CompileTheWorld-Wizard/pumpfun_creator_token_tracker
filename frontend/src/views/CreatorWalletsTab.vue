@@ -1238,7 +1238,13 @@
             <!-- Top row with merged headers -->
             <tr>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Wallet Address</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Total Tokens(Valid)</th>
+              <th rowspan="2" class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-20">
+                <div class="leading-tight">
+                  <div>Total</div>
+                  <div>Tokens</div>
+                  <div>(Valid)</div>
+                </div>
+              </th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Bonded Tokens</th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Win Rate (% Bonded)</th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg ATH MCap</th>
@@ -1247,7 +1253,13 @@
               <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buys/Sells</th>
               <th colspan="3" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Expected ROI (1st/2nd/3rd Buy)</th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Rate (%)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Time (seconds)</th>
+              <th rowspan="2" class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-24">
+                <div class="leading-tight">
+                  <div>Avg Rug</div>
+                  <div>Time</div>
+                  <div>(Secs)</div>
+                </div>
+              </th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px] border border-gray-700">Multiplier Scores</th>
               <th rowspan="2" v-if="showWhatIfColumn" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">
                 <div class="flex items-center justify-center gap-1">
@@ -1307,7 +1319,7 @@
                   <div class="text-[10px] text-gray-400 font-mono">{{ formatAddress(wallet.address) }}</div>
                 </div>
               </td>
-              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+              <td class="px-1 py-1.5 whitespace-nowrap text-right border border-gray-700 w-20">
                 <div class="text-xs font-semibold text-gray-200">
                   {{ wallet.totalTokens }}<span class="text-gray-500 ml-1">({{ getValidTokenCount(wallet) }})</span>
                 </div>
@@ -1443,7 +1455,7 @@
                   {{ wallet.avgRugRate?.toFixed(2) || '0.00' }}%<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.avgRugRateScore?.toFixed(0) || '0' }})</span>
                 </div>
               </td>
-              <td class="px-2 py-1.5 text-right border border-gray-700">
+              <td class="px-1 py-1.5 text-right border border-gray-700 w-24">
                 <div v-if="wallet.avgRugTime !== null && wallet.avgRugTime !== undefined">
                   <div class="text-xs font-semibold" :class="wallet.avgRugTime <= 5 ? 'text-red-400' : wallet.avgRugTime <= 15 ? 'text-yellow-400' : 'text-green-400'">
                     {{ wallet.avgRugTime.toFixed(2) }}s<span v-if="viewMode === 'score'" class="text-gray-500 ml-1">({{ wallet.scores.timeBucketRugRateScore?.toFixed(0) || '0' }})</span>
