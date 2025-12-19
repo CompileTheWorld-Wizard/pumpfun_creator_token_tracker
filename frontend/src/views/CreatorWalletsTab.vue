@@ -20,6 +20,21 @@
           {{ activeFilterCount }}
         </span>
       </button>
+      <button
+        @click="whatIfExpanded = !whatIfExpanded"
+        class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-lg transition flex items-center gap-2"
+      >
+        <svg 
+          class="w-4 h-4 transition-transform"
+          :class="{ 'rotate-180': whatIfExpanded }"
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+        <span>What If</span>
+      </button>
       <label class="text-xs text-gray-400 font-medium">Items per page:</label>
       <select
         v-model="itemsPerPage"
@@ -1080,6 +1095,20 @@
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Rate (%)</th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Time (seconds)</th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[280px] border border-gray-700">Multiplier Scores</th>
+              <th rowspan="2" v-if="showWhatIfColumn" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">
+                <div class="flex items-center justify-center gap-1">
+                  <span>What If PNL</span>
+                  <button
+                    @click="showWhatIfColumn = false"
+                    class="text-gray-500 hover:text-gray-300 transition"
+                    title="Hide column"
+                  >
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                  </button>
+                </div>
+              </th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Final Score</th>
             </tr>
             <!-- Bottom row with individual column headers -->
@@ -1100,7 +1129,7 @@
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td colspan="20" class="px-2 py-8 text-center">
+              <td :colspan="showWhatIfColumn ? 21 : 20" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -1451,6 +1480,22 @@ const showAddFilterDialog = ref(false)
 const newFilterType = ref<string>('')
 const addedFilterTypes = ref<Set<string>>(new Set())
 const filterSearchQuery = ref<string>('')
+
+// What If state
+const whatIfExpanded = ref(false)
+const showWhatIfColumn = ref(false)
+const whatIfSettings = ref<{
+  buyPosition: number;
+  sellStrategy: 'time' | 'pnl' | 'multiple';
+  sellAtSeconds?: number;
+  sellAtPnlPercent?: number;
+  multipleSells?: Array<{ seconds: number; sizePercent: number }>;
+}>({
+  buyPosition: 2,
+  sellStrategy: 'time',
+  sellAtSeconds: 5,
+  multipleSells: []
+})
 
 // Tree expansion state
 const expandedGroups = ref({
@@ -2091,6 +2136,58 @@ const applyFilters = () => {
   loadWallets()
 }
 
+// What If functions
+const applyWhatIfSettings = () => {
+  if (!whatIfSettings.value.buyPosition || !whatIfSettings.value.sellStrategy) {
+    alert('Please configure buy position and sell strategy')
+    return
+  }
+  
+  if (whatIfSettings.value.sellStrategy === 'time' && !whatIfSettings.value.sellAtSeconds) {
+    alert('Please set sell at seconds')
+    return
+  }
+  
+  if (whatIfSettings.value.sellStrategy === 'pnl' && !whatIfSettings.value.sellAtPnlPercent) {
+    alert('Please set sell at PNL percent')
+    return
+  }
+  
+  if (whatIfSettings.value.sellStrategy === 'multiple' && (!whatIfSettings.value.multipleSells || whatIfSettings.value.multipleSells.length === 0)) {
+    alert('Please add at least one multiple sell')
+    return
+  }
+  
+  showWhatIfColumn.value = true
+  pagination.value.page = 1
+  loadWallets()
+}
+
+const clearWhatIfSettings = () => {
+  whatIfSettings.value = {
+    buyPosition: 2,
+    sellStrategy: 'time',
+    sellAtSeconds: 5,
+    multipleSells: []
+  }
+  showWhatIfColumn.value = false
+  pagination.value.page = 1
+  loadWallets()
+}
+
+const addMultipleSell = () => {
+  if (!whatIfSettings.value.multipleSells) {
+    whatIfSettings.value.multipleSells = []
+  }
+  whatIfSettings.value.multipleSells.push({ seconds: 3, sizePercent: 50 })
+}
+
+const removeMultipleSell = (index: number) => {
+  if (whatIfSettings.value.multipleSells) {
+    whatIfSettings.value.multipleSells.splice(index, 1)
+  }
+}
+
 const visiblePages = computed(() => {
   const pages: number[] = []
   const maxVisible = 5
@@ -2291,11 +2388,17 @@ const loadWallets = async () => {
       filterParams.multiplierScores = filters.value.multiplierScores
     }
     
+    // Prepare What If settings if enabled
+    const whatIfSettingsToSend = showWhatIfColumn.value && whatIfSettings.value.buyPosition && whatIfSettings.value.sellStrategy
+      ? whatIfSettings.value
+      : null
+    
     const response = await getCreatorWalletsAnalytics(
       pagination.value.page,
       limit,
       false, // viewAll - can be made configurable later
-      filterParams
+      filterParams,
+      whatIfSettingsToSend
     )
     wallets.value = response.wallets
     pagination.value = response.pagination

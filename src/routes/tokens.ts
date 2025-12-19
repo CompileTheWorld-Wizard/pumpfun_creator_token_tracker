@@ -677,6 +677,236 @@ function calculateExpectedROI(
   };
 }
 
+// Calculate What If PNL for a creator wallet based on simulation settings
+function calculateWhatIfPNL(
+  tokens: Array<{
+    createdAt: Date;
+    marketCapTimeSeries: any;
+  }>,
+  settings: {
+    buyPosition: number; // Buy at position X after dev (e.g., 2 = 2nd buy after dev)
+    sellStrategy: 'time' | 'pnl' | 'multiple';
+    sellAtSeconds?: number; // Sell at X seconds
+    sellAtPnlPercent?: number; // Sell if PNL >= X%
+    multipleSells?: Array<{ seconds: number; sizePercent: number }>; // Multiple sells: [{seconds: 3, sizePercent: 50}, {seconds: 6, sizePercent: 50}]
+  }
+): {
+  avgPnl: number;
+  avgPnlPercent: number;
+  tokensSimulated: number;
+} {
+  const DEFAULT_TOKEN_SUPPLY = 1_000_000_000; // 1 billion tokens
+  
+  if (tokens.length === 0) {
+    return {
+      avgPnl: 0,
+      avgPnlPercent: 0,
+      tokensSimulated: 0
+    };
+  }
+  
+  let totalPnl = 0;
+  let totalPnlPercent = 0;
+  let tokensSimulated = 0;
+  
+  for (const token of tokens) {
+    // Parse market cap time series
+    let marketCapTimeSeries = token.marketCapTimeSeries;
+    if (typeof marketCapTimeSeries === 'string') {
+      try {
+        marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
+      } catch (e) {
+        continue; // Skip if can't parse
+      }
+    }
+    
+    if (!Array.isArray(marketCapTimeSeries) || marketCapTimeSeries.length === 0) {
+      continue; // Skip if no time series data
+    }
+    
+    // Get token creation time
+    const createdAtMs = new Date(token.createdAt).getTime();
+    
+    // Filter only buy transactions and get them in order
+    const buyTrades = marketCapTimeSeries
+      .filter((point: any) => {
+        const tradeType = point.tradeType || point.trade_type;
+        return tradeType === 'buy' && 
+               point.executionPriceSol !== undefined && 
+               point.executionPriceSol !== null &&
+               point.executionPriceSol > 0;
+      })
+      .map((point: any) => ({
+        executionPriceSol: point.executionPriceSol || point.execution_price_sol || 0,
+        timestamp: point.timestamp || point.time || 0,
+        solPriceUsd: point.solPriceUsd || point.sol_price_usd || 0
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to get order
+    
+    // Need at least buyPosition buys (position 1 = first buy after dev, position 2 = second buy, etc.)
+    if (buyTrades.length < settings.buyPosition) {
+      continue; // Not enough buys
+    }
+    
+    // Get buy price at the specified position (position is 1-indexed, so position 2 = index 1)
+    const buyTrade = buyTrades[settings.buyPosition - 1];
+    if (!buyTrade || buyTrade.executionPriceSol <= 0) {
+      continue;
+    }
+    
+    const buyPriceSol = buyTrade.executionPriceSol;
+    const buyTimestamp = buyTrade.timestamp;
+    const buySolPriceUsd = buyTrade.solPriceUsd || 0;
+    
+    // Calculate buy cost (assume 1 SOL investment for simplicity, or we could use actual trade amounts)
+    const buyAmountSol = 1; // Standardized to 1 SOL for comparison
+    const buyAmountUsd = buyAmountSol * (buySolPriceUsd || 0);
+    const tokensBought = buyAmountSol / buyPriceSol;
+    
+    // Simulate selling based on strategy
+    let totalSellAmountUsd = 0;
+    let remainingTokens = tokensBought;
+    let totalSellAmountSol = 0;
+    
+    if (settings.sellStrategy === 'time' && settings.sellAtSeconds !== undefined) {
+      // Sell at X seconds after creation
+      const sellTimestamp = createdAtMs + (settings.sellAtSeconds * 1000);
+      
+      // Find the closest price point at or after sell timestamp
+      let sellPriceSol: number | null = null;
+      let sellSolPriceUsd = 0;
+      
+      // Sort all trades by timestamp
+      const allTrades = marketCapTimeSeries
+        .map((point: any) => ({
+          timestamp: point.timestamp || point.time || 0,
+          executionPriceSol: point.executionPriceSol || point.execution_price_sol || 0,
+          solPriceUsd: point.solPriceUsd || point.sol_price_usd || 0,
+          marketCapUsd: point.marketCapUsd || point.market_cap_usd || 0
+        }))
+        .filter((p: any) => p.timestamp >= buyTimestamp && p.executionPriceSol > 0)
+        .sort((a: any, b: any) => a.timestamp - b.timestamp);
+      
+      // Find price at sell timestamp
+      for (const trade of allTrades) {
+        if (trade.timestamp >= sellTimestamp) {
+          sellPriceSol = trade.executionPriceSol;
+          sellSolPriceUsd = trade.solPriceUsd || 0;
+          break;
+        }
+      }
+      
+      // If no exact match, use the last available price
+      if (sellPriceSol === null && allTrades.length > 0) {
+        const lastTrade = allTrades[allTrades.length - 1];
+        sellPriceSol = lastTrade.executionPriceSol;
+        sellSolPriceUsd = lastTrade.solPriceUsd || 0;
+      }
+      
+      if (sellPriceSol && sellPriceSol > 0) {
+        totalSellAmountSol = remainingTokens * sellPriceSol;
+        totalSellAmountUsd = totalSellAmountSol * (sellSolPriceUsd || 0);
+      }
+      
+    } else if (settings.sellStrategy === 'pnl' && settings.sellAtPnlPercent !== undefined) {
+      // Sell when PNL >= X%
+      const targetPnlPercent = settings.sellAtPnlPercent;
+      
+      // Sort all trades by timestamp after buy
+      const allTrades = marketCapTimeSeries
+        .map((point: any) => ({
+          timestamp: point.timestamp || point.time || 0,
+          executionPriceSol: point.executionPriceSol || point.execution_price_sol || 0,
+          solPriceUsd: point.solPriceUsd || point.sol_price_usd || 0,
+          marketCapUsd: point.marketCapUsd || point.market_cap_usd || 0
+        }))
+        .filter((p: any) => p.timestamp >= buyTimestamp && p.executionPriceSol > 0)
+        .sort((a: any, b: any) => a.timestamp - b.timestamp);
+      
+      // Find first price where PNL >= target
+      for (const trade of allTrades) {
+        const currentPriceSol = trade.executionPriceSol;
+        const pnlPercent = ((currentPriceSol - buyPriceSol) / buyPriceSol) * 100;
+        
+        if (pnlPercent >= targetPnlPercent) {
+          totalSellAmountSol = remainingTokens * currentPriceSol;
+          totalSellAmountUsd = totalSellAmountSol * (trade.solPriceUsd || 0);
+          break;
+        }
+      }
+      
+    } else if (settings.sellStrategy === 'multiple' && settings.multipleSells && settings.multipleSells.length > 0) {
+      // Multiple sells at different times with different sizes
+      const allTrades = marketCapTimeSeries
+        .map((point: any) => ({
+          timestamp: point.timestamp || point.time || 0,
+          executionPriceSol: point.executionPriceSol || point.execution_price_sol || 0,
+          solPriceUsd: point.solPriceUsd || point.sol_price_usd || 0,
+          marketCapUsd: point.marketCapUsd || point.market_cap_usd || 0
+        }))
+        .filter((p: any) => p.timestamp >= buyTimestamp && p.executionPriceSol > 0)
+        .sort((a: any, b: any) => a.timestamp - b.timestamp);
+      
+      // Sort sells by time
+      const sortedSells = [...settings.multipleSells].sort((a, b) => a.seconds - b.seconds);
+      
+      for (const sell of sortedSells) {
+        if (remainingTokens <= 0) break;
+        
+        const sellTimestamp = createdAtMs + (sell.seconds * 1000);
+        const sellSize = (sell.sizePercent / 100) * tokensBought;
+        const actualSellSize = Math.min(sellSize, remainingTokens);
+        
+        // Find price at sell timestamp
+        let sellPriceSol: number | null = null;
+        let sellSolPriceUsd = 0;
+        
+        for (const trade of allTrades) {
+          if (trade.timestamp >= sellTimestamp) {
+            sellPriceSol = trade.executionPriceSol;
+            sellSolPriceUsd = trade.solPriceUsd || 0;
+            break;
+          }
+        }
+        
+        // If no exact match, use the last available price
+        if (sellPriceSol === null && allTrades.length > 0) {
+          const lastTrade = allTrades[allTrades.length - 1];
+          sellPriceSol = lastTrade.executionPriceSol;
+          sellSolPriceUsd = lastTrade.solPriceUsd || 0;
+        }
+        
+        if (sellPriceSol && sellPriceSol > 0) {
+          const sellAmountSol = actualSellSize * sellPriceSol;
+          totalSellAmountSol += sellAmountSol;
+          totalSellAmountUsd += sellAmountSol * (sellSolPriceUsd || 0);
+          remainingTokens -= actualSellSize;
+        }
+      }
+    }
+    
+    // Calculate PNL
+    if (totalSellAmountUsd > 0 && buyAmountUsd > 0) {
+      const pnlUsd = totalSellAmountUsd - buyAmountUsd;
+      const pnlPercent = ((totalSellAmountSol - buyAmountSol) / buyAmountSol) * 100;
+      
+      totalPnl += pnlUsd;
+      totalPnlPercent += pnlPercent;
+      tokensSimulated++;
+    }
+  }
+  
+  // Calculate averages
+  const avgPnl = tokensSimulated > 0 ? totalPnl / tokensSimulated : 0;
+  const avgPnlPercent = tokensSimulated > 0 ? totalPnlPercent / tokensSimulated : 0;
+  
+  return {
+    avgPnl: Math.round(avgPnl * 100) / 100,
+    avgPnlPercent: Math.round(avgPnlPercent * 100) / 100,
+    tokensSimulated
+  };
+}
+
 // Calculate average buy/sell statistics for a creator wallet
 function calculateBuySellStats(
   tokens: Array<{
@@ -774,6 +1004,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     const limit = parseInt(req.query.limit as string) || 20;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     const filters = req.body?.filters || {};
+    const whatIfSettings = req.body?.whatIfSettings || null;
     
     const offset = (page - 1) * limit;
     
@@ -1008,6 +1239,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       // Calculate expected ROI for 1st/2nd/3rd buy positions
       const expectedROI = calculateExpectedROI(allTokens);
       
+      // Calculate What If PNL if settings are provided
+      let whatIfPnl = null;
+      if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
+        whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
+      }
+      
       // Calculate scores if settings are available
       let scores = {
         winRateScore: 0,
@@ -1071,6 +1308,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgRoi2ndBuy: expectedROI.avgRoi2ndBuy,
           avgRoi3rdBuy: expectedROI.avgRoi3rdBuy
         },
+        whatIfPnl: whatIfPnl,
         scores: {
           winRateScore: Math.round(scores.winRateScore * 100) / 100,
           avgAthMcapScore: Math.round(scores.avgAthMcapScore * 100) / 100,

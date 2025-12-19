@@ -24,6 +24,12 @@ export interface ExpectedROI {
   avgRoi3rdBuy: number;
 }
 
+export interface WhatIfPnl {
+  avgPnl: number;
+  avgPnlPercent: number;
+  tokensSimulated: number;
+}
+
 export interface AthMcapPercentiles {
   percentile25th: boolean; // Whether creator has reached 25th percentile threshold
   percentile50th: boolean; // Whether creator has reached 50th percentile threshold
@@ -46,6 +52,7 @@ export interface CreatorWallet {
   multiplierPercentages: Record<number, number>; // % of tokens that reach each multiplier threshold
   buySellStats: BuySellStats;
   expectedROI: ExpectedROI;
+  whatIfPnl: WhatIfPnl | null;
   scores: CreatorWalletScores;
 }
 
@@ -100,11 +107,20 @@ export interface FilterParams {
   }>;
 }
 
+export interface WhatIfSettings {
+  buyPosition: number; // Buy at position X after dev (e.g., 2 = 2nd buy after dev)
+  sellStrategy: 'time' | 'pnl' | 'multiple';
+  sellAtSeconds?: number; // Sell at X seconds
+  sellAtPnlPercent?: number; // Sell if PNL >= X%
+  multipleSells?: Array<{ seconds: number; sizePercent: number }>; // Multiple sells: [{seconds: 3, sizePercent: 50}, {seconds: 6, sizePercent: 50}]
+}
+
 export async function getCreatorWalletsAnalytics(
   page: number = 1,
   limit: number = 20,
   viewAll: boolean = false,
-  filters?: FilterParams
+  filters?: FilterParams,
+  whatIfSettings?: WhatIfSettings | null
 ): Promise<CreatorWalletsResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -115,14 +131,17 @@ export async function getCreatorWalletsAnalytics(
     params.append('viewAll', 'true');
   }
 
-  // Add filters to request body if provided
+  // Add filters and What If settings to request body if provided
   const requestOptions: RequestInit = {
     method: 'POST',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ filters: filters || {} })
+    body: JSON.stringify({ 
+      filters: filters || {},
+      whatIfSettings: whatIfSettings || null
+    })
   };
   
   const response = await fetch(`${API_BASE_URL}/tokens/creators/analytics?${params.toString()}`, requestOptions);
