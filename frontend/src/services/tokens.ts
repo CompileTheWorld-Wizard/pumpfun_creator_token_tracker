@@ -128,3 +128,37 @@ export async function getTokenByMint(mint: string): Promise<Token> {
   return data.token;
 }
 
+export interface AthMcapStats {
+  avgAthMcap: number | null;
+  medianAthMcap: number | null;
+}
+
+export async function getAthMcapStats(viewAll: boolean = false): Promise<AthMcapStats> {
+  const params = new URLSearchParams();
+  if (viewAll) {
+    params.append('viewAll', 'true');
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/tokens/creators/ath-stats?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch ATH mcap statistics');
+  }
+
+  const data = await response.json();
+  return {
+    avgAthMcap: data.avgAthMcap,
+    medianAthMcap: data.medianAthMcap
+  };
+}
+

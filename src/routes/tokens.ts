@@ -250,6 +250,49 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
   }
 });
 
+// Get overall ATH mcap statistics for all creator wallets
+router.get('/creators/ath-stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    
+    let whereClause = '';
+    if (!viewAll) {
+      // Normal mode: exclude blacklisted wallets
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+    }
+    
+    // Calculate average and median ATH mcap across all creator wallets
+    // First, get the average ATH mcap per creator wallet
+    const result = await pool.query(
+      `SELECT 
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}`
+    );
+    
+    // Get median ATH mcap across all tokens
+    const medianResult = await pool.query(
+      `SELECT 
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}`
+    );
+    
+    const avgAthMcap = result.rows[0]?.avg_ath_mcap ? parseFloat(result.rows[0].avg_ath_mcap) : null;
+    const medianAthMcap = medianResult.rows[0]?.median_ath_mcap ? parseFloat(medianResult.rows[0].median_ath_mcap) : null;
+    
+    res.json({
+      avgAthMcap,
+      medianAthMcap
+    });
+  } catch (error: any) {
+    console.error('Error fetching ATH mcap statistics:', error);
+    res.status(500).json({ 
+      error: 'Error fetching ATH mcap statistics' 
+    });
+  }
+});
+
 // Helper function to get score from ranges
 function getScoreFromRanges(value: number, ranges: Array<{ min: number; max: number; score: number }>): number {
   for (const range of ranges) {

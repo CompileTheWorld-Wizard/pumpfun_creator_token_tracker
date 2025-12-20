@@ -76,7 +76,7 @@
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Stats Cards -->
-      <div class="grid grid-cols-2 gap-3 mb-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         <div class="bg-gradient-to-br from-purple-600/20 to-purple-800/20 border border-purple-500/30 p-3 rounded-lg backdrop-blur-sm">
           <div class="flex items-center justify-between mb-1.5">
             <h3 class="text-xs font-semibold text-gray-400">Wallets</h3>
@@ -97,6 +97,28 @@
           </div>
           <p class="text-2xl font-bold text-blue-400">{{ tokensTotalCount }}</p>
           <p class="text-xs text-gray-500 mt-0.5">Total</p>
+        </div>
+        
+        <div class="bg-gradient-to-br from-green-600/20 to-green-800/20 border border-green-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg ATH Mcap</h3>
+            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-green-400">{{ avgAthMcap !== null ? formatCurrency(avgAthMcap) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">All Creator Wallets</p>
+        </div>
+        
+        <div class="bg-gradient-to-br from-cyan-600/20 to-cyan-800/20 border border-cyan-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Median ATH Mcap</h3>
+            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-cyan-400">{{ medianAthMcap !== null ? formatCurrency(medianAthMcap) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">All Creator Wallets</p>
         </div>
       </div>
 
@@ -588,7 +610,7 @@ import { useRouter } from 'vue-router'
 import { logout, changePassword, clearDatabase } from '../services/auth'
 import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
-import { getCreatorWalletsFromTokens, type Token } from '../services/tokens'
+import { getCreatorWalletsFromTokens, getAthMcapStats, type Token } from '../services/tokens'
 import CreatorWalletsTab from './CreatorWalletsTab.vue'
 import TokensTab from './TokensTab.vue'
 // Import SVG files as raw strings
@@ -607,6 +629,8 @@ const router = useRouter()
 
 const activeTab = ref<'creator-wallets' | 'tokens'>('creator-wallets')
 const tokensTotalCount = ref<number>(0)
+const avgAthMcap = ref<number | null>(null)
+const medianAthMcap = ref<number | null>(null)
 
 // Helper function to process SVG for inline rendering
 const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
@@ -1074,6 +1098,18 @@ const loadCreatorWallets = async () => {
   }
 }
 
+const loadAthMcapStats = async () => {
+  try {
+    const stats = await getAthMcapStats(false) // false = exclude blacklisted wallets
+    avgAthMcap.value = stats.avgAthMcap
+    medianAthMcap.value = stats.medianAthMcap
+  } catch (err: any) {
+    console.error('Error loading ATH mcap statistics:', err)
+    avgAthMcap.value = null
+    medianAthMcap.value = null
+  }
+}
+
 // Watch for token selection from TokensTab
 watch(selectedToken, async (newToken) => {
   if (newToken && newToken.marketCapTimeSeries && newToken.marketCapTimeSeries.length > 0) {
@@ -1114,7 +1150,10 @@ onMounted(async () => {
     const response = await getStreamStatus()
     isTracking.value = response.status || false
     
-    await loadCreatorWallets()
+    await Promise.all([
+      loadCreatorWallets(),
+      loadAthMcapStats()
+    ])
   } catch (error) {
     console.error('Error loading data:', error)
   }
