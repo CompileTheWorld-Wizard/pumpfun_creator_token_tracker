@@ -162,3 +162,46 @@ export async function getAthMcapStats(viewAll: boolean = false): Promise<AthMcap
   };
 }
 
+export interface AvgStats {
+  avgTotalTokens: number | null;
+  avgBondedTokens: number | null;
+  avgWinRate: number | null;
+  avgAthMcap: number | null;
+  avgMedianAthMcap: number | null;
+  avgRugRate: number | null;
+  avgRugTime: number | null;
+  avgBuyCount: number | null;
+  avgBuyTotalSol: number | null;
+  avgSellCount: number | null;
+  avgSellTotalSol: number | null;
+  avgRoi1stBuy: number | null;
+  avgRoi2ndBuy: number | null;
+  avgRoi3rdBuy: number | null;
+}
+
+export async function getAvgStats(viewAll: boolean = false): Promise<AvgStats> {
+  const params = new URLSearchParams();
+  if (viewAll) {
+    params.append('viewAll', 'true');
+  }
+  
+  const response = await fetch(`${API_BASE_URL}/tokens/creators/avg-stats?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch average statistics');
+  }
+
+  const data = await response.json();
+  return data;
+}
+

@@ -293,6 +293,204 @@ router.get('/creators/ath-stats', requireAuth, async (req: Request, res: Respons
   }
 });
 
+// Get overall average metrics for all creator wallets
+router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    
+    let whereClause = '';
+    if (!viewAll) {
+      // Normal mode: exclude blacklisted wallets
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+    }
+    
+    // Get basic statistics that can be calculated directly from database
+    const basicStatsResult = await pool.query(
+      `SELECT 
+        AVG(wallet_stats.total_tokens) as avg_total_tokens,
+        AVG(wallet_stats.bonded_tokens) as avg_bonded_tokens,
+        AVG(wallet_stats.win_rate) as avg_win_rate,
+        AVG(wallet_stats.avg_ath_mcap) FILTER (WHERE wallet_stats.avg_ath_mcap IS NOT NULL) as avg_ath_mcap,
+        AVG(wallet_stats.median_ath_mcap) FILTER (WHERE wallet_stats.median_ath_mcap IS NOT NULL) as avg_median_ath_mcap
+      FROM (
+        SELECT 
+          ct.creator,
+          COUNT(*) as total_tokens,
+          COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+          CASE 
+            WHEN COUNT(*) > 0 THEN 
+              ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+            ELSE 0
+          END as win_rate,
+          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+        FROM tbl_soltrack_created_tokens ct
+        ${whereClause}
+        GROUP BY ct.creator
+      ) as wallet_stats`
+    );
+    
+    const basicStats = basicStatsResult.rows[0];
+    
+    // Get all creator wallets to calculate complex metrics
+    const creatorsResult = await pool.query(
+      `SELECT DISTINCT ct.creator
+       FROM tbl_soltrack_created_tokens ct
+       ${whereClause}
+       ORDER BY ct.creator`
+    );
+    
+    const creatorAddresses = creatorsResult.rows.map(row => row.creator);
+    
+    if (creatorAddresses.length === 0) {
+      res.json({
+        avgTotalTokens: null,
+        avgBondedTokens: null,
+        avgWinRate: null,
+        avgAthMcap: null,
+        avgMedianAthMcap: null,
+        avgRugRate: null,
+        avgRugTime: null,
+        avgBuyCount: null,
+        avgBuyTotalSol: null,
+        avgSellCount: null,
+        avgSellTotalSol: null,
+        avgRoi1stBuy: null,
+        avgRoi2ndBuy: null,
+        avgRoi3rdBuy: null
+      });
+      return;
+    }
+    
+    // Get scoring settings for rug threshold
+    const settingsResult = await pool.query('SELECT rug_threshold_mcap FROM tbl_soltrack_scoring_settings LIMIT 1');
+    const rugThresholdMcap = settingsResult.rows[0]?.rug_threshold_mcap || 6000;
+    
+    // Get all tokens for all creators (limit to reasonable amount for performance)
+    const tokensResult = await pool.query(
+      `SELECT 
+        ct.creator,
+        ct.market_cap_time_series,
+        ct.created_at,
+        ct.ath_market_cap_usd,
+        ct.initial_market_cap_usd
+      FROM tbl_soltrack_created_tokens ct
+      ${whereClause}
+      ORDER BY ct.creator, ct.created_at DESC`
+    );
+    
+    // Group tokens by creator
+    const tokensByCreator = new Map<string, Array<{
+      marketCapTimeSeries: any;
+      createdAt: Date;
+      athMarketCapUsd: number | null;
+      initialMarketCapUsd: number | null;
+      isFetched: boolean;
+    }>>();
+    
+    for (const row of tokensResult.rows) {
+      if (!tokensByCreator.has(row.creator)) {
+        tokensByCreator.set(row.creator, []);
+      }
+      
+      let marketCapTimeSeries = row.market_cap_time_series;
+      if (typeof marketCapTimeSeries === 'string') {
+        try {
+          marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
+        } catch (e) {
+          marketCapTimeSeries = [];
+        }
+      }
+      if (!Array.isArray(marketCapTimeSeries)) {
+        marketCapTimeSeries = [];
+      }
+      
+      tokensByCreator.get(row.creator)!.push({
+        marketCapTimeSeries,
+        createdAt: new Date(row.created_at),
+        athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
+        initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
+        isFetched: true
+      });
+    }
+    
+    // Calculate averages across all creators
+    let totalRugRate = 0;
+    let totalRugTime = 0;
+    let totalBuyCount = 0;
+    let totalBuyTotalSol = 0;
+    let totalSellCount = 0;
+    let totalSellTotalSol = 0;
+    let totalRoi1stBuy = 0;
+    let totalRoi2ndBuy = 0;
+    let totalRoi3rdBuy = 0;
+    let creatorsWithRugRate = 0;
+    let creatorsWithRugTime = 0;
+    let creatorsWithBuySell = 0;
+    let creatorsWithROI = 0;
+    
+    for (const creator of creatorAddresses) {
+      const tokens = tokensByCreator.get(creator) || [];
+      if (tokens.length === 0) continue;
+      
+      // Calculate rug rate
+      const rugRate = calculateRugRate(tokens, rugThresholdMcap);
+      if (rugRate !== null) {
+        totalRugRate += rugRate;
+        creatorsWithRugRate++;
+      }
+      
+      // Calculate rug time
+      const rugTime = calculateAvgRugTime(tokens, rugThresholdMcap);
+      if (rugTime !== null) {
+        totalRugTime += rugTime;
+        creatorsWithRugTime++;
+      }
+      
+      // Calculate buy/sell stats
+      const buySellStats = calculateBuySellStats(tokens);
+      if (buySellStats.avgBuyCount > 0 || buySellStats.avgSellCount > 0) {
+        totalBuyCount += buySellStats.avgBuyCount;
+        totalBuyTotalSol += buySellStats.avgBuyTotalSol;
+        totalSellCount += buySellStats.avgSellCount;
+        totalSellTotalSol += buySellStats.avgSellTotalSol;
+        creatorsWithBuySell++;
+      }
+      
+      // Calculate expected ROI
+      const expectedROI = calculateExpectedROI(tokens);
+      if (expectedROI.avgRoi1stBuy !== 0 || expectedROI.avgRoi2ndBuy !== 0 || expectedROI.avgRoi3rdBuy !== 0) {
+        totalRoi1stBuy += expectedROI.avgRoi1stBuy;
+        totalRoi2ndBuy += expectedROI.avgRoi2ndBuy;
+        totalRoi3rdBuy += expectedROI.avgRoi3rdBuy;
+        creatorsWithROI++;
+      }
+    }
+    
+    res.json({
+      avgTotalTokens: basicStats.avg_total_tokens ? parseFloat(basicStats.avg_total_tokens) : null,
+      avgBondedTokens: basicStats.avg_bonded_tokens ? parseFloat(basicStats.avg_bonded_tokens) : null,
+      avgWinRate: basicStats.avg_win_rate ? parseFloat(basicStats.avg_win_rate) : null,
+      avgAthMcap: basicStats.avg_ath_mcap ? parseFloat(basicStats.avg_ath_mcap) : null,
+      avgMedianAthMcap: basicStats.avg_median_ath_mcap ? parseFloat(basicStats.avg_median_ath_mcap) : null,
+      avgRugRate: creatorsWithRugRate > 0 ? totalRugRate / creatorsWithRugRate : null,
+      avgRugTime: creatorsWithRugTime > 0 ? totalRugTime / creatorsWithRugTime : null,
+      avgBuyCount: creatorsWithBuySell > 0 ? totalBuyCount / creatorsWithBuySell : null,
+      avgBuyTotalSol: creatorsWithBuySell > 0 ? totalBuyTotalSol / creatorsWithBuySell : null,
+      avgSellCount: creatorsWithBuySell > 0 ? totalSellCount / creatorsWithBuySell : null,
+      avgSellTotalSol: creatorsWithBuySell > 0 ? totalSellTotalSol / creatorsWithBuySell : null,
+      avgRoi1stBuy: creatorsWithROI > 0 ? totalRoi1stBuy / creatorsWithROI : null,
+      avgRoi2ndBuy: creatorsWithROI > 0 ? totalRoi2ndBuy / creatorsWithROI : null,
+      avgRoi3rdBuy: creatorsWithROI > 0 ? totalRoi3rdBuy / creatorsWithROI : null
+    });
+  } catch (error: any) {
+    console.error('Error fetching average statistics:', error);
+    res.status(500).json({ 
+      error: 'Error fetching average statistics' 
+    });
+  }
+});
+
 // Helper function to get score from ranges
 function getScoreFromRanges(value: number, ranges: Array<{ min: number; max: number; score: number }>): number {
   for (const range of ranges) {

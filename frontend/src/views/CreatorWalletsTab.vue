@@ -1186,7 +1186,8 @@
                 </div>
                 <button
                   @click="removeMultipleSell(index)"
-                  class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition h-[34px]"
+                  class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition"
+                  style="height: 2rem; line-height: 1.5rem;"
                 >
                   Remove
                 </button>

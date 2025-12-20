@@ -122,6 +122,147 @@
         </div>
       </div>
 
+      <!-- Additional Average Stats Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-4">
+        <div class="bg-gradient-to-br from-indigo-600/20 to-indigo-800/20 border border-indigo-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Tokens</h3>
+            <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-indigo-400">{{ avgStats.avgTotalTokens !== null ? avgStats.avgTotalTokens.toFixed(1) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Per Wallet</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-emerald-600/20 to-emerald-800/20 border border-emerald-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Bonded</h3>
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-emerald-400">{{ avgStats.avgBondedTokens !== null ? avgStats.avgBondedTokens.toFixed(1) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Per Wallet</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-yellow-600/20 to-yellow-800/20 border border-yellow-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Win Rate</h3>
+            <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-yellow-400">{{ avgStats.avgWinRate !== null ? avgStats.avgWinRate.toFixed(2) + '%' : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">% Bonded</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-red-600/20 to-red-800/20 border border-red-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Rug Rate</h3>
+            <svg class="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-red-400">{{ avgStats.avgRugRate !== null ? avgStats.avgRugRate.toFixed(2) + '%' : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">% Rugged</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-orange-600/20 to-orange-800/20 border border-orange-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Rug Time</h3>
+            <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-orange-400">{{ avgStats.avgRugTime !== null ? avgStats.avgRugTime.toFixed(2) + 's' : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Seconds</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-teal-600/20 to-teal-800/20 border border-teal-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Buy Count</h3>
+            <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-teal-400">{{ avgStats.avgBuyCount !== null ? avgStats.avgBuyCount.toFixed(1) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Per Token</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-pink-600/20 to-pink-800/20 border border-pink-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Buy SOL</h3>
+            <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-pink-400">{{ avgStats.avgBuyTotalSol !== null ? avgStats.avgBuyTotalSol.toFixed(2) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">SOL Per Token</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-rose-600/20 to-rose-800/20 border border-rose-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Sell Count</h3>
+            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-rose-400">{{ avgStats.avgSellCount !== null ? avgStats.avgSellCount.toFixed(1) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">Per Token</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-fuchsia-600/20 to-fuchsia-800/20 border border-fuchsia-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg Sell SOL</h3>
+            <svg class="w-4 h-4 text-fuchsia-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold text-fuchsia-400">{{ avgStats.avgSellTotalSol !== null ? avgStats.avgSellTotalSol.toFixed(2) : 'N/A' }}</p>
+          <p class="text-xs text-gray-500 mt-0.5">SOL Per Token</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-violet-600/20 to-violet-800/20 border border-violet-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg ROI 1st</h3>
+            <svg class="w-4 h-4 text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold" :class="avgStats.avgRoi1stBuy !== null && avgStats.avgRoi1stBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+            {{ avgStats.avgRoi1stBuy !== null ? (avgStats.avgRoi1stBuy >= 0 ? '+' : '') + avgStats.avgRoi1stBuy.toFixed(2) + '%' : 'N/A' }}
+          </p>
+          <p class="text-xs text-gray-500 mt-0.5">1st Buy</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-sky-600/20 to-sky-800/20 border border-sky-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg ROI 2nd</h3>
+            <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold" :class="avgStats.avgRoi2ndBuy !== null && avgStats.avgRoi2ndBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+            {{ avgStats.avgRoi2ndBuy !== null ? (avgStats.avgRoi2ndBuy >= 0 ? '+' : '') + avgStats.avgRoi2ndBuy.toFixed(2) + '%' : 'N/A' }}
+          </p>
+          <p class="text-xs text-gray-500 mt-0.5">2nd Buy</p>
+        </div>
+
+        <div class="bg-gradient-to-br from-amber-600/20 to-amber-800/20 border border-amber-500/30 p-3 rounded-lg backdrop-blur-sm">
+          <div class="flex items-center justify-between mb-1.5">
+            <h3 class="text-xs font-semibold text-gray-400">Avg ROI 3rd</h3>
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path>
+            </svg>
+          </div>
+          <p class="text-2xl font-bold" :class="avgStats.avgRoi3rdBuy !== null && avgStats.avgRoi3rdBuy >= 0 ? 'text-green-400' : 'text-red-400'">
+            {{ avgStats.avgRoi3rdBuy !== null ? (avgStats.avgRoi3rdBuy >= 0 ? '+' : '') + avgStats.avgRoi3rdBuy.toFixed(2) + '%' : 'N/A' }}
+          </p>
+          <p class="text-xs text-gray-500 mt-0.5">3rd Buy</p>
+        </div>
+      </div>
+
       <!-- Tab Controller -->
       <div class="mb-4">
         <div class="flex border-b border-gray-800">
@@ -610,7 +751,7 @@ import { useRouter } from 'vue-router'
 import { logout, changePassword, clearDatabase } from '../services/auth'
 import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, type Wallet } from '../services/wallets'
 import { startStream, stopStream, getStreamStatus } from '../services/stream'
-import { getCreatorWalletsFromTokens, getAthMcapStats, type Token } from '../services/tokens'
+import { getCreatorWalletsFromTokens, getAthMcapStats, getAvgStats, type Token } from '../services/tokens'
 import CreatorWalletsTab from './CreatorWalletsTab.vue'
 import TokensTab from './TokensTab.vue'
 // Import SVG files as raw strings
@@ -631,6 +772,20 @@ const activeTab = ref<'creator-wallets' | 'tokens'>('creator-wallets')
 const tokensTotalCount = ref<number>(0)
 const avgAthMcap = ref<number | null>(null)
 const medianAthMcap = ref<number | null>(null)
+const avgStats = ref({
+  avgTotalTokens: null as number | null,
+  avgBondedTokens: null as number | null,
+  avgWinRate: null as number | null,
+  avgRugRate: null as number | null,
+  avgRugTime: null as number | null,
+  avgBuyCount: null as number | null,
+  avgBuyTotalSol: null as number | null,
+  avgSellCount: null as number | null,
+  avgSellTotalSol: null as number | null,
+  avgRoi1stBuy: null as number | null,
+  avgRoi2ndBuy: null as number | null,
+  avgRoi3rdBuy: null as number | null
+})
 
 // Helper function to process SVG for inline rendering
 const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
@@ -1110,6 +1265,29 @@ const loadAthMcapStats = async () => {
   }
 }
 
+const loadAvgStats = async () => {
+  try {
+    const stats = await getAvgStats(false) // false = exclude blacklisted wallets
+    avgStats.value = stats
+  } catch (err: any) {
+    console.error('Error loading average statistics:', err)
+    avgStats.value = {
+      avgTotalTokens: null,
+      avgBondedTokens: null,
+      avgWinRate: null,
+      avgRugRate: null,
+      avgRugTime: null,
+      avgBuyCount: null,
+      avgBuyTotalSol: null,
+      avgSellCount: null,
+      avgSellTotalSol: null,
+      avgRoi1stBuy: null,
+      avgRoi2ndBuy: null,
+      avgRoi3rdBuy: null
+    }
+  }
+}
+
 // Watch for token selection from TokensTab
 watch(selectedToken, async (newToken) => {
   if (newToken && newToken.marketCapTimeSeries && newToken.marketCapTimeSeries.length > 0) {
@@ -1152,7 +1330,8 @@ onMounted(async () => {
     
     await Promise.all([
       loadCreatorWallets(),
-      loadAthMcapStats()
+      loadAthMcapStats(),
+      loadAvgStats()
     ])
   } catch (error) {
     console.error('Error loading data:', error)
