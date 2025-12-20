@@ -315,8 +315,8 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
       FROM (
         SELECT 
           ct.creator,
-          COUNT(*) as total_tokens,
-          COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+          COUNT(*)::DECIMAL as total_tokens,
+          COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL as bonded_tokens,
           CASE 
             WHEN COUNT(*) > 0 THEN 
               ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
@@ -330,7 +330,7 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
       ) as wallet_stats`
     );
     
-    const basicStats = basicStatsResult.rows[0];
+    const basicStats = basicStatsResult.rows[0] || {};
     
     // Get all creator wallets to calculate complex metrics
     const creatorsResult = await pool.query(
@@ -430,58 +430,62 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
     let creatorsWithROI = 0;
     
     for (const creator of creatorAddresses) {
-      const tokens = tokensByCreator.get(creator) || [];
-      if (tokens.length === 0) continue;
-      
-      // Calculate rug rate
-      const rugRate = calculateRugRate(tokens, rugThresholdMcap);
-      if (rugRate !== null) {
+      try {
+        const tokens = tokensByCreator.get(creator) || [];
+        if (tokens.length === 0) continue;
+        
+        // Calculate rug rate (always returns a number)
+        const rugRate = calculateRugRate(tokens, rugThresholdMcap);
         totalRugRate += rugRate;
         creatorsWithRugRate++;
-      }
-      
-      // Calculate rug time
-      const rugTime = calculateAvgRugTime(tokens, rugThresholdMcap);
-      if (rugTime !== null) {
-        totalRugTime += rugTime;
-        creatorsWithRugTime++;
-      }
-      
-      // Calculate buy/sell stats
-      const buySellStats = calculateBuySellStats(tokens);
-      if (buySellStats.avgBuyCount > 0 || buySellStats.avgSellCount > 0) {
-        totalBuyCount += buySellStats.avgBuyCount;
-        totalBuyTotalSol += buySellStats.avgBuyTotalSol;
-        totalSellCount += buySellStats.avgSellCount;
-        totalSellTotalSol += buySellStats.avgSellTotalSol;
-        creatorsWithBuySell++;
-      }
-      
-      // Calculate expected ROI
-      const expectedROI = calculateExpectedROI(tokens);
-      if (expectedROI.avgRoi1stBuy !== 0 || expectedROI.avgRoi2ndBuy !== 0 || expectedROI.avgRoi3rdBuy !== 0) {
-        totalRoi1stBuy += expectedROI.avgRoi1stBuy;
-        totalRoi2ndBuy += expectedROI.avgRoi2ndBuy;
-        totalRoi3rdBuy += expectedROI.avgRoi3rdBuy;
-        creatorsWithROI++;
+        
+        // Calculate rug time (can return null)
+        const rugTime = calculateAvgRugTime(tokens, rugThresholdMcap);
+        if (rugTime !== null) {
+          totalRugTime += rugTime;
+          creatorsWithRugTime++;
+        }
+        
+        // Calculate buy/sell stats
+        const buySellStats = calculateBuySellStats(tokens);
+        if (buySellStats.avgBuyCount > 0 || buySellStats.avgSellCount > 0) {
+          totalBuyCount += buySellStats.avgBuyCount;
+          totalBuyTotalSol += buySellStats.avgBuyTotalSol;
+          totalSellCount += buySellStats.avgSellCount;
+          totalSellTotalSol += buySellStats.avgSellTotalSol;
+          creatorsWithBuySell++;
+        }
+        
+        // Calculate expected ROI
+        const expectedROI = calculateExpectedROI(tokens);
+        if (expectedROI.avgRoi1stBuy !== 0 || expectedROI.avgRoi2ndBuy !== 0 || expectedROI.avgRoi3rdBuy !== 0) {
+          totalRoi1stBuy += expectedROI.avgRoi1stBuy;
+          totalRoi2ndBuy += expectedROI.avgRoi2ndBuy;
+          totalRoi3rdBuy += expectedROI.avgRoi3rdBuy;
+          creatorsWithROI++;
+        }
+      } catch (err) {
+        console.error(`Error calculating stats for creator ${creator}:`, err);
+        // Continue with next creator
+        continue;
       }
     }
     
     res.json({
-      avgTotalTokens: basicStats.avg_total_tokens ? parseFloat(basicStats.avg_total_tokens) : null,
-      avgBondedTokens: basicStats.avg_bonded_tokens ? parseFloat(basicStats.avg_bonded_tokens) : null,
-      avgWinRate: basicStats.avg_win_rate ? parseFloat(basicStats.avg_win_rate) : null,
-      avgAthMcap: basicStats.avg_ath_mcap ? parseFloat(basicStats.avg_ath_mcap) : null,
-      avgMedianAthMcap: basicStats.avg_median_ath_mcap ? parseFloat(basicStats.avg_median_ath_mcap) : null,
-      avgRugRate: creatorsWithRugRate > 0 ? totalRugRate / creatorsWithRugRate : null,
-      avgRugTime: creatorsWithRugTime > 0 ? totalRugTime / creatorsWithRugTime : null,
-      avgBuyCount: creatorsWithBuySell > 0 ? totalBuyCount / creatorsWithBuySell : null,
-      avgBuyTotalSol: creatorsWithBuySell > 0 ? totalBuyTotalSol / creatorsWithBuySell : null,
-      avgSellCount: creatorsWithBuySell > 0 ? totalSellCount / creatorsWithBuySell : null,
-      avgSellTotalSol: creatorsWithBuySell > 0 ? totalSellTotalSol / creatorsWithBuySell : null,
-      avgRoi1stBuy: creatorsWithROI > 0 ? totalRoi1stBuy / creatorsWithROI : null,
-      avgRoi2ndBuy: creatorsWithROI > 0 ? totalRoi2ndBuy / creatorsWithROI : null,
-      avgRoi3rdBuy: creatorsWithROI > 0 ? totalRoi3rdBuy / creatorsWithROI : null
+      avgTotalTokens: basicStats.avg_total_tokens != null ? parseFloat(basicStats.avg_total_tokens) : null,
+      avgBondedTokens: basicStats.avg_bonded_tokens != null ? parseFloat(basicStats.avg_bonded_tokens) : null,
+      avgWinRate: basicStats.avg_win_rate != null ? parseFloat(basicStats.avg_win_rate) : null,
+      avgAthMcap: basicStats.avg_ath_mcap != null ? parseFloat(basicStats.avg_ath_mcap) : null,
+      avgMedianAthMcap: basicStats.avg_median_ath_mcap != null ? parseFloat(basicStats.avg_median_ath_mcap) : null,
+      avgRugRate: creatorsWithRugRate > 0 ? Math.round((totalRugRate / creatorsWithRugRate) * 100) / 100 : null,
+      avgRugTime: creatorsWithRugTime > 0 ? Math.round((totalRugTime / creatorsWithRugTime) * 100) / 100 : null,
+      avgBuyCount: creatorsWithBuySell > 0 ? Math.round((totalBuyCount / creatorsWithBuySell) * 100) / 100 : null,
+      avgBuyTotalSol: creatorsWithBuySell > 0 ? Math.round((totalBuyTotalSol / creatorsWithBuySell) * 100) / 100 : null,
+      avgSellCount: creatorsWithBuySell > 0 ? Math.round((totalSellCount / creatorsWithBuySell) * 100) / 100 : null,
+      avgSellTotalSol: creatorsWithBuySell > 0 ? Math.round((totalSellTotalSol / creatorsWithBuySell) * 100) / 100 : null,
+      avgRoi1stBuy: creatorsWithROI > 0 ? Math.round((totalRoi1stBuy / creatorsWithROI) * 100) / 100 : null,
+      avgRoi2ndBuy: creatorsWithROI > 0 ? Math.round((totalRoi2ndBuy / creatorsWithROI) * 100) / 100 : null,
+      avgRoi3rdBuy: creatorsWithROI > 0 ? Math.round((totalRoi3rdBuy / creatorsWithROI) * 100) / 100 : null
     });
   } catch (error: any) {
     console.error('Error fetching average statistics:', error);
