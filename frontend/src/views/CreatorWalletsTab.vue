@@ -1159,7 +1159,7 @@
               :key="index"
               class="space-y-1"
             >
-              <div class="flex items-center gap-2">
+              <div class="flex items-end gap-2">
                 <div class="flex-1">
                   <label class="block text-[10px] text-gray-400 mb-0.5">Seconds</label>
                   <input
@@ -1184,14 +1184,12 @@
                     :class="getMultipleSellValidationClass()"
                   />
                 </div>
-                <div class="flex items-end">
-                  <button
-                    @click="removeMultipleSell(index)"
-                    class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition"
-                  >
-                    Remove
-                  </button>
-                </div>
+                <button
+                  @click="removeMultipleSell(index)"
+                  class="px-2 py-1.5 text-xs bg-red-600/90 hover:bg-red-600 text-white rounded transition h-[34px]"
+                >
+                  Remove
+                </button>
               </div>
             </div>
             <div v-if="whatIfSettings.multipleSells && whatIfSettings.multipleSells.length > 0" class="text-[10px] text-gray-400">
