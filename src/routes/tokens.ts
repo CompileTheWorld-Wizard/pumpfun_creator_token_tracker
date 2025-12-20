@@ -363,8 +363,21 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
     }
     
     // Get scoring settings for rug threshold
-    const settingsResult = await pool.query('SELECT rug_threshold_mcap FROM tbl_soltrack_scoring_settings LIMIT 1');
-    const rugThresholdMcap = settingsResult.rows[0]?.rug_threshold_mcap || 6000;
+    let rugThresholdMcap = 6000; // Default value
+    try {
+      const settingsResult = await pool.query(
+        `SELECT settings
+         FROM tbl_soltrack_scoring_settings
+         WHERE is_default = TRUE
+         LIMIT 1`
+      );
+      if (settingsResult.rows.length > 0 && settingsResult.rows[0].settings) {
+        rugThresholdMcap = settingsResult.rows[0].settings.rugThresholdMcap || 6000;
+      }
+    } catch (settingsError) {
+      console.error('Error fetching scoring settings for avg-stats:', settingsError);
+      // Use default value
+    }
     
     // Get all tokens for all creators (limit to reasonable amount for performance)
     const tokensResult = await pool.query(
