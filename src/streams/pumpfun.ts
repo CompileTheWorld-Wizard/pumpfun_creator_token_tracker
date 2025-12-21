@@ -34,6 +34,24 @@ let isStreaming = false;
 let isStopping = false; // Flag to indicate graceful shutdown in progress
 let txnStreamer: TransactionStreamer | null = null;
 
+// In-memory pool -> mint mapping (for buy/sell events)
+// This maps pool addresses to base_mint addresses
+const poolToMintMap: Map<string, string> = new Map();
+
+/**
+ * Get mint address from pool address
+ */
+export function getMintFromPool(poolAddress: string): string | null {
+  return poolToMintMap.get(poolAddress) || null;
+}
+
+/**
+ * Store pool -> mint mapping
+ */
+export function setPoolToMintMapping(poolAddress: string, mintAddress: string): void {
+  poolToMintMap.set(poolAddress, mintAddress);
+}
+
 /**
  * Extract mint address from AMM event
  * AMM events don't have mint directly, need to extract from transaction accounts
@@ -128,191 +146,226 @@ function initializeParser(): Parser {
   return parser;
 }
 
+// Event type lookup map for fast conversion (optimization)
+const EVENT_TYPE_MAP: Record<string, EventType> = {
+  'CreateEvent': 'CreateEvent',
+  'BuyEvent': 'BuyEvent',
+  'SellEvent': 'SellEvent',
+  'TradeEvent': 'TradeEvent',
+};
+
 /**
  * Process incoming transaction data from ladysbug
+ * Optimized for high-frequency transactions (10-50ms intervals)
  * Streamer only detects events and signals trackers - no heavy processing here
  */
 async function processData(processed: any) {
   try {
-    // Log transaction signatures
-    if (!processed?.transaction?.signatures)
-      return
+    // Early return if no signatures
+    if (!processed?.transaction?.signatures) {
+      return;
+    }
 
+    // Early return if no events (before any processing)
+    const events = processed.transaction.message?.events;
+    if (!events || !Array.isArray(events) || events.length === 0) {
+      return;
+    }
+
+    // Extract signature once
     const txSignature = Array.isArray(processed.transaction.signatures) 
       ? processed.transaction.signatures[0] 
       : String(processed.transaction.signatures[0] || 'unknown');
 
-    // Check for migrate instruction (non-blocking signal to bonding tracker)
+    // Single-pass optimization: process all events in one loop
+    const transactionTimestamp = Date.now();
+    let createEventFound: CreateEventData | null = null;
+    let devBuyTradeEventFound: TradeEventData | null = null;
+    const redisEvents: Array<{ signature: string; eventType: EventType; timestamp: number; data: any }> = [];
+    const tradeEventsToProcess: TradeEventData[] = [];
+    const ammBuyEventsToProcess: Array<{ data: AmmBuyEventData; mint: string | null }> = [];
+    const ammSellEventsToProcess: Array<{ data: AmmSellEventData; mint: string | null }> = [];
+    let createPoolEvent: any = null;
+    let hasMigrateInstruction = false;
+
+    // Check for migrate instruction first (lightweight check)
     try {
       const instructions = processed.transaction.message?.compiledInstructions || [];
       for (const instruction of instructions) {
         if (instruction?.data?.name?.includes('migrate')) {
-          // Extract mint address from transaction
-          const mintAddress = extractMintFromTransaction(processed);
-          if (mintAddress) {
-            // Signal bonding tracker (non-blocking)
-            handleMigrateEvent(mintAddress).catch((error) => {
-              console.error(`[PumpFun] Error handling migrate event for ${mintAddress}:`, error);
-            });
-          } else {
-            console.warn(`[PumpFun] Could not extract mint address from migrate transaction`);
-          }
+          hasMigrateInstruction = true;
+          break;
         }
       }
     } catch (error) {
-      // Don't fail the whole transaction processing if migrate detection fails
-      console.error('[PumpFun] Error detecting migrate:', error);
+      // Ignore migrate detection errors
     }
 
-    // Log events if available
-    if (processed?.transaction?.message?.events.length === 0) {
-      return;
-    }
+    // Single pass through events - collect all information
+    for (const event of events) {
+      if (!event) continue;
+      
+      const eventName = event.name;
+      if (!eventName) continue;
 
-    // Store events in Redis and process them
-    const events = processed.transaction.message?.events;
-    if (events && Array.isArray(events)) {
-      // First pass: Store all events in Redis
-      const transactionTimestamp = Date.now();
-      
-      for (const event of events) {
-        const eventName = event?.name ? String(event.name) : 'unknown';
-        
-        // Determine event type
-        let eventType: EventType = 'unknown';
-        if (eventName === 'CreateEvent') {
-          eventType = 'CreateEvent';
-        } else if (eventName === 'BuyEvent') {
-          eventType = 'BuyEvent';
-        } else if (eventName === 'SellEvent') {
-          eventType = 'SellEvent';
-        } else if (eventName === 'TradeEvent') {
-          eventType = 'TradeEvent';
-        }
-        
-        // Store event in Redis (only relevant event types)
-        if (eventType !== 'unknown') {
-          await storeTransactionEvent({
-            signature: txSignature,
-            eventType,
-            timestamp: transactionTimestamp,
-            data: event?.data || null,
-          });
-        }
+      // Fast event type lookup
+      const eventType = EVENT_TYPE_MAP[eventName] || 'unknown';
+
+      // Handle CreatePoolEvent for migrate (only if migrate instruction detected)
+      if (hasMigrateInstruction && eventName === 'CreatePoolEvent' && event.data && !createPoolEvent) {
+        createPoolEvent = event.data;
       }
-      
-      // Second pass: Collect CreateEvent and TradeEvent from same transaction
-      let createEventFound: CreateEventData | null = null;
-      let devBuyTradeEventFound: TradeEventData | null = null;
-      const tradeEventsInTx: TradeEventData[] = [];
-      
-      // First, find CreateEvent
-      for (const event of events) {
-        const eventName = event?.name ? String(event.name) : 'unknown';
-        if (eventName === 'CreateEvent' && event?.data) {
-          createEventFound = event.data as CreateEventData;
-          break; // Found CreateEvent, can exit
-        }
+
+      // Collect events for Redis (batch write later)
+      if (eventType !== 'unknown' && event.data) {
+        redisEvents.push({
+          signature: txSignature,
+          eventType,
+          timestamp: transactionTimestamp,
+          data: event.data,
+        });
       }
-      
-      // Then, find TradeEvents in the same transaction
-      if (createEventFound) {
-        for (const event of events) {
-          const eventName = event?.name ? String(event.name) : 'unknown';
-          if (eventName === 'TradeEvent' && event?.data) {
-            const tradeData = event.data as TradeEventData;
-            tradeEventsInTx.push(tradeData);
-            // Check if this TradeEvent is for the same mint as CreateEvent and is a buy (dev buy)
-            if (tradeData.mint === createEventFound.mint && tradeData.is_buy) {
-              devBuyTradeEventFound = tradeData;
-              console.log(`[PumpFun] Found dev buy TradeEvent in same transaction as CreateEvent for ${tradeData.mint}`);
-            }
+
+      // Collect CreateEvent
+      if (eventName === 'CreateEvent' && event.data && !createEventFound) {
+        createEventFound = event.data as CreateEventData;
+      }
+
+      // Collect TradeEvents
+      if (eventName === 'TradeEvent' && event.data) {
+        const tradeData = event.data as TradeEventData;
+        if (createEventFound && tradeData.mint === createEventFound.mint && tradeData.is_buy) {
+          // Dev buy found
+          if (!devBuyTradeEventFound) {
+            devBuyTradeEventFound = tradeData;
           }
+        } else {
+          // Regular trade event (not dev buy)
+          tradeEventsToProcess.push(tradeData);
         }
       }
-      
-      // Process CreateEvent with dev buy if found
-      if (createEventFound) {
-        // During graceful shutdown, don't accept new tokens
-        if (!isStopping) {
-          const creator = createEventFound.creator || createEventFound.user;
+
+      // Collect AMM events (defer mint resolution)
+      if (eventName === 'BuyEvent' && event.data) {
+        const buyData = event.data as AmmBuyEventData;
+        const poolAddress = buyData.pool;
+        const mint = poolAddress ? (poolToMintMap.get(poolAddress) || null) : null;
+        ammBuyEventsToProcess.push({ data: buyData, mint });
+      }
+
+      if (eventName === 'SellEvent' && event.data) {
+        const sellData = event.data as AmmSellEventData;
+        const poolAddress = sellData.pool;
+        const mint = poolAddress ? (poolToMintMap.get(poolAddress) || null) : null;
+        ammSellEventsToProcess.push({ data: sellData, mint });
+      }
+    }
+
+    // Handle migrate event (non-blocking)
+    if (hasMigrateInstruction) {
+      try {
+        if (createPoolEvent) {
+          const poolAddress = createPoolEvent.pool;
+          const baseMint = createPoolEvent.base_mint;
+          const quoteMint = createPoolEvent.quote_mint;
+          const mintAddress = baseMint || extractMintFromTransaction(processed);
           
-          // Skip if creator is blacklisted (fast check in streamer)
-          if (!isBlacklistedCreator(creator)) {
-            // Signal token tracker (handles 15-sec tracking + creator token fetching)
-            // Pass dev buy TradeEvent if found in same transaction
-            handleCreateEvent(createEventFound, txSignature, devBuyTradeEventFound);
-            
-            // Signal ATH tracker to register token
-            registerTokenForAth(
-              createEventFound.mint,
-              createEventFound.name,
-              createEventFound.symbol,
-              creator,
-              createEventFound.timestamp * 1000
-            );
-            
-            // If dev buy found, also send to ATH tracker immediately
-            if (devBuyTradeEventFound) {
-              handleTradeEvent(devBuyTradeEventFound, txSignature);
-            }
+          if (mintAddress && poolAddress && baseMint && quoteMint) {
+            // Store pool->mint mapping immediately
+            poolToMintMap.set(poolAddress, baseMint);
+            // Signal bonding tracker (non-blocking)
+            handleMigrateEvent(mintAddress, {
+              pool: poolAddress,
+              base_mint: baseMint,
+              quote_mint: quoteMint
+            }).catch((error) => {
+              console.error(`[PumpFun] Error handling migrate event for ${mintAddress}:`, error);
+            });
           }
+        } else {
+          // Fallback: extract mint from transaction
+          const mintAddress = extractMintFromTransaction(processed);
+          if (mintAddress) {
+            handleMigrateEvent(mintAddress).catch((error) => {
+              console.error(`[PumpFun] Error handling migrate event for ${mintAddress}:`, error);
+            });
+          }
+        }
+      } catch (error) {
+        // Ignore migrate errors
+      }
+    }
+
+    // Batch write all events to Redis (non-blocking)
+    if (redisEvents.length > 0) {
+      // Fire and forget - don't await Redis writes
+      Promise.all(redisEvents.map(event => storeTransactionEvent(event))).catch((error) => {
+        console.error('[PumpFun] Error storing events to Redis:', error);
+      });
+    }
+
+    // Process CreateEvent (if found)
+    if (createEventFound && !isStopping) {
+      const creator = createEventFound.creator || createEventFound.user;
+      
+      if (!isBlacklistedCreator(creator)) {
+        // Signal token tracker (non-blocking)
+        handleCreateEvent(createEventFound, txSignature, devBuyTradeEventFound);
+        
+        // Signal ATH tracker (non-blocking)
+        registerTokenForAth(
+          createEventFound.mint,
+          createEventFound.name,
+          createEventFound.symbol,
+          creator,
+          createEventFound.timestamp * 1000
+        );
+        
+        // Process dev buy if found (non-blocking)
+        if (devBuyTradeEventFound) {
+          handleTradeEvent(devBuyTradeEventFound, txSignature);
+        }
+      }
+    }
+
+    // Process regular TradeEvents (non-blocking)
+    for (const tradeData of tradeEventsToProcess) {
+      handleTradeEvent(tradeData, txSignature);
+    }
+
+    // Process AMM BuyEvents (resolve mints if needed)
+    for (const { data: buyData, mint } of ammBuyEventsToProcess) {
+      let resolvedMint = mint;
+      const poolAddress = buyData.pool;
+      
+      if (!resolvedMint && poolAddress) {
+        // Fallback: try to extract from transaction
+        resolvedMint = extractMintFromAmmEvent(processed, { data: buyData });
+        if (resolvedMint) {
+          poolToMintMap.set(poolAddress, resolvedMint);
         }
       }
       
-      // Process other events (TradeEvent, BuyEvent, SellEvent) that are NOT dev buys
-      for (const event of events) {
-        const eventName = event?.name ? String(event.name) : 'unknown';
-        
-        let eventType: EventType = 'unknown';
-        if (eventName === 'CreateEvent') {
-          eventType = 'CreateEvent';
-        } else if (eventName === 'BuyEvent') {
-          eventType = 'BuyEvent';
-        } else if (eventName === 'SellEvent') {
-          eventType = 'SellEvent';
-        } else if (eventName === 'TradeEvent') {
-          eventType = 'TradeEvent';
+      if (resolvedMint) {
+        handleAmmBuyEvent(buyData, resolvedMint, txSignature);
+      }
+    }
+
+    // Process AMM SellEvents (resolve mints if needed)
+    for (const { data: sellData, mint } of ammSellEventsToProcess) {
+      let resolvedMint = mint;
+      const poolAddress = sellData.pool;
+      
+      if (!resolvedMint && poolAddress) {
+        // Fallback: try to extract from transaction
+        resolvedMint = extractMintFromAmmEvent(processed, { data: sellData });
+        if (resolvedMint) {
+          poolToMintMap.set(poolAddress, resolvedMint);
         }
-        
-        // Skip CreateEvent (already processed) and dev buy TradeEvent (already processed)
-        if (eventType === 'CreateEvent') {
-          continue;
-        }
-        
-        if (eventType === 'TradeEvent' && event?.data) {
-          const tradeData = event.data as TradeEventData;
-          // Skip if this is the dev buy we already processed (same mint, same transaction, is buy)
-          if (createEventFound && 
-              devBuyTradeEventFound && 
-              tradeData.mint === createEventFound.mint && 
-              tradeData.is_buy &&
-              tradeData.sol_amount === devBuyTradeEventFound.sol_amount &&
-              tradeData.token_amount === devBuyTradeEventFound.token_amount) {
-            continue; // Skip dev buy - already processed
-          }
-          // Process other TradeEvents (not dev buys)
-          handleTradeEvent(tradeData, txSignature);
-        }
-        
-        // Send BuyEvent to ATH tracker (pump.fun AMM)
-        if (eventType === 'BuyEvent' && event?.data) {
-          const buyData = event.data as AmmBuyEventData;
-          // Extract mint from pool or other field - AMM events need pool lookup
-          const mint = extractMintFromAmmEvent(processed, event);
-          if (mint) {
-            handleAmmBuyEvent(buyData, mint, txSignature);
-          }
-        }
-        
-        // Send SellEvent to ATH tracker (pump.fun AMM)
-        if (eventType === 'SellEvent' && event?.data) {
-          const sellData = event.data as AmmSellEventData;
-          const mint = extractMintFromAmmEvent(processed, event);
-          if (mint) {
-            handleAmmSellEvent(sellData, mint, txSignature);
-          }
-        }
+      }
+      
+      if (resolvedMint) {
+        handleAmmSellEvent(sellData, resolvedMint, txSignature);
       }
     }
   } catch (error) {
@@ -347,6 +400,9 @@ async function startStreaming(): Promise<void> {
 
     // Initialize bonding tracker (fetches bonding status from Shyft API)
     await initializeBondingTracker();
+
+    // Load pool -> mint mappings from database
+    await loadPoolToMintMappings();
 
     // Initialize parser
     const parser = initializeParser();
@@ -426,6 +482,33 @@ async function stopStreaming(): Promise<void> {
   isStopping = false;
   txnStreamer = null;
   console.log('[PumpFun] Graceful shutdown complete');
+}
+
+/**
+ * Load pool -> mint mappings from database
+ */
+async function loadPoolToMintMappings(): Promise<void> {
+  try {
+    const { pool } = await import('../db.js');
+    const result = await pool.query(
+      `SELECT pool_address, base_mint 
+       FROM tbl_soltrack_created_tokens 
+       WHERE pool_address IS NOT NULL AND base_mint IS NOT NULL`
+    );
+    
+    for (const row of result.rows) {
+      if (row.pool_address && row.base_mint) {
+        poolToMintMap.set(row.pool_address, row.base_mint);
+      }
+    }
+    
+    console.log(`[PumpFun] Loaded ${result.rows.length} pool->mint mappings from database`);
+  } catch (error) {
+    // Ignore errors if columns don't exist yet (migration not run)
+    if ((error as any)?.code !== '42703') {
+      console.error('[PumpFun] Error loading pool->mint mappings from database:', error);
+    }
+  }
 }
 
 /**

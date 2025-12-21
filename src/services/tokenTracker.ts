@@ -172,7 +172,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
         const dbTokenMints = dbResult.rows.map(row => row.mint);
         
         // Fetch bonding status for database tokens
-        const bondingStatusMap = await fetchBondingStatusBatch(dbTokenMints);
+        const { bondingStatusMap, poolInfoMap } = await fetchBondingStatusBatch(dbTokenMints);
         
         // Update bonding status in database based on Shyft API response
         const bondedTokens: string[] = [];
@@ -187,15 +187,30 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
           }
         }
         
-        // Update database with latest bonding status from Shyft API
+        // Update database with latest bonding status from Shyft API (with pool info)
         if (bondedTokens.length > 0) {
-          const bondedPlaceholders = bondedTokens.map((_, i) => `$${i + 1}`).join(', ');
-          await pool.query(
-            `UPDATE tbl_soltrack_created_tokens 
-             SET bonded = true, updated_at = NOW()
-             WHERE mint IN (${bondedPlaceholders})`,
-            bondedTokens
-          );
+          for (const mint of bondedTokens) {
+            const poolInfo = poolInfoMap.get(mint);
+            if (poolInfo) {
+              await pool.query(
+                `UPDATE tbl_soltrack_created_tokens 
+                 SET bonded = true,
+                     pool_address = $2,
+                     base_mint = $3,
+                     quote_mint = $4,
+                     updated_at = NOW()
+                 WHERE mint = $1`,
+                [mint, poolInfo.pool, poolInfo.base_mint, poolInfo.quote_mint]
+              );
+            } else {
+              await pool.query(
+                `UPDATE tbl_soltrack_created_tokens 
+                 SET bonded = true, updated_at = NOW()
+                 WHERE mint = $1`,
+                [mint]
+              );
+            }
+          }
         }
         
         if (unbondedTokens.length > 0) {
@@ -216,7 +231,7 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
     }
     
     // Fetch bonding status for all tokens using Shyft GraphQL API
-    const bondingStatusMap = await fetchBondingStatusBatch(tokenMints);
+    const { bondingStatusMap, poolInfoMap } = await fetchBondingStatusBatch(tokenMints);
     
     // Save tokens to database and prepare for ATH fetching
     const tokensForAth: Array<{ mint: string; name: string; symbol: string; creator: string; blockTime: number }> = [];
@@ -224,30 +239,64 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
     for (const mint of tokenMints) {
       const tokenData = tokenDataMap.get(mint);
       const isBonded = bondingStatusMap.get(mint) || false;
+      const poolInfo = poolInfoMap.get(mint);
       
       if (tokenData) {
         try {
-          await pool.query(
-            `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
-             ON CONFLICT (mint) DO UPDATE SET
-               name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
-               symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-               -- Don't update bonded status - it should only be set by migrate events
-               -- Preserve existing bonded status to avoid overwriting migrate event updates
-               bonded = tbl_soltrack_created_tokens.bonded,
-               is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
-               updated_at = NOW()`,
-            [
-              mint,
-              tokenData.name,
-              tokenData.symbol,
-              creatorAddress,
-              isBonded, // Only used for new inserts, not for updates
-              new Date(tokenData.blockTime * 1000),
-              true, // is_fetched = true (from Solscan API)
-            ]
-          );
+          if (isBonded && poolInfo) {
+            // Insert with pool information if bonded
+            await pool.query(
+              `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, pool_address, base_mint, quote_mint, created_at, is_fetched)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+               ON CONFLICT (mint) DO UPDATE SET
+                 name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+                 symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
+                 -- Don't update bonded status - it should only be set by migrate events
+                 -- Preserve existing bonded status to avoid overwriting migrate event updates
+                 bonded = tbl_soltrack_created_tokens.bonded,
+                 -- Update pool info only if not already set (preserve migrate event data)
+                 pool_address = COALESCE(tbl_soltrack_created_tokens.pool_address, EXCLUDED.pool_address),
+                 base_mint = COALESCE(tbl_soltrack_created_tokens.base_mint, EXCLUDED.base_mint),
+                 quote_mint = COALESCE(tbl_soltrack_created_tokens.quote_mint, EXCLUDED.quote_mint),
+                 is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
+                 updated_at = NOW()`,
+              [
+                mint,
+                tokenData.name,
+                tokenData.symbol,
+                creatorAddress,
+                isBonded,
+                poolInfo.pool,
+                poolInfo.base_mint,
+                poolInfo.quote_mint,
+                new Date(tokenData.blockTime * 1000),
+                true, // is_fetched = true (from Solscan API)
+              ]
+            );
+          } else {
+            // Insert without pool information
+            await pool.query(
+              `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, bonded, created_at, is_fetched)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               ON CONFLICT (mint) DO UPDATE SET
+                 name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
+                 symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
+                 -- Don't update bonded status - it should only be set by migrate events
+                 -- Preserve existing bonded status to avoid overwriting migrate event updates
+                 bonded = tbl_soltrack_created_tokens.bonded,
+                 is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
+                 updated_at = NOW()`,
+              [
+                mint,
+                tokenData.name,
+                tokenData.symbol,
+                creatorAddress,
+                isBonded, // Only used for new inserts, not for updates
+                new Date(tokenData.blockTime * 1000),
+                true, // is_fetched = true (from Solscan API)
+              ]
+            );
+          }
 
           // Register token in ATH tracker (for real-time tracking)
           // Only register if creator is not blacklisted (registerToken checks this internally)
