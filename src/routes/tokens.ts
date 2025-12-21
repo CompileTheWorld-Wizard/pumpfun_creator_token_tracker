@@ -718,7 +718,7 @@ function calculateRugRate(
   return (rugCount / tokens.length) * 100;
 }
 
-// Calculate average rug time for streamed tokens
+// Calculate average rug time for tokens
 // Returns the average time (in seconds) when tokens rug (market cap drops below threshold)
 function calculateAvgRugTime(
   tokens: Array<{
@@ -729,14 +729,13 @@ function calculateAvgRugTime(
   }>,
   rugThresholdMcap: number
 ): number | null {
-  // Only consider streamed tokens (is_fetched = false)
-  const streamedTokens = tokens.filter(t => !t.isFetched);
-  
-  if (streamedTokens.length === 0) return null;
+  // Consider all tokens that have market cap time series data
+  // (both streamed and fetched tokens can have time series data)
+  if (tokens.length === 0) return null;
   
   const rugTimes: number[] = [];
   
-  for (const token of streamedTokens) {
+  for (const token of tokens) {
     // Check if token has market cap time series data
     let marketCapTimeSeries = token.marketCapTimeSeries;
     if (typeof marketCapTimeSeries === 'string') {
