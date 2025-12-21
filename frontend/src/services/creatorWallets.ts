@@ -112,7 +112,7 @@ export interface WhatIfSettings {
   sellStrategy: 'time' | 'pnl' | 'multiple';
   sellAtSeconds?: number; // Sell at X seconds
   sellAtPnlPercent?: number; // Sell if PNL >= X%
-  multipleSells?: Array<{ seconds: number; sizePercent: number }>; // Multiple sells: [{seconds: 3, sizePercent: 50}, {seconds: 6, sizePercent: 50}]
+  multipleSells?: Array<{ type: 'time' | 'pnl'; value: number; sizePercent: number }>; // Multiple sells: [{type: 'time', value: 3, sizePercent: 50}, {type: 'pnl', value: 100, sizePercent: 50}]
 }
 
 export async function getCreatorWalletsAnalytics(

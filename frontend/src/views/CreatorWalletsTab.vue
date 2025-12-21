@@ -1160,14 +1160,27 @@
               class="space-y-1"
             >
               <div class="flex items-end gap-2">
+                <div class="w-24">
+                  <label class="block text-[10px] text-gray-400 mb-0.5">Type</label>
+                  <select
+                    v-model="sell.type"
+                    class="w-full px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value="time">Time</option>
+                    <option value="pnl">PNL</option>
+                  </select>
+                </div>
                 <div class="flex-1">
-                  <label class="block text-[10px] text-gray-400 mb-0.5">Seconds</label>
+                  <label class="block text-[10px] text-gray-400 mb-0.5">
+                    {{ sell.type === 'time' ? 'Seconds' : 'PNL %' }}
+                  </label>
                   <input
-                    v-model.number="sell.seconds"
+                    v-model.number="sell.value"
                     type="number"
-                    min="0"
-                    max="15"
-                    placeholder="e.g., 3"
+                    :min="sell.type === 'time' ? 0 : 0"
+                    :max="sell.type === 'time' ? 15 : undefined"
+                    :step="sell.type === 'time' ? 1 : 0.1"
+                    :placeholder="sell.type === 'time' ? 'e.g., 3' : 'e.g., 100'"
                     class="w-full px-2 py-1.5 text-xs bg-gray-800/80 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-purple-500"
                   />
                 </div>
@@ -1664,7 +1677,7 @@ const whatIfSettings = ref<{
   sellStrategy: 'time' | 'pnl' | 'multiple';
   sellAtSeconds?: number;
   sellAtPnlPercent?: number;
-  multipleSells?: Array<{ seconds: number; sizePercent: number }>;
+  multipleSells?: Array<{ type: 'time' | 'pnl'; value: number; sizePercent: number }>;
 }>({
   buyPosition: 2,
   sellStrategy: 'time',
@@ -2351,11 +2364,19 @@ const applyWhatIfSettings = () => {
       return
     }
     
-    // Validate that all sells have seconds and size percent
+    // Validate that all sells have type, value, and size percent
     for (let i = 0; i < whatIfSettings.value.multipleSells.length; i++) {
       const sell = whatIfSettings.value.multipleSells[i]
-      if (!sell.seconds && sell.seconds !== 0) {
-        alert(`Please set seconds for sell ${i + 1}`)
+      if (!sell.type || (sell.type !== 'time' && sell.type !== 'pnl')) {
+        alert(`Please select a type (Time or PNL) for sell ${i + 1}`)
+        return
+      }
+      if (sell.value === undefined || sell.value === null || sell.value < 0) {
+        alert(`Please set ${sell.type === 'time' ? 'seconds' : 'PNL %'} for sell ${i + 1}`)
+        return
+      }
+      if (sell.type === 'time' && sell.value > 15) {
+        alert(`Seconds for sell ${i + 1} must be between 0 and 15`)
         return
       }
       if (!sell.sizePercent && sell.sizePercent !== 0) {
@@ -2374,16 +2395,6 @@ const applyWhatIfSettings = () => {
       alert(`Total sell percentage (${total.toFixed(1)}%) exceeds 100%. Please adjust the percentages.`)
       return
     }
-    
-    // Validate seconds are in ascending order
-    const sortedSells = [...whatIfSettings.value.multipleSells].sort((a, b) => a.seconds - b.seconds)
-    for (let i = 0; i < sortedSells.length; i++) {
-      if (i > 0 && sortedSells[i].seconds < sortedSells[i - 1].seconds) {
-        // This shouldn't happen after sorting, but just in case
-        alert('Sells should be ordered by time (seconds)')
-        return
-      }
-    }
   }
   
   showWhatIfColumn.value = true
@@ -2396,7 +2407,7 @@ const addMultipleSell = () => {
   if (!whatIfSettings.value.multipleSells) {
     whatIfSettings.value.multipleSells = []
   }
-  whatIfSettings.value.multipleSells.push({ seconds: 3, sizePercent: 50 })
+  whatIfSettings.value.multipleSells.push({ type: 'time', value: 3, sizePercent: 50 })
 }
 
 const removeMultipleSell = (index: number) => {

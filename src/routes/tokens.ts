@@ -946,7 +946,7 @@ function calculateWhatIfPNL(
     sellStrategy: 'time' | 'pnl' | 'multiple';
     sellAtSeconds?: number; // Sell at X seconds
     sellAtPnlPercent?: number; // Sell if PNL >= X%
-    multipleSells?: Array<{ seconds: number; sizePercent: number }>; // Multiple sells: [{seconds: 3, sizePercent: 50}, {seconds: 6, sizePercent: 50}]
+    multipleSells?: Array<{ type: 'time' | 'pnl'; value: number; sizePercent: number }>; // Multiple sells: [{type: 'time', value: 3, sizePercent: 50}, {type: 'pnl', value: 100, sizePercent: 50}]
   }
 ): {
   avgPnl: number;
@@ -1092,7 +1092,7 @@ function calculateWhatIfPNL(
       }
       
     } else if (settings.sellStrategy === 'multiple' && settings.multipleSells && settings.multipleSells.length > 0) {
-      // Multiple sells at different times with different sizes
+      // Multiple sells at different times or PNL levels with different sizes
       const allTrades = marketCapTimeSeries
         .map((point: any) => ({
           timestamp: point.timestamp || point.time || 0,
@@ -1103,33 +1103,50 @@ function calculateWhatIfPNL(
         .filter((p: any) => p.timestamp >= buyTimestamp && p.executionPriceSol > 0)
         .sort((a: any, b: any) => a.timestamp - b.timestamp);
       
-      // Sort sells by time
-      const sortedSells = [...settings.multipleSells].sort((a, b) => a.seconds - b.seconds);
-      
-      for (const sell of sortedSells) {
+      // Process each sell - can be time-based or PNL-based
+      for (const sell of settings.multipleSells) {
         if (remainingTokens <= 0) break;
         
-        const sellTimestamp = createdAtMs + (sell.seconds * 1000);
         const sellSize = (sell.sizePercent / 100) * tokensBought;
         const actualSellSize = Math.min(sellSize, remainingTokens);
         
-        // Find price at sell timestamp
         let sellPriceSol: number | null = null;
         let sellSolPriceUsd = 0;
         
-        for (const trade of allTrades) {
-          if (trade.timestamp >= sellTimestamp) {
-            sellPriceSol = trade.executionPriceSol;
-            sellSolPriceUsd = trade.solPriceUsd || 0;
-            break;
+        if (sell.type === 'time') {
+          // Time-based sell: sell at X seconds
+          const sellTimestamp = createdAtMs + (sell.value * 1000);
+          
+          // Find price at sell timestamp
+          for (const trade of allTrades) {
+            if (trade.timestamp >= sellTimestamp) {
+              sellPriceSol = trade.executionPriceSol;
+              sellSolPriceUsd = trade.solPriceUsd || 0;
+              break;
+            }
           }
-        }
-        
-        // If no exact match, use the last available price
-        if (sellPriceSol === null && allTrades.length > 0) {
-          const lastTrade = allTrades[allTrades.length - 1];
-          sellPriceSol = lastTrade.executionPriceSol;
-          sellSolPriceUsd = lastTrade.solPriceUsd || 0;
+          
+          // If no exact match, use the last available price
+          if (sellPriceSol === null && allTrades.length > 0) {
+            const lastTrade = allTrades[allTrades.length - 1];
+            sellPriceSol = lastTrade.executionPriceSol;
+            sellSolPriceUsd = lastTrade.solPriceUsd || 0;
+          }
+        } else if (sell.type === 'pnl') {
+          // PNL-based sell: sell when PNL >= X%
+          const targetPnlPercent = sell.value;
+          
+          // Find first price where PNL >= target
+          for (const trade of allTrades) {
+            const currentPriceSol = trade.executionPriceSol;
+            const pnlPercent = ((currentPriceSol - buyPriceSol) / buyPriceSol) * 100;
+            
+            if (pnlPercent >= targetPnlPercent) {
+              sellPriceSol = currentPriceSol;
+              sellSolPriceUsd = trade.solPriceUsd || 0;
+              break;
+            }
+          }
         }
         
         if (sellPriceSol && sellPriceSol > 0) {
