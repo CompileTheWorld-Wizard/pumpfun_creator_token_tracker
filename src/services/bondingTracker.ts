@@ -87,37 +87,55 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<{
 
   try {
     const query = getPoolsQuery();
+    const requestBody = {
+      query: query,
+      variables: {
+        tokens: tokenMints,
+      },
+      operationName: "MyQuery",
+    };
+    
+    console.log(`[BondingTracker] fetchBondingStatusBatch: Starting API call for ${tokenMints.length} tokens`);
+    console.log(`[BondingTracker] Request tokens:`, tokenMints.slice(0, 5), tokenMints.length > 5 ? `... (${tokenMints.length} total)` : '');
+    console.log(`[BondingTracker] GraphQL Query:`, query);
+    console.log(`[BondingTracker] Request body (variables only):`, JSON.stringify({ tokens: tokenMints.slice(0, 3), total: tokenMints.length }, null, 2));
+    
     const response = await fetch(SHYFT_GQL_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        query: query,
-        variables: {
-          tokens: tokenMints,
-        },
-        operationName: "MyQuery",
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
-      console.error(`[BondingTracker] API request failed with status ${response.status}`);
+      const errorText = await response.text().catch(() => 'Unable to read error response');
+      console.error(`[BondingTracker] API request failed with status ${response.status}:`, errorText);
       return { bondingStatusMap, poolInfoMap };
     }
 
     const result = (await response.json()) as ShyftResponse;
 
     if (result.errors) {
-      console.error('[BondingTracker] GraphQL errors:', result.errors);
+      console.error('[BondingTracker] GraphQL errors:', JSON.stringify(result.errors, null, 2));
       return { bondingStatusMap, poolInfoMap };
     }
+
+    // Log raw response structure for debugging
+    console.log(`[BondingTracker] API Response received:`);
+    console.log(`  - Has data: ${!!result.data}`);
+    console.log(`  - Has pump_fun_amm_Pool: ${!!result.data?.pump_fun_amm_Pool}`);
+    console.log(`  - Pool array length: ${result.data?.pump_fun_amm_Pool?.length || 0}`);
 
     // Process pool data - if a token has a pool, it's bonded
     const pools = result.data?.pump_fun_amm_Pool || [];
     const bondedMints = new Set<string>();
 
     console.log(`[BondingTracker] fetchBondingStatusBatch: Processing ${tokenMints.length} tokens, found ${pools.length} pools`);
+    
+    if (pools.length > 0) {
+      console.log(`[BondingTracker] Sample pool data:`, JSON.stringify(pools[0], null, 2));
+    }
     
     for (const poolData of pools) {
       // Both base_mint and quote_mint could be our tracked tokens
@@ -130,8 +148,11 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<{
         });
         // Store pool -> mint mapping for buy/sell events
         setPoolToMintMapping(poolData.pubkey, poolData.base_mint);
-        console.log(`[BondingTracker] Found pool for base_mint: ${poolData.base_mint}, pool: ${poolData.pubkey}`);
+        console.log(`[BondingTracker] ✓ Found pool for base_mint: ${poolData.base_mint}, pool: ${poolData.pubkey}`);
+      } else {
+        console.log(`[BondingTracker] Pool base_mint ${poolData.base_mint} not in requested tokens list`);
       }
+      
       if (tokenMints.includes(poolData.quote_mint)) {
         bondedMints.add(poolData.quote_mint);
         // Note: For quote_mint, the base_mint is the token we're tracking
@@ -143,17 +164,30 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<{
     }
 
     // Set bonding status for all tokens in the batch
+    console.log(`[BondingTracker] Setting bonding status for ${tokenMints.length} tokens:`);
+    let bondedCount = 0;
+    let unbondedCount = 0;
+    
     for (const mint of tokenMints) {
       const isBonded = bondedMints.has(mint);
       bondingStatusMap.set(mint, isBonded);
       if (isBonded) {
-        console.log(`[BondingTracker] Token ${mint} marked as BONDED by Shyft API`);
+        bondedCount++;
+        console.log(`[BondingTracker] ✓ Token ${mint} marked as BONDED`);
+      } else {
+        unbondedCount++;
       }
     }
+    
+    console.log(`[BondingTracker] Summary: ${bondedCount} bonded, ${unbondedCount} unbonded out of ${tokenMints.length} tokens`);
+    console.log(`[BondingTracker] Pool info map size: ${poolInfoMap.size}`);
 
     return { bondingStatusMap, poolInfoMap };
   } catch (error) {
     console.error('[BondingTracker] Error fetching bonding status:', error);
+    if (error instanceof Error) {
+      console.error('[BondingTracker] Error stack:', error.stack);
+    }
     return { bondingStatusMap, poolInfoMap };
   }
 }
@@ -164,6 +198,7 @@ export async function fetchBondingStatusBatch(tokenMints: string[]): Promise<{
  */
 async function getUnbondedTokens(): Promise<string[]> {
   try {
+    console.log(`[BondingTracker] getUnbondedTokens: Querying database...`);
     const result = await pool.query(
       `SELECT mint 
        FROM tbl_soltrack_created_tokens
@@ -172,9 +207,17 @@ async function getUnbondedTokens(): Promise<string[]> {
        ORDER BY created_at DESC`
     );
 
-    return result.rows.map((row) => row.mint);
+    const mints = result.rows.map((row) => row.mint);
+    console.log(`[BondingTracker] getUnbondedTokens: Found ${mints.length} unbonded tokens`);
+    if (mints.length > 0) {
+      console.log(`[BondingTracker] Sample unbonded tokens:`, mints.slice(0, 5), mints.length > 5 ? `... (${mints.length} total)` : '');
+    }
+    return mints;
   } catch (error) {
     console.error('[BondingTracker] Error fetching unbonded tokens:', error);
+    if (error instanceof Error) {
+      console.error('[BondingTracker] Error stack:', error.stack);
+    }
     return [];
   }
 }
@@ -236,15 +279,32 @@ async function updateBondingStatusWithPoolInfo(
   poolInfoMap: Map<string, { pool: string; base_mint: string; quote_mint: string }>
 ): Promise<void> {
   if (mintAddresses.length === 0) {
+    console.log(`[BondingTracker] updateBondingStatusWithPoolInfo: No tokens to update`);
     return;
   }
 
+  console.log(`[BondingTracker] updateBondingStatusWithPoolInfo: Updating ${mintAddresses.length} tokens`);
+  console.log(`[BondingTracker] Pool info map has ${poolInfoMap.size} entries`);
+
   try {
+    // Check current state before update
+    const beforeResult = await pool.query(
+      `SELECT mint, bonded, pool_address FROM tbl_soltrack_created_tokens WHERE mint = ANY($1)`,
+      [mintAddresses]
+    );
+    console.log(`[BondingTracker] Current state before update:`);
+    beforeResult.rows.forEach(row => {
+      console.log(`  - ${row.mint}: bonded=${row.bonded}, pool_address=${row.pool_address || 'NULL'}`);
+    });
+
     // Update each token individually to set pool information
+    let updatedWithPoolInfo = 0;
+    let updatedWithoutPoolInfo = 0;
+    
     for (const mint of mintAddresses) {
       const poolInfo = poolInfoMap.get(mint);
       if (poolInfo) {
-        await pool.query(
+        const updateResult = await pool.query(
           `UPDATE tbl_soltrack_created_tokens 
            SET bonded = true,
                pool_address = $2,
@@ -256,20 +316,38 @@ async function updateBondingStatusWithPoolInfo(
         );
         // Store pool -> mint mapping for buy/sell events
         setPoolToMintMapping(poolInfo.pool, poolInfo.base_mint);
-        console.log(`[BondingTracker] Updated token ${mint} with pool info: pool=${poolInfo.pool}`);
+        console.log(`[BondingTracker] ✓ Updated token ${mint} with pool info: pool=${poolInfo.pool}, rows affected: ${updateResult.rowCount}`);
+        updatedWithPoolInfo++;
       } else {
         // Fallback to basic update if pool info not available
-        await pool.query(
+        const updateResult = await pool.query(
           `UPDATE tbl_soltrack_created_tokens 
            SET bonded = true,
                updated_at = NOW()
            WHERE mint = $1`,
           [mint]
         );
+        console.log(`[BondingTracker] ⚠ Updated token ${mint} without pool info (pool info not found in map), rows affected: ${updateResult.rowCount}`);
+        updatedWithoutPoolInfo++;
       }
     }
+    
+    console.log(`[BondingTracker] Update summary: ${updatedWithPoolInfo} with pool info, ${updatedWithoutPoolInfo} without pool info`);
+
+    // Verify after update
+    const afterResult = await pool.query(
+      `SELECT mint, bonded, pool_address, base_mint, quote_mint FROM tbl_soltrack_created_tokens WHERE mint = ANY($1)`,
+      [mintAddresses]
+    );
+    console.log(`[BondingTracker] Verification after update:`);
+    afterResult.rows.forEach(row => {
+      console.log(`  - ${row.mint}: bonded=${row.bonded}, pool_address=${row.pool_address || 'NULL'}, base_mint=${row.base_mint || 'NULL'}, quote_mint=${row.quote_mint || 'NULL'}`);
+    });
   } catch (error) {
     console.error('[BondingTracker] Error updating bonding status with pool info:', error);
+    if (error instanceof Error) {
+      console.error('[BondingTracker] Error stack:', error.stack);
+    }
     throw error;
   }
 }
@@ -278,9 +356,13 @@ async function updateBondingStatusWithPoolInfo(
  * Fetch bonding status for all unbonded tokens in batches
  */
 async function fetchBondingStatusForAllTokens(): Promise<void> {
+  console.log(`[BondingTracker] fetchBondingStatusForAllTokens: Starting...`);
+  
   const unbondedTokens = await getUnbondedTokens();
+  console.log(`[BondingTracker] Found ${unbondedTokens.length} unbonded tokens to check`);
 
   if (unbondedTokens.length === 0) {
+    console.log(`[BondingTracker] No unbonded tokens to check, exiting`);
     return;
   }
 
@@ -290,9 +372,15 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
     batches.push(unbondedTokens.slice(i, i + BATCH_SIZE));
   }
 
+  console.log(`[BondingTracker] Processing ${batches.length} batches of up to ${BATCH_SIZE} tokens each`);
+
   let totalBondedFound = 0;
+  let batchNumber = 0;
 
   for (const batch of batches) {
+    batchNumber++;
+    console.log(`[BondingTracker] ===== Processing batch ${batchNumber}/${batches.length} =====`);
+    
     const { bondingStatusMap, poolInfoMap } = await fetchBondingStatusBatch(batch);
 
     // Collect bonded and unbonded tokens separately
@@ -308,10 +396,16 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
       }
     }
 
+    console.log(`[BondingTracker] Batch ${batchNumber} results: ${bondedTokens.length} bonded, ${stillUnbondedTokens.length} still unbonded`);
+
     // Update database for bonded tokens with pool information
     if (bondedTokens.length > 0) {
+      console.log(`[BondingTracker] Updating ${bondedTokens.length} bonded tokens in database...`);
       await updateBondingStatusWithPoolInfo(bondedTokens, poolInfoMap);
       totalBondedFound += bondedTokens.length;
+      console.log(`[BondingTracker] ✓ Successfully updated ${bondedTokens.length} tokens in batch ${batchNumber}`);
+    } else {
+      console.log(`[BondingTracker] No bonded tokens found in batch ${batchNumber}, skipping database update`);
     }
 
     // Add a small delay between batches to avoid rate limiting
@@ -320,6 +414,8 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
     }
   }
 
+  console.log(`[BondingTracker] ===== fetchBondingStatusForAllTokens COMPLETE =====`);
+  console.log(`[BondingTracker] Total bonded tokens found and updated: ${totalBondedFound} out of ${unbondedTokens.length} checked`);
 }
 
 /**
