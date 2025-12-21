@@ -172,41 +172,27 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
         const dbTokenMints = dbResult.rows.map(row => row.mint);
         
         // Fetch bonding status for database tokens
-        console.log(`[TokenTracker] fetchCreatorTokensAndBondingStatus: Fetching bonding status for ${dbTokenMints.length} tokens from database`);
         const { bondingStatusMap, poolInfoMap } = await fetchBondingStatusBatch(dbTokenMints);
         
         // Update bonding status in database based on Shyft API response
         const bondedTokens: string[] = [];
         const unbondedTokens: string[] = [];
         
-        console.log(`[TokenTracker] Processing bonding status results:`);
-        console.log(`  - bondingStatusMap size: ${bondingStatusMap.size}`);
-        console.log(`  - poolInfoMap size: ${poolInfoMap.size}`);
-        
         for (const mint of dbTokenMints) {
           const isBonded = bondingStatusMap.get(mint) || false;
-          console.log(`[TokenTracker] Token ${mint}: isBonded=${isBonded}`);
           if (isBonded) {
             bondedTokens.push(mint);
-            console.log(`[TokenTracker] ✓ Added ${mint} to bondedTokens array`);
           } else {
             unbondedTokens.push(mint);
           }
         }
         
-        console.log(`[TokenTracker] Summary: ${bondedTokens.length} bonded, ${unbondedTokens.length} unbonded`);
-        console.log(`[TokenTracker] Bonded tokens:`, bondedTokens);
-        console.log(`[TokenTracker] Pool info map keys:`, Array.from(poolInfoMap.keys()));
-        
         // Update database with latest bonding status from Shyft API (with pool info)
         if (bondedTokens.length > 0) {
-          console.log(`[TokenTracker] Updating ${bondedTokens.length} bonded tokens in database...`);
           for (const mint of bondedTokens) {
             const poolInfo = poolInfoMap.get(mint);
-            console.log(`[TokenTracker] Updating token ${mint}, poolInfo:`, poolInfo ? { pool: poolInfo.pool, base_mint: poolInfo.base_mint, quote_mint: poolInfo.quote_mint } : 'NULL');
-            
             if (poolInfo) {
-              const updateResult = await pool.query(
+              await pool.query(
                 `UPDATE tbl_soltrack_created_tokens 
                  SET bonded = true,
                      pool_address = $2,
@@ -216,32 +202,15 @@ async function fetchCreatorTokensAndBondingStatus(creatorAddress: string): Promi
                  WHERE mint = $1`,
                 [mint, poolInfo.pool, poolInfo.base_mint, poolInfo.quote_mint]
               );
-              console.log(`[TokenTracker] ✓ Updated token ${mint} with pool info, rows affected: ${updateResult.rowCount}`);
             } else {
-              const updateResult = await pool.query(
+              await pool.query(
                 `UPDATE tbl_soltrack_created_tokens 
                  SET bonded = true, updated_at = NOW()
                  WHERE mint = $1`,
                 [mint]
               );
-              console.log(`[TokenTracker] ⚠ Updated token ${mint} without pool info, rows affected: ${updateResult.rowCount}`);
-            }
-            
-            // Verify the update
-            const verifyResult = await pool.query(
-              `SELECT mint, bonded, pool_address, base_mint, quote_mint FROM tbl_soltrack_created_tokens WHERE mint = $1`,
-              [mint]
-            );
-            if (verifyResult.rows.length > 0) {
-              const row = verifyResult.rows[0];
-              console.log(`[TokenTracker] Verification for ${mint}: bonded=${row.bonded}, pool_address=${row.pool_address || 'NULL'}, base_mint=${row.base_mint || 'NULL'}, quote_mint=${row.quote_mint || 'NULL'}`);
-            } else {
-              console.warn(`[TokenTracker] ⚠ WARNING: Token ${mint} not found in database after update!`);
             }
           }
-          console.log(`[TokenTracker] ✓ Completed updating ${bondedTokens.length} bonded tokens`);
-        } else {
-          console.log(`[TokenTracker] No bonded tokens to update`);
         }
         
         if (unbondedTokens.length > 0) {
