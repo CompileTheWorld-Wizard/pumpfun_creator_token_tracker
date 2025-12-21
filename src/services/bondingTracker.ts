@@ -380,8 +380,25 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
   for (const batch of batches) {
     batchNumber++;
     console.log(`[BondingTracker] ===== Processing batch ${batchNumber}/${batches.length} =====`);
+    console.log(`[BondingTracker] Batch ${batchNumber} contains ${batch.length} tokens:`, batch.slice(0, 3), batch.length > 3 ? `... (${batch.length} total)` : '');
     
     const { bondingStatusMap, poolInfoMap } = await fetchBondingStatusBatch(batch);
+
+    // Log the maps we received
+    console.log(`[BondingTracker] Batch ${batchNumber} - bondingStatusMap size: ${bondingStatusMap.size}`);
+    console.log(`[BondingTracker] Batch ${batchNumber} - poolInfoMap size: ${poolInfoMap.size}`);
+    
+    // Log all entries in bondingStatusMap
+    console.log(`[BondingTracker] Batch ${batchNumber} - bondingStatusMap entries:`);
+    for (const [mint, isBonded] of bondingStatusMap.entries()) {
+      console.log(`  - ${mint}: ${isBonded}`);
+    }
+    
+    // Log all entries in poolInfoMap
+    console.log(`[BondingTracker] Batch ${batchNumber} - poolInfoMap entries:`);
+    for (const [mint, poolInfo] of poolInfoMap.entries()) {
+      console.log(`  - ${mint}: pool=${poolInfo.pool}, base_mint=${poolInfo.base_mint}, quote_mint=${poolInfo.quote_mint}`);
+    }
 
     // Collect bonded and unbonded tokens separately
     const bondedTokens: string[] = [];
@@ -389,23 +406,67 @@ async function fetchBondingStatusForAllTokens(): Promise<void> {
 
     for (const mint of batch) {
       const isBonded = bondingStatusMap.get(mint) || false;
+      console.log(`[BondingTracker] Batch ${batchNumber} - Checking mint ${mint}: isBonded=${isBonded} (from map: ${bondingStatusMap.get(mint)})`);
       if (isBonded) {
         bondedTokens.push(mint);
+        console.log(`[BondingTracker] Batch ${batchNumber} - Added ${mint} to bondedTokens array`);
       } else {
         stillUnbondedTokens.push(mint);
       }
     }
 
     console.log(`[BondingTracker] Batch ${batchNumber} results: ${bondedTokens.length} bonded, ${stillUnbondedTokens.length} still unbonded`);
+    console.log(`[BondingTracker] Batch ${batchNumber} - bondedTokens array:`, bondedTokens);
+    console.log(`[BondingTracker] Batch ${batchNumber} - poolInfoMap keys:`, Array.from(poolInfoMap.keys()));
 
     // Update database for bonded tokens with pool information
     if (bondedTokens.length > 0) {
-      console.log(`[BondingTracker] Updating ${bondedTokens.length} bonded tokens in database...`);
-      await updateBondingStatusWithPoolInfo(bondedTokens, poolInfoMap);
-      totalBondedFound += bondedTokens.length;
-      console.log(`[BondingTracker] ✓ Successfully updated ${bondedTokens.length} tokens in batch ${batchNumber}`);
+      console.log(`[BondingTracker] Batch ${batchNumber} - Updating ${bondedTokens.length} bonded tokens in database...`);
+      console.log(`[BondingTracker] Batch ${batchNumber} - About to call updateBondingStatusWithPoolInfo with:`, {
+        bondedTokens,
+        poolInfoMapSize: poolInfoMap.size,
+        poolInfoMapKeys: Array.from(poolInfoMap.keys())
+      });
+      
+      // First, verify these tokens exist in the database
+      try {
+        const verifyResult = await pool.query(
+          `SELECT mint, bonded FROM tbl_soltrack_created_tokens WHERE mint = ANY($1)`,
+          [bondedTokens]
+        );
+        console.log(`[BondingTracker] Batch ${batchNumber} - Database verification before update:`);
+        console.log(`  - Tokens to update: ${bondedTokens.length}`);
+        console.log(`  - Tokens found in DB: ${verifyResult.rows.length}`);
+        verifyResult.rows.forEach(row => {
+          console.log(`  - ${row.mint}: current bonded=${row.bonded}`);
+        });
+        
+        // Check for missing tokens
+        const foundMints = new Set(verifyResult.rows.map(r => r.mint));
+        const missingMints = bondedTokens.filter(m => !foundMints.has(m));
+        if (missingMints.length > 0) {
+          console.warn(`[BondingTracker] Batch ${batchNumber} - WARNING: ${missingMints.length} tokens not found in database:`, missingMints);
+        }
+      } catch (verifyError) {
+        console.error(`[BondingTracker] Batch ${batchNumber} - Error verifying tokens in database:`, verifyError);
+      }
+      
+      try {
+        await updateBondingStatusWithPoolInfo(bondedTokens, poolInfoMap);
+        totalBondedFound += bondedTokens.length;
+        console.log(`[BondingTracker] ✓ Successfully updated ${bondedTokens.length} tokens in batch ${batchNumber}`);
+      } catch (error) {
+        console.error(`[BondingTracker] ✗ ERROR updating tokens in batch ${batchNumber}:`, error);
+        if (error instanceof Error) {
+          console.error(`[BondingTracker] Error stack:`, error.stack);
+        }
+        // Don't throw - continue with other batches
+        console.error(`[BondingTracker] Continuing with next batch despite error`);
+      }
     } else {
-      console.log(`[BondingTracker] No bonded tokens found in batch ${batchNumber}, skipping database update`);
+      console.log(`[BondingTracker] Batch ${batchNumber} - No bonded tokens found, skipping database update`);
+      console.log(`[BondingTracker] Batch ${batchNumber} - Debug: bondingStatusMap has ${bondingStatusMap.size} entries`);
+      console.log(`[BondingTracker] Batch ${batchNumber} - Debug: Checking if maps are empty or mismatched`);
     }
 
     // Add a small delay between batches to avoid rate limiting
