@@ -45,7 +45,8 @@
     "ioredis": "^5.8.2",
     "pg": "^8.13.1",
     "vue": "^3.5.13",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -53,6 +54,7 @@
     "@types/express-session": "^1.18.0",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
+    "@types/xlsx": "^0.0.35",
     "@vitejs/plugin-vue": "^5.2.1",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.0",

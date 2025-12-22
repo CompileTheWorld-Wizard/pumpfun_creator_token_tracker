@@ -67,21 +67,38 @@
         <option :value="100">100</option>
         <option value="all">All</option>
       </select>
-      <button
-        @click="handleRefresh"
-        :disabled="refreshing"
-        class="ml-auto px-3 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-      >
-        <svg 
-          :class="['w-4 h-4', refreshing ? 'animate-spin' : '']"
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
+      <div class="ml-auto flex items-center gap-2">
+        <button
+          @click="handleExport"
+          :disabled="loading || tokens.length === 0"
+          class="px-3 py-1 text-xs bg-green-600/90 hover:bg-green-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-        </svg>
-        <span>{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
-      </button>
+          <svg 
+            class="w-4 h-4"
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+          <span>Export</span>
+        </button>
+        <button
+          @click="handleRefresh"
+          :disabled="refreshing"
+          class="px-3 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <svg 
+            :class="['w-4 h-4', refreshing ? 'animate-spin' : '']"
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+          <span>{{ refreshing ? 'Refreshing...' : 'Refresh' }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Error State -->
@@ -279,6 +296,7 @@ import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type Paginat
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 import closeIconSvg from '../icons/close.svg?raw'
+import * as XLSX from 'xlsx'
 
 const emit = defineEmits<{
   'select-token': [token: Token]
@@ -595,6 +613,56 @@ const loadTokens = async () => {
     console.error('Error loading tokens:', err)
   } finally {
     loading.value = false
+  }
+}
+
+const handleExport = async () => {
+  try {
+    // Fetch all tokens for export
+    const limit = 1000000 // Large limit to get all data
+    const viewAll = !selectedCreatorWallet.value
+    const response = await getCreatedTokens(
+      1,
+      limit,
+      selectedCreatorWallet.value || undefined,
+      viewAll
+    )
+    
+    const allTokens = response.tokens
+    
+    // Prepare data for Excel export
+    const exportData = allTokens.map(token => ({
+      'Token Name': token.name || 'Unnamed Token',
+      'Symbol': token.symbol,
+      'Mint Address': token.mint,
+      'Creator Wallet': token.creator,
+      'Bonding Curve': token.bondingCurve,
+      'Status': token.bonded ? 'Bonded' : 'Bonding',
+      'Initial Market Cap (USD)': token.initialMarketCapUsd !== null ? token.initialMarketCapUsd : 'N/A',
+      'Peak Market Cap (USD)': token.peakMarketCapUsd !== null ? token.peakMarketCapUsd : 'N/A',
+      'Final Market Cap (USD)': token.finalMarketCapUsd !== null ? token.finalMarketCapUsd : 'N/A',
+      'ATH Market Cap (USD)': token.athMarketCapUsd !== null ? token.athMarketCapUsd : 'N/A',
+      'Trade Count (15s)': token.tradeCount15s,
+      'Created At': token.createdAt,
+      'Create TX Signature': token.createTxSignature,
+      'Tracked At': token.trackedAt,
+      'Updated At': token.updatedAt
+    }))
+    
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Tokens')
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const filename = `tokens-${timestamp}.xlsx`
+    
+    // Write file
+    XLSX.writeFile(wb, filename)
+  } catch (err: any) {
+    console.error('Error exporting data:', err)
+    error.value = err.message || 'Failed to export data'
   }
 }
 

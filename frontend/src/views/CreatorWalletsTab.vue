@@ -69,6 +69,21 @@
         </div>
       </div>
       <button
+        @click="handleExport"
+        :disabled="loading || wallets.length === 0"
+        class="px-3 py-1 text-xs bg-green-600/90 hover:bg-green-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+      >
+        <svg 
+          class="w-4 h-4"
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+        </svg>
+        <span>Export</span>
+      </button>
+      <button
         @click="handleRefresh"
         :disabled="refreshing"
         class="px-3 py-1 text-xs bg-purple-600/90 hover:bg-purple-600 text-white font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-purple-500/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
@@ -1638,6 +1653,7 @@ import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } f
 import { getAppliedSettings, type ScoringSettings } from '../services/settings'
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
+import * as XLSX from 'xlsx'
 
 // Helper function to process SVG for inline rendering
 const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
@@ -2655,6 +2671,164 @@ const handleRefresh = async () => {
     console.error('Error refreshing data:', err)
   } finally {
     refreshing.value = false
+  }
+}
+
+const handleExport = async () => {
+  try {
+    // Fetch all wallets for export
+    const limit = 1000000 // Large limit to get all data
+    
+    // Build filter object (same logic as loadWallets)
+    const filterParams: any = {}
+    
+    if (filters.value.totalTokens.min !== undefined || filters.value.totalTokens.max !== undefined) {
+      filterParams.totalTokens = {}
+      if (filters.value.totalTokens.min !== undefined) {
+        filterParams.totalTokens.min = filters.value.totalTokens.min
+      }
+      if (filters.value.totalTokens.max !== undefined) {
+        filterParams.totalTokens.max = filters.value.totalTokens.max
+      }
+    }
+    
+    if (filters.value.bondedTokens.min !== undefined || filters.value.bondedTokens.max !== undefined) {
+      filterParams.bondedTokens = {}
+      if (filters.value.bondedTokens.min !== undefined) {
+        filterParams.bondedTokens.min = filters.value.bondedTokens.min
+      }
+      if (filters.value.bondedTokens.max !== undefined) {
+        filterParams.bondedTokens.max = filters.value.bondedTokens.max
+      }
+    }
+    
+    if (filters.value.winRate.length > 0) {
+      filterParams.winRate = filters.value.winRate
+    }
+    
+    if (filters.value.avgMcap.length > 0) {
+      filterParams.avgMcap = filters.value.avgMcap
+    }
+    
+    if (filters.value.medianMcap.length > 0) {
+      filterParams.medianMcap = filters.value.medianMcap
+    }
+    
+    if (filters.value.avgBuySells.length > 0) {
+      filterParams.avgBuySells = filters.value.avgBuySells
+    }
+    
+    if (filters.value.expectedROI.length > 0) {
+      filterParams.expectedROI = filters.value.expectedROI
+    }
+    
+    if (filters.value.rugRate.min !== undefined || filters.value.rugRate.max !== undefined) {
+      filterParams.rugRate = {}
+      if (filters.value.rugRate.min !== undefined) {
+        filterParams.rugRate.min = filters.value.rugRate.min
+      }
+      if (filters.value.rugRate.max !== undefined) {
+        filterParams.rugRate.max = filters.value.rugRate.max
+      }
+    }
+    
+    if (filters.value.avgRugTime.min !== undefined || filters.value.avgRugTime.max !== undefined) {
+      filterParams.avgRugTime = {}
+      if (filters.value.avgRugTime.min !== undefined) {
+        filterParams.avgRugTime.min = filters.value.avgRugTime.min
+      }
+      if (filters.value.avgRugTime.max !== undefined) {
+        filterParams.avgRugTime.max = filters.value.avgRugTime.max
+      }
+    }
+    
+    if (filters.value.finalScore.min !== undefined || filters.value.finalScore.max !== undefined) {
+      filterParams.finalScore = {}
+      if (filters.value.finalScore.min !== undefined) {
+        filterParams.finalScore.min = filters.value.finalScore.min
+      }
+      if (filters.value.finalScore.max !== undefined) {
+        filterParams.finalScore.max = filters.value.finalScore.max
+      }
+    }
+    
+    if (filters.value.multiplierScores.length > 0) {
+      filterParams.multiplierScores = filters.value.multiplierScores
+    }
+    
+    const whatIfSettingsToSend = showWhatIfColumn.value && whatIfSettings.value.buyPosition && whatIfSettings.value.sellStrategy
+      ? whatIfSettings.value
+      : null
+    
+    const response = await getCreatorWalletsAnalytics(
+      1,
+      limit,
+      false,
+      filterParams,
+      whatIfSettingsToSend
+    )
+    
+    const allWallets = response.wallets
+    
+    // Prepare data for Excel export
+    const exportData = allWallets.map(wallet => ({
+      'Wallet Address': wallet.address,
+      'Total Tokens': wallet.totalTokens,
+      'Valid Token Count': wallet.validTokenCount,
+      'Bonded Tokens': wallet.bondedTokens,
+      'Win Rate (%)': wallet.winRate.toFixed(2),
+      'Win Rate Score': wallet.scores.winRateScore.toFixed(2),
+      'Avg ATH MCap': wallet.avgAthMcap !== null ? wallet.avgAthMcap : 'N/A',
+      'Avg ATH MCap Score': wallet.scores.avgAthMcapScore.toFixed(2),
+      'Median ATH MCap': wallet.medianAthMcap !== null ? wallet.medianAthMcap : 'N/A',
+      'Median ATH MCap Score': wallet.scores.medianAthMcapScore.toFixed(2),
+      'ATH MCap Percentile Rank': wallet.athMcapPercentileRank !== null ? wallet.athMcapPercentileRank.toFixed(1) : 'N/A',
+      '25th Percentile': wallet.athMcapPercentiles.percentile25th ? 'Yes' : 'No',
+      '50th Percentile': wallet.athMcapPercentiles.percentile50th ? 'Yes' : 'No',
+      '75th Percentile': wallet.athMcapPercentiles.percentile75th ? 'Yes' : 'No',
+      '90th Percentile': wallet.athMcapPercentiles.percentile90th ? 'Yes' : 'No',
+      'Avg Buy Count': wallet.buySellStats.avgBuyCount.toFixed(2),
+      'Avg Buy Total SOL': wallet.buySellStats.avgBuyTotalSol.toFixed(4),
+      'Avg Sell Count': wallet.buySellStats.avgSellCount.toFixed(2),
+      'Avg Sell Total SOL': wallet.buySellStats.avgSellTotalSol.toFixed(4),
+      'Expected ROI 1st Buy': wallet.expectedROI.avgRoi1stBuy.toFixed(2),
+      'Expected ROI 2nd Buy': wallet.expectedROI.avgRoi2ndBuy.toFixed(2),
+      'Expected ROI 3rd Buy': wallet.expectedROI.avgRoi3rdBuy.toFixed(2),
+      'Avg Rug Rate (%)': wallet.avgRugRate.toFixed(2),
+      'Avg Rug Rate Score': wallet.scores.avgRugRateScore.toFixed(2),
+      'Avg Rug Time (seconds)': wallet.avgRugTime !== null ? wallet.avgRugTime.toFixed(2) : 'N/A',
+      'Time Bucket Rug Rate Score': wallet.scores.timeBucketRugRateScore.toFixed(2),
+      'Multiplier Score': wallet.scores.multiplierScore.toFixed(2),
+      'Final Score': wallet.scores.finalScore.toFixed(2),
+      ...(showWhatIfColumn.value && wallet.whatIfPnl ? {
+        'What If Avg PNL': wallet.whatIfPnl.avgPnl.toFixed(2),
+        'What If Avg PNL %': wallet.whatIfPnl.avgPnlPercent.toFixed(2),
+        'What If Tokens Simulated': wallet.whatIfPnl.tokensSimulated
+      } : {}),
+      ...Object.entries(wallet.multiplierPercentages).reduce((acc, [multiplier, percentage]) => {
+        acc[`${multiplier}x Multiplier %`] = percentage.toFixed(2)
+        return acc
+      }, {} as Record<string, string>),
+      ...Object.entries(wallet.scores.individualMultiplierScores).reduce((acc, [multiplier, score]) => {
+        acc[`${multiplier}x Multiplier Score`] = score.toFixed(2)
+        return acc
+      }, {} as Record<string, string>)
+    }))
+    
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Creator Wallets')
+    
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
+    const filename = `creator-wallets-${timestamp}.xlsx`
+    
+    // Write file
+    XLSX.writeFile(wb, filename)
+  } catch (err: any) {
+    console.error('Error exporting data:', err)
+    error.value = err.message || 'Failed to export data'
   }
 }
 
