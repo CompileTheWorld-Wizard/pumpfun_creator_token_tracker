@@ -1335,32 +1335,151 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       // Continue without scoring if settings can't be loaded
     }
     
-    // Build WHERE clause
-    let whereClause = '';
+    // Build base WHERE clause
+    let baseWhereClause = '';
     if (!viewAll) {
-      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
     }
     
     // Get rug threshold from settings (default 6000) - need this early for calculations
     const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
     
-    // First, get ALL wallets data to calculate percentiles (not just paginated ones)
-    const allWalletsResult = await pool.query(
-      `SELECT 
-        ct.creator,
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
-      ${whereClause}
-      GROUP BY ct.creator`
-    );
+    // Build SQL-level filters for simple metrics that can be filtered in SQL
+    // These filters will reduce the dataset before fetching tokens
+    const sqlFilterConditions: string[] = [];
+    const sqlFilterParams: any[] = [];
+    let paramIndex = 1;
     
-    const allWalletsData = allWalletsResult.rows.map(row => ({
-      avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
-      medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
-    }));
+    // Filter by total tokens (can be done in SQL HAVING clause)
+    if (filters.totalTokens) {
+      if (filters.totalTokens.min !== undefined && filters.totalTokens.min !== null) {
+        sqlFilterConditions.push(`COUNT(*) >= $${paramIndex}`);
+        sqlFilterParams.push(filters.totalTokens.min);
+        paramIndex++;
+      }
+      if (filters.totalTokens.max !== undefined && filters.totalTokens.max !== null) {
+        sqlFilterConditions.push(`COUNT(*) <= $${paramIndex}`);
+        sqlFilterParams.push(filters.totalTokens.max);
+        paramIndex++;
+      }
+    }
     
-    // Get ALL creator wallets with statistics (we'll filter and paginate after)
+    // Filter by bonded tokens (can be done in SQL HAVING clause)
+    if (filters.bondedTokens) {
+      if (filters.bondedTokens.min !== undefined && filters.bondedTokens.min !== null) {
+        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) >= $${paramIndex}`);
+        sqlFilterParams.push(filters.bondedTokens.min);
+        paramIndex++;
+      }
+      if (filters.bondedTokens.max !== undefined && filters.bondedTokens.max !== null) {
+        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) <= $${paramIndex}`);
+        sqlFilterParams.push(filters.bondedTokens.max);
+        paramIndex++;
+      }
+    }
+    
+    // Filter by win rate (can be done in SQL HAVING clause)
+    if (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.length > 0) {
+      for (const filter of filters.winRate) {
+        if (filter.type === 'percent') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+        // Score-based win rate filters need to be done after score calculation
+      }
+    }
+    
+    // Filter by average ATH mcap (can be done in SQL HAVING clause)
+    if (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.length > 0) {
+      for (const filter of filters.avgMcap) {
+        if (filter.type === 'mcap') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+        // Percentile and score-based filters need to be done after calculation
+      }
+    }
+    
+    // Filter by median ATH mcap (can be done in SQL HAVING clause)
+    if (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.length > 0) {
+      for (const filter of filters.medianMcap) {
+        if (filter.type === 'mcap') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+        // Score-based filters need to be done after calculation
+      }
+    }
+    
+    // Build HAVING clause for SQL filters
+    const havingClause = sqlFilterConditions.length > 0 
+      ? `HAVING ${sqlFilterConditions.join(' AND ')}`
+      : '';
+    
+    // First, get ALL wallets data to calculate percentiles (only for percentile-based filters)
+    // We only need this if there are percentile filters
+    const hasPercentileFilters = filters.avgMcap?.some((f: any) => f.type === 'percentile') || false;
+    let allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }> = [];
+    
+    if (hasPercentileFilters) {
+      const allWalletsResult = await pool.query(
+        `SELECT 
+          ct.creator,
+          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+        FROM tbl_soltrack_created_tokens ct
+        ${baseWhereClause}
+        GROUP BY ct.creator`
+      );
+      
+      allWalletsData = allWalletsResult.rows.map(row => ({
+        avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
+        medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
+      }));
+    }
+    
+    // Determine if we can use SQL sorting for simple fields
+    const sqlSortableFields: Record<string, string> = {
+      'totalTokens': 'COUNT(*)',
+      'bondedTokens': 'COUNT(*) FILTER (WHERE ct.bonded = true)',
+      'winRate': '(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100)',
+      'avgAthMcap': 'AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL)',
+      'medianAthMcap': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0)'
+    };
+    
+    // Build ORDER BY clause for SQL if sorting by a simple field
+    let orderByClause = 'ORDER BY win_rate DESC, total_tokens DESC'; // Default
+    if (sortColumn && sqlSortableFields[sortColumn]) {
+      const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+      orderByClause = `ORDER BY ${sqlSortableFields[sortColumn]} ${direction}`;
+    }
+    
+    // Get filtered creator wallets with basic statistics (SQL-level filtering applied)
+    // This significantly reduces the dataset before fetching tokens
     const result = await pool.query(
       `SELECT 
         ct.creator as address,
@@ -1374,12 +1493,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
         PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
       FROM tbl_soltrack_created_tokens ct
-      ${whereClause}
+      ${baseWhereClause}
       GROUP BY ct.creator
-      ORDER BY win_rate DESC, total_tokens DESC`
+      ${havingClause}
+      ${orderByClause}`,
+      sqlFilterParams
     );
     
-    // Get token data for multiplier and rug rate calculations for the paginated creators
+    // Get token data for multiplier and rug rate calculations ONLY for the filtered creators
     const creatorAddresses = result.rows.map(row => row.address);
     let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
     let allTokensByCreator: Map<string, Array<{ 
@@ -1831,9 +1952,11 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     }
     
     // Apply sorting
+    // If sorting by a SQL-sortable field, it's already sorted by SQL, so we can skip in-memory sorting
     let sortedWallets = [...filteredWallets];
     
-    if (sortColumn) {
+    // Only do in-memory sorting if sorting by a complex field (not SQL-sortable)
+    if (sortColumn && !sqlSortableFields[sortColumn]) {
       const direction = sortDirection.toLowerCase() === 'asc' ? 1 : -1;
       
       sortedWallets.sort((a, b) => {
@@ -1845,31 +1968,6 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             aVal = a.address.toLowerCase();
             bVal = b.address.toLowerCase();
             return aVal.localeCompare(bVal) * direction;
-          
-          case 'totalTokens':
-            aVal = a.totalTokens ?? 0;
-            bVal = b.totalTokens ?? 0;
-            return (aVal - bVal) * direction;
-          
-          case 'bondedTokens':
-            aVal = a.bondedTokens ?? 0;
-            bVal = b.bondedTokens ?? 0;
-            return (aVal - bVal) * direction;
-          
-          case 'winRate':
-            aVal = a.winRate ?? 0;
-            bVal = b.winRate ?? 0;
-            return (aVal - bVal) * direction;
-          
-          case 'avgAthMcap':
-            aVal = a.avgAthMcap ?? 0;
-            bVal = b.avgAthMcap ?? 0;
-            return (aVal - bVal) * direction;
-          
-          case 'medianAthMcap':
-            aVal = a.medianAthMcap ?? 0;
-            bVal = b.medianAthMcap ?? 0;
-            return (aVal - bVal) * direction;
           
           case 'avgRugRate':
             aVal = a.avgRugRate ?? 0;
@@ -1940,12 +2038,13 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             return 0;
         }
       });
-    } else {
-      // Default sorting: by final score if scoring settings are available, otherwise keep original order
+    } else if (!sortColumn) {
+      // Default sorting: by final score if scoring settings are available, otherwise keep SQL order
       if (scoringSettings) {
         sortedWallets.sort((a, b) => b.scores.finalScore - a.scores.finalScore);
       }
     }
+    // If sortColumn is a SQL-sortable field, wallets are already sorted by SQL, no need to sort again
     
     const wallets = sortedWallets;
     
