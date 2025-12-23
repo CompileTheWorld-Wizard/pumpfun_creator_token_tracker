@@ -1468,7 +1468,7 @@
             </tr>
             <!-- Wallet Rows -->
             <tr
-              v-for="wallet in sortedWallets"
+              v-for="wallet in wallets"
               :key="wallet.address"
               class="hover:bg-gray-800/50 transition"
             >
@@ -2597,117 +2597,6 @@ const visiblePages = computed(() => {
   return pages
 })
 
-// Sorted wallets computed property
-const sortedWallets = computed(() => {
-  if (!sortColumn.value) {
-    return wallets.value
-  }
-  
-  const sorted = [...wallets.value]
-  const direction = sortDirection.value === 'asc' ? 1 : -1
-  
-  sorted.sort((a, b) => {
-    let aVal: any
-    let bVal: any
-    
-    switch (sortColumn.value) {
-      case 'address':
-        aVal = a.address.toLowerCase()
-        bVal = b.address.toLowerCase()
-        return aVal.localeCompare(bVal) * direction
-      
-      case 'totalTokens':
-        aVal = a.totalTokens ?? 0
-        bVal = b.totalTokens ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'bondedTokens':
-        aVal = a.bondedTokens ?? 0
-        bVal = b.bondedTokens ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'winRate':
-        aVal = a.winRate ?? 0
-        bVal = b.winRate ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgAthMcap':
-        aVal = a.avgAthMcap ?? 0
-        bVal = b.avgAthMcap ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'medianAthMcap':
-        aVal = a.medianAthMcap ?? 0
-        bVal = b.medianAthMcap ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgRugRate':
-        aVal = a.avgRugRate ?? 0
-        bVal = b.avgRugRate ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgRugTime':
-        aVal = a.avgRugTime ?? 0
-        bVal = b.avgRugTime ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'finalScore':
-        aVal = a.scores.finalScore ?? 0
-        bVal = b.scores.finalScore ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgBuyCount':
-        aVal = a.buySellStats.avgBuyCount ?? 0
-        bVal = b.buySellStats.avgBuyCount ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgBuySol':
-        aVal = a.buySellStats.avgBuyTotalSol ?? 0
-        bVal = b.buySellStats.avgBuyTotalSol ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgSellCount':
-        aVal = a.buySellStats.avgSellCount ?? 0
-        bVal = b.buySellStats.avgSellCount ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'avgSellSol':
-        aVal = a.buySellStats.avgSellTotalSol ?? 0
-        bVal = b.buySellStats.avgSellTotalSol ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'roi1st':
-        aVal = a.expectedROI.avgRoi1stBuy ?? 0
-        bVal = b.expectedROI.avgRoi1stBuy ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'roi2nd':
-        aVal = a.expectedROI.avgRoi2ndBuy ?? 0
-        bVal = b.expectedROI.avgRoi2ndBuy ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'roi3rd':
-        aVal = a.expectedROI.avgRoi3rdBuy ?? 0
-        bVal = b.expectedROI.avgRoi3rdBuy ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'whatIfPnl':
-        if (!a.whatIfPnl || !b.whatIfPnl) {
-          if (!a.whatIfPnl && !b.whatIfPnl) return 0
-          return (!a.whatIfPnl ? -1 : 1) * direction
-        }
-        aVal = a.whatIfPnl.avgPnl ?? 0
-        bVal = b.whatIfPnl.avgPnl ?? 0
-        return (aVal - bVal) * direction
-      
-      default:
-        return 0
-    }
-  })
-  
-  return sorted
-})
-
 const handleSort = (column: string) => {
   if (sortColumn.value === column) {
     // Toggle direction if clicking the same column
@@ -2717,6 +2606,9 @@ const handleSort = (column: string) => {
     sortColumn.value = column
     sortDirection.value = 'desc'
   }
+  // Reload data with new sort parameters
+  pagination.value.page = 1
+  loadWallets()
 }
 
 const getSortIcon = (column: string) => {
@@ -2919,7 +2811,9 @@ const loadWallets = async () => {
       limit,
       false, // viewAll - can be made configurable later
       filterParams,
-      whatIfSettingsToSend
+      whatIfSettingsToSend,
+      sortColumn.value,
+      sortDirection.value
     )
     wallets.value = response.wallets
     pagination.value = response.pagination
@@ -3037,7 +2931,9 @@ const handleExport = async () => {
       limit,
       false,
       filterParams,
-      whatIfSettingsToSend
+      whatIfSettingsToSend,
+      sortColumn.value,
+      sortDirection.value
     )
     
     const allWallets = response.wallets

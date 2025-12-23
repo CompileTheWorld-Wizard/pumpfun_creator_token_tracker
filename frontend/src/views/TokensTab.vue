@@ -218,7 +218,7 @@
             </tr>
             <!-- Token Rows -->
             <tr
-              v-for="token in sortedTokens"
+              v-for="token in tokens"
               :key="token.mint"
               class="hover:bg-gray-800/50 transition cursor-pointer"
               @click="$emit('select-token', token)"
@@ -458,78 +458,6 @@ const visiblePages = computed(() => {
   return pages
 })
 
-// Sorted tokens computed property
-const sortedTokens = computed(() => {
-  if (!sortColumn.value) {
-    return tokens.value
-  }
-  
-  const sorted = [...tokens.value]
-  const direction = sortDirection.value === 'asc' ? 1 : -1
-  
-  sorted.sort((a, b) => {
-    let aVal: any
-    let bVal: any
-    
-    switch (sortColumn.value) {
-      case 'name':
-        aVal = (a.name || 'Unnamed Token').toLowerCase()
-        bVal = (b.name || 'Unnamed Token').toLowerCase()
-        return aVal.localeCompare(bVal) * direction
-      
-      case 'symbol':
-        aVal = (a.symbol || '').toLowerCase()
-        bVal = (b.symbol || '').toLowerCase()
-        return aVal.localeCompare(bVal) * direction
-      
-      case 'creator':
-        aVal = a.creator.toLowerCase()
-        bVal = b.creator.toLowerCase()
-        return aVal.localeCompare(bVal) * direction
-      
-      case 'status':
-        aVal = a.bonded ? 1 : 0
-        bVal = b.bonded ? 1 : 0
-        return (aVal - bVal) * direction
-      
-      case 'initialMC':
-        aVal = a.initialMarketCapUsd ?? 0
-        bVal = b.initialMarketCapUsd ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'peakMC':
-        aVal = a.peakMarketCapUsd ?? 0
-        bVal = b.peakMarketCapUsd ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'finalMC':
-        aVal = a.finalMarketCapUsd ?? 0
-        bVal = b.finalMarketCapUsd ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'athMC':
-        aVal = a.athMarketCapUsd ?? 0
-        bVal = b.athMarketCapUsd ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'trades':
-        aVal = a.tradeCount15s ?? 0
-        bVal = b.tradeCount15s ?? 0
-        return (aVal - bVal) * direction
-      
-      case 'created':
-        aVal = new Date(a.createdAt).getTime()
-        bVal = new Date(b.createdAt).getTime()
-        return (aVal - bVal) * direction
-      
-      default:
-        return 0
-    }
-  })
-  
-  return sorted
-})
-
 const handleSort = (column: string) => {
   if (sortColumn.value === column) {
     // Toggle direction if clicking the same column
@@ -539,6 +467,9 @@ const handleSort = (column: string) => {
     sortColumn.value = column
     sortDirection.value = 'desc'
   }
+  // Reload data with new sort parameters
+  pagination.value.page = 1
+  loadTokens()
 }
 
 const getSortIcon = (column: string) => {
@@ -765,7 +696,9 @@ const loadTokens = async () => {
       pagination.value.page,
       limit,
       selectedCreatorWallet.value || undefined,
-      viewAll
+      viewAll,
+      sortColumn.value,
+      sortDirection.value
     )
     tokens.value = response.tokens
     pagination.value = response.pagination

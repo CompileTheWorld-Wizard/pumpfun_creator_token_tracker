@@ -13,6 +13,10 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
     const creatorWallet = req.query.creator as string || null;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
+    // Parse sorting parameters
+    const sortColumn = req.query.sortColumn as string || 'created_at';
+    const sortDirection = req.query.sortDirection as string || 'desc';
+    
     const offset = (page - 1) * limit;
     
     // Build WHERE clause
@@ -49,6 +53,24 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
     );
     const total = parseInt(countResult.rows[0].total);
     
+    // Validate and build ORDER BY clause
+    const validSortColumns: Record<string, string> = {
+      'name': 'ct.name',
+      'symbol': 'ct.symbol',
+      'creator': 'ct.creator',
+      'status': 'ct.bonded',
+      'initialMC': 'ct.initial_market_cap_usd',
+      'peakMC': 'ct.peak_market_cap_usd',
+      'finalMC': 'ct.final_market_cap_usd',
+      'athMC': 'ct.ath_market_cap_usd',
+      'trades': 'ct.trade_count_15s',
+      'created': 'ct.created_at'
+    };
+    
+    const validSortDirection = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const dbSortColumn = validSortColumns[sortColumn] || 'ct.created_at';
+    const orderByClause = `ORDER BY ${dbSortColumn} ${validSortDirection}`;
+    
     // Get paginated tokens
     const result = await pool.query(
       `SELECT 
@@ -70,7 +92,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         ct.updated_at
       FROM tbl_soltrack_created_tokens ct
       ${whereClause}
-      ORDER BY ct.created_at DESC
+      ${orderByClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...queryParams, limit, offset]
     );
@@ -1278,6 +1300,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     const filters = req.body?.filters || {};
     const whatIfSettings = req.body?.whatIfSettings || null;
     
+    // Parse sorting parameters
+    const sortColumn = req.query.sortColumn as string || null;
+    const sortDirection = req.query.sortDirection as string || 'desc';
+    
     const offset = (page - 1) * limit;
     
     // Get applied scoring settings
@@ -1804,10 +1830,124 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       });
     }
     
-    // Sort by final score if scoring settings are available, otherwise keep original order
-    const wallets = scoringSettings
-      ? filteredWallets.sort((a, b) => b.scores.finalScore - a.scores.finalScore)
-      : filteredWallets;
+    // Apply sorting
+    let sortedWallets = [...filteredWallets];
+    
+    if (sortColumn) {
+      const direction = sortDirection.toLowerCase() === 'asc' ? 1 : -1;
+      
+      sortedWallets.sort((a, b) => {
+        let aVal: any;
+        let bVal: any;
+        
+        switch (sortColumn) {
+          case 'address':
+            aVal = a.address.toLowerCase();
+            bVal = b.address.toLowerCase();
+            return aVal.localeCompare(bVal) * direction;
+          
+          case 'totalTokens':
+            aVal = a.totalTokens ?? 0;
+            bVal = b.totalTokens ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'bondedTokens':
+            aVal = a.bondedTokens ?? 0;
+            bVal = b.bondedTokens ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'winRate':
+            aVal = a.winRate ?? 0;
+            bVal = b.winRate ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgAthMcap':
+            aVal = a.avgAthMcap ?? 0;
+            bVal = b.avgAthMcap ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'medianAthMcap':
+            aVal = a.medianAthMcap ?? 0;
+            bVal = b.medianAthMcap ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgRugRate':
+            aVal = a.avgRugRate ?? 0;
+            bVal = b.avgRugRate ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgRugTime':
+            aVal = a.avgRugTime ?? 0;
+            bVal = b.avgRugTime ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'finalScore':
+            aVal = a.scores.finalScore ?? 0;
+            bVal = b.scores.finalScore ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgBuyCount':
+            aVal = a.buySellStats.avgBuyCount ?? 0;
+            bVal = b.buySellStats.avgBuyCount ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgBuySol':
+            aVal = a.buySellStats.avgBuyTotalSol ?? 0;
+            bVal = b.buySellStats.avgBuyTotalSol ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgSellCount':
+            aVal = a.buySellStats.avgSellCount ?? 0;
+            bVal = b.buySellStats.avgSellCount ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgSellSol':
+            aVal = a.buySellStats.avgSellTotalSol ?? 0;
+            bVal = b.buySellStats.avgSellTotalSol ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'roi1st':
+            aVal = a.expectedROI.avgRoi1stBuy ?? 0;
+            bVal = b.expectedROI.avgRoi1stBuy ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'roi2nd':
+            aVal = a.expectedROI.avgRoi2ndBuy ?? 0;
+            bVal = b.expectedROI.avgRoi2ndBuy ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'roi3rd':
+            aVal = a.expectedROI.avgRoi3rdBuy ?? 0;
+            bVal = b.expectedROI.avgRoi3rdBuy ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'whatIfPnl':
+            if (!a.whatIfPnl || !b.whatIfPnl) {
+              if (!a.whatIfPnl && !b.whatIfPnl) return 0;
+              return (!a.whatIfPnl ? -1 : 1) * direction;
+            }
+            aVal = a.whatIfPnl.avgPnl ?? 0;
+            bVal = b.whatIfPnl.avgPnl ?? 0;
+            return (aVal - bVal) * direction;
+          
+          default:
+            // Default to final score if scoring settings are available
+            if (scoringSettings) {
+              aVal = a.scores.finalScore ?? 0;
+              bVal = b.scores.finalScore ?? 0;
+              return (bVal - aVal); // Default descending
+            }
+            return 0;
+        }
+      });
+    } else {
+      // Default sorting: by final score if scoring settings are available, otherwise keep original order
+      if (scoringSettings) {
+        sortedWallets.sort((a, b) => b.scores.finalScore - a.scores.finalScore);
+      }
+    }
+    
+    const wallets = sortedWallets;
     
     // Recalculate total count after filtering
     const filteredTotal = wallets.length;

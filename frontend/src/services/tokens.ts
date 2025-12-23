@@ -41,7 +41,14 @@ export interface TokensResponse {
   pagination: PaginationInfo;
 }
 
-export async function getCreatedTokens(page: number = 1, limit: number = 20, creatorWallet?: string, viewAll: boolean = false): Promise<TokensResponse> {
+export async function getCreatedTokens(
+  page: number = 1, 
+  limit: number = 20, 
+  creatorWallet?: string, 
+  viewAll: boolean = false,
+  sortColumn?: string | null,
+  sortDirection?: 'asc' | 'desc'
+): Promise<TokensResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
     limit: limit.toString(),
@@ -53,6 +60,14 @@ export async function getCreatedTokens(page: number = 1, limit: number = 20, cre
   
   if (viewAll) {
     params.append('viewAll', 'true');
+  }
+  
+  if (sortColumn) {
+    params.append('sortColumn', sortColumn);
+  }
+  
+  if (sortDirection) {
+    params.append('sortDirection', sortDirection);
   }
   
   const response = await fetch(`${API_BASE_URL}/tokens?${params.toString()}`, {

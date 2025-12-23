@@ -120,7 +120,9 @@ export async function getCreatorWalletsAnalytics(
   limit: number = 20,
   viewAll: boolean = false,
   filters?: FilterParams,
-  whatIfSettings?: WhatIfSettings | null
+  whatIfSettings?: WhatIfSettings | null,
+  sortColumn?: string | null,
+  sortDirection?: 'asc' | 'desc'
 ): Promise<CreatorWalletsResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -129,6 +131,14 @@ export async function getCreatorWalletsAnalytics(
   
   if (viewAll) {
     params.append('viewAll', 'true');
+  }
+  
+  if (sortColumn) {
+    params.append('sortColumn', sortColumn);
+  }
+  
+  if (sortDirection) {
+    params.append('sortDirection', sortDirection);
   }
 
   // Add filters and What If settings to request body if provided
