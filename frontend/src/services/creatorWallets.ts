@@ -66,6 +66,7 @@ export interface PaginationInfo {
 export interface CreatorWalletsResponse {
   wallets: CreatorWallet[];
   pagination: PaginationInfo;
+  totalTokens?: number; // Total token count from all filtered wallets
 }
 
 export interface FilterParams {
@@ -167,7 +168,8 @@ export async function getCreatorWalletsAnalytics(
   const data = await response.json();
   return {
     wallets: data.wallets || [],
-    pagination: data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 }
+    pagination: data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 },
+    totalTokens: data.totalTokens || 0
   };
 }
 
