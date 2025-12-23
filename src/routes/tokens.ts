@@ -1653,36 +1653,50 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         }
       }
       
-      // Get tokens for this creator and calculate multiplier percentages
+      // Get tokens for this creator and calculate stats
+      // If tokens weren't fetched (needsTokensForAll = false), use empty arrays
+      // We'll recalculate these stats after pagination for the wallets that are displayed
       const tokens = tokensByCreator.get(row.address) || [];
-      const multiplierPercentages = calculateMultiplierPercentages(tokens);
+      const allTokens = allTokensByCreator.get(row.address) || [];
+      
+      // Only calculate token-dependent stats if we have token data
+      // Otherwise, use default values (will be recalculated after pagination if needed)
+      const hasTokenData = needsTokensForAll && (tokens.length > 0 || allTokens.length > 0);
+      
+      const multiplierPercentages = hasTokenData ? calculateMultiplierPercentages(tokens) : new Map<number, number>();
       
       // Count valid tokens (tokens with both initial and ATH market cap > 0)
-      const validTokenCount = tokens.filter(
+      const validTokenCount = hasTokenData ? tokens.filter(
         t => t.initialMarketCapUsd !== null && 
              t.initialMarketCapUsd > 0 && 
              t.athMarketCapUsd !== null && 
              t.athMarketCapUsd > 0
-      ).length;
-      
-      // Get all tokens for rug rate calculations
-      const allTokens = allTokensByCreator.get(row.address) || [];
+      ).length : 0;
       
       // Calculate overall rug rate
-      const avgRugRate = calculateRugRate(allTokens, rugThresholdMcap);
+      const avgRugRate = hasTokenData ? calculateRugRate(allTokens, rugThresholdMcap) : 0;
       
       // Calculate average rug time (only for streamed tokens)
-      const avgRugTime = calculateAvgRugTime(allTokens, rugThresholdMcap);
+      const avgRugTime = hasTokenData ? calculateAvgRugTime(allTokens, rugThresholdMcap) : null;
       
       // Calculate buy/sell statistics
-      const buySellStats = calculateBuySellStats(allTokens);
+      const buySellStats = hasTokenData ? calculateBuySellStats(allTokens) : {
+        avgBuyCount: 0,
+        avgBuyTotalSol: 0,
+        avgSellCount: 0,
+        avgSellTotalSol: 0
+      };
       
       // Calculate expected ROI for 1st/2nd/3rd buy positions
-      const expectedROI = calculateExpectedROI(allTokens);
+      const expectedROI = hasTokenData ? calculateExpectedROI(allTokens) : {
+        avgRoi1stBuy: 0,
+        avgRoi2ndBuy: 0,
+        avgRoi3rdBuy: 0
+      };
       
       // Calculate What If PNL if settings are provided
       let whatIfPnl = null;
-      if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
+      if (hasTokenData && whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
         whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
       }
       
@@ -1698,7 +1712,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         finalScore: 0
       };
       
-      if (scoringSettings) {
+      if (scoringSettings && hasTokenData) {
         scores = calculateCreatorWalletScores(
           winRate, 
           avgAthMcap, 
@@ -2140,69 +2154,74 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         });
         
         // Recalculate stats for paginated wallets now that we have token data
-        for (const wallet of paginatedWalletsBeforeTokens) {
-          const tokens = tokensByCreator.get(wallet.address) || [];
-          const allTokens = allTokensByCreator.get(wallet.address) || [];
-          
-          // Recalculate stats that require token data
-          wallet.multiplierPercentages = Object.fromEntries(
-            Array.from(calculateMultiplierPercentages(tokens).entries()).map(([key, value]) => [
-              key,
-              Math.round(value * 100) / 100
-            ])
-          );
-          
-          wallet.validTokenCount = tokens.filter(
-            t => t.initialMarketCapUsd !== null && 
-                 t.initialMarketCapUsd > 0 && 
-                 t.athMarketCapUsd !== null && 
-                 t.athMarketCapUsd > 0
-          ).length;
-          
-          wallet.avgRugRate = Math.round(calculateRugRate(allTokens, rugThresholdMcap) * 100) / 100;
-          wallet.avgRugTime = (() => {
-            const time = calculateAvgRugTime(allTokens, rugThresholdMcap);
-            return time !== null ? Math.round(time * 100) / 100 : null;
-          })();
-          
-          wallet.buySellStats = calculateBuySellStats(allTokens);
-          wallet.expectedROI = calculateExpectedROI(allTokens);
-          
-          if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
-            wallet.whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
-          }
-          
-          // Recalculate scores with updated stats
-          if (scoringSettings) {
-            const percentileRank = wallet.athMcapPercentileRank !== null ? wallet.athMcapPercentileRank / 100 : null;
-            wallet.scores = calculateCreatorWalletScores(
-              wallet.winRate,
-              wallet.avgAthMcap,
-              wallet.medianAthMcap,
-              calculateMultiplierPercentages(tokens),
-              wallet.avgRugRate,
-              wallet.avgRugTime,
-              scoringSettings,
-              allWalletsData,
-              percentileRank
+        // Update wallets in the original array by finding them by address
+        for (const creatorAddress of paginatedCreatorAddresses) {
+          const wallet = wallets.find(w => w.address === creatorAddress);
+          if (wallet) {
+            const tokens = tokensByCreator.get(creatorAddress) || [];
+            const allTokens = allTokensByCreator.get(creatorAddress) || [];
+            
+            // Recalculate stats that require token data
+            wallet.multiplierPercentages = Object.fromEntries(
+              Array.from(calculateMultiplierPercentages(tokens).entries()).map(([key, value]) => [
+                key,
+                Math.round(value * 100) / 100
+              ])
             );
             
-            // Round scores
-            wallet.scores = {
-              winRateScore: Math.round(wallet.scores.winRateScore * 100) / 100,
-              avgAthMcapScore: Math.round(wallet.scores.avgAthMcapScore * 100) / 100,
-              medianAthMcapScore: Math.round(wallet.scores.medianAthMcapScore * 100) / 100,
-              multiplierScore: Math.round(wallet.scores.multiplierScore * 100) / 100,
-              avgRugRateScore: Math.round(wallet.scores.avgRugRateScore * 100) / 100,
-              timeBucketRugRateScore: Math.round(wallet.scores.timeBucketRugRateScore * 100) / 100,
-              individualMultiplierScores: Object.fromEntries(
-                Object.entries(wallet.scores.individualMultiplierScores).map(([key, value]) => [
-                  parseFloat(key),
-                  Math.round(value * 100) / 100
-                ])
-              ),
-              finalScore: Math.round(wallet.scores.finalScore * 100) / 100
-            };
+            wallet.validTokenCount = tokens.filter(
+              t => t.initialMarketCapUsd !== null && 
+                   t.initialMarketCapUsd > 0 && 
+                   t.athMarketCapUsd !== null && 
+                   t.athMarketCapUsd > 0
+            ).length;
+            
+            wallet.avgRugRate = Math.round(calculateRugRate(allTokens, rugThresholdMcap) * 100) / 100;
+            wallet.avgRugTime = (() => {
+              const time = calculateAvgRugTime(allTokens, rugThresholdMcap);
+              return time !== null ? Math.round(time * 100) / 100 : null;
+            })();
+            
+            wallet.buySellStats = calculateBuySellStats(allTokens);
+            wallet.expectedROI = calculateExpectedROI(allTokens);
+            
+            if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
+              wallet.whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
+            }
+            
+            // Recalculate scores with updated stats
+            if (scoringSettings) {
+              const percentileRank = wallet.athMcapPercentileRank !== null ? wallet.athMcapPercentileRank / 100 : null;
+              const multiplierPercentagesMap = calculateMultiplierPercentages(tokens);
+              wallet.scores = calculateCreatorWalletScores(
+                wallet.winRate,
+                wallet.avgAthMcap,
+                wallet.medianAthMcap,
+                multiplierPercentagesMap,
+                wallet.avgRugRate,
+                wallet.avgRugTime,
+                scoringSettings,
+                allWalletsData,
+                percentileRank
+              );
+              
+              // Round scores
+              wallet.scores = {
+                winRateScore: Math.round(wallet.scores.winRateScore * 100) / 100,
+                avgAthMcapScore: Math.round(wallet.scores.avgAthMcapScore * 100) / 100,
+                medianAthMcapScore: Math.round(wallet.scores.medianAthMcapScore * 100) / 100,
+                multiplierScore: Math.round(wallet.scores.multiplierScore * 100) / 100,
+                avgRugRateScore: Math.round(wallet.scores.avgRugRateScore * 100) / 100,
+                timeBucketRugRateScore: Math.round(wallet.scores.timeBucketRugRateScore * 100) / 100,
+                individualMultiplierScores: Object.fromEntries(
+                  Object.entries(wallet.scores.individualMultiplierScores).map(([key, value]) => [
+                    parseFloat(key),
+                    Math.round(value * 100) / 100
+                  ])
+                ),
+                finalScore: Math.round(wallet.scores.finalScore * 100) / 100
+              };
+            }
           }
         }
       }
@@ -2222,7 +2241,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         total: filteredTotal,
         totalPages: Math.ceil(filteredTotal / limit)
       },
-      totalTokensCount: totalTokensCount
+      totalTokens: totalTokensCount
     });
   } catch (error: any) {
     console.error('Error fetching creator wallets analytics:', error);
