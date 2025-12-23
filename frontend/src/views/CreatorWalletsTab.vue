@@ -1264,35 +1264,109 @@
           <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
             <!-- Top row with merged headers -->
             <tr>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Wallet Address</th>
-              <th rowspan="2" class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-14">
+              <th 
+                rowspan="2" 
+                @click="handleSort('address')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Wallet Address</span>
+                  <span v-if="getSortIcon('address')" class="text-purple-400">{{ getSortIcon('address') }}</span>
+                </div>
+              </th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('totalTokens')"
+                class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-14 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
                 <div class="leading-tight">
-                  <div>Total</div>
+                  <div class="flex items-center justify-center gap-1">
+                    <span>Total</span>
+                    <span v-if="getSortIcon('totalTokens')" class="text-purple-400 text-[8px]">{{ getSortIcon('totalTokens') }}</span>
+                  </div>
                   <div>Tokens</div>
                   <div>(Valid)</div>
                 </div>
               </th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Bonded Tokens</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Win Rate (% Bonded)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg ATH MCap</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Median ATH MCap</th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('bondedTokens')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Bonded Tokens</span>
+                  <span v-if="getSortIcon('bondedTokens')" class="text-purple-400">{{ getSortIcon('bondedTokens') }}</span>
+                </div>
+              </th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('winRate')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Win Rate (% Bonded)</span>
+                  <span v-if="getSortIcon('winRate')" class="text-purple-400">{{ getSortIcon('winRate') }}</span>
+                </div>
+              </th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('avgAthMcap')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg ATH MCap</span>
+                  <span v-if="getSortIcon('avgAthMcap')" class="text-purple-400">{{ getSortIcon('avgAthMcap') }}</span>
+                </div>
+              </th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('medianAthMcap')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Median ATH MCap</span>
+                  <span v-if="getSortIcon('medianAthMcap')" class="text-purple-400">{{ getSortIcon('medianAthMcap') }}</span>
+                </div>
+              </th>
               <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">ATH MCap Percentiles</th>
               <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buys/Sells</th>
               <th colspan="3" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Expected ROI (1st/2nd/3rd Buy)</th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Rug Rate (%)</th>
-              <th rowspan="2" class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-16">
+              <th 
+                rowspan="2" 
+                @click="handleSort('avgRugRate')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg Rug Rate (%)</span>
+                  <span v-if="getSortIcon('avgRugRate')" class="text-purple-400">{{ getSortIcon('avgRugRate') }}</span>
+                </div>
+              </th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('avgRugTime')"
+                class="px-1 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 w-16 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
                 <div class="leading-tight">
-                  <div>Avg Rug</div>
+                  <div class="flex items-center justify-center gap-1">
+                    <span>Avg Rug</span>
+                    <span v-if="getSortIcon('avgRugTime')" class="text-purple-400 text-[8px]">{{ getSortIcon('avgRugTime') }}</span>
+                  </div>
                   <div>Time</div>
                   <div>(Secs)</div>
                 </div>
               </th>
               <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider min-w-[360px] border border-gray-700">Multiplier Scores</th>
-              <th rowspan="2" v-if="showWhatIfColumn" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">
+              <th 
+                rowspan="2" 
+                v-if="showWhatIfColumn" 
+                @click="handleSort('whatIfPnl')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
                 <div class="flex items-center justify-center gap-1">
                   <span>What If PNL</span>
+                  <span v-if="getSortIcon('whatIfPnl')" class="text-purple-400">{{ getSortIcon('whatIfPnl') }}</span>
                   <button
-                    @click="showWhatIfColumn = false"
+                    @click.stop="showWhatIfColumn = false"
                     class="text-gray-500 hover:text-gray-300 transition"
                     title="Hide column"
                   >
@@ -1302,7 +1376,16 @@
                   </button>
                 </div>
               </th>
-              <th rowspan="2" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Final Score</th>
+              <th 
+                rowspan="2" 
+                @click="handleSort('finalScore')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Final Score</span>
+                  <span v-if="getSortIcon('finalScore')" class="text-purple-400">{{ getSortIcon('finalScore') }}</span>
+                </div>
+              </th>
             </tr>
             <!-- Bottom row with individual column headers -->
             <tr>
@@ -1310,13 +1393,69 @@
               <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">50th</th>
               <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">75th</th>
               <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">90th</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Count</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buy Sol Amount</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Count</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Sell Sol Amount</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">1st Buy</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">2nd Buy</th>
-              <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">3rd Buy</th>
+              <th 
+                @click="handleSort('avgBuyCount')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg Buy Count</span>
+                  <span v-if="getSortIcon('avgBuyCount')" class="text-purple-400">{{ getSortIcon('avgBuyCount') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('avgBuySol')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg Buy Sol Amount</span>
+                  <span v-if="getSortIcon('avgBuySol')" class="text-purple-400">{{ getSortIcon('avgBuySol') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('avgSellCount')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg Sell Count</span>
+                  <span v-if="getSortIcon('avgSellCount')" class="text-purple-400">{{ getSortIcon('avgSellCount') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('avgSellSol')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg Sell Sol Amount</span>
+                  <span v-if="getSortIcon('avgSellSol')" class="text-purple-400">{{ getSortIcon('avgSellSol') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('roi1st')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>1st Buy</span>
+                  <span v-if="getSortIcon('roi1st')" class="text-purple-400">{{ getSortIcon('roi1st') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('roi2nd')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>2nd Buy</span>
+                  <span v-if="getSortIcon('roi2nd')" class="text-purple-400">{{ getSortIcon('roi2nd') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('roi3rd')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>3rd Buy</span>
+                  <span v-if="getSortIcon('roi3rd')" class="text-purple-400">{{ getSortIcon('roi3rd') }}</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-800">
@@ -1329,7 +1468,7 @@
             </tr>
             <!-- Wallet Rows -->
             <tr
-              v-for="wallet in wallets"
+              v-for="wallet in sortedWallets"
               :key="wallet.address"
               class="hover:bg-gray-800/50 transition"
             >
@@ -1676,6 +1815,10 @@ const pagination = ref<PaginationInfo>({
   totalPages: 0
 })
 const refreshing = ref(false)
+
+// Sorting state
+const sortColumn = ref<string | null>(null)
+const sortDirection = ref<'asc' | 'desc'>('desc')
 
 // Filter state
 const filtersExpanded = ref(false)
@@ -2453,6 +2596,135 @@ const visiblePages = computed(() => {
   
   return pages
 })
+
+// Sorted wallets computed property
+const sortedWallets = computed(() => {
+  if (!sortColumn.value) {
+    return wallets.value
+  }
+  
+  const sorted = [...wallets.value]
+  const direction = sortDirection.value === 'asc' ? 1 : -1
+  
+  sorted.sort((a, b) => {
+    let aVal: any
+    let bVal: any
+    
+    switch (sortColumn.value) {
+      case 'address':
+        aVal = a.address.toLowerCase()
+        bVal = b.address.toLowerCase()
+        return aVal.localeCompare(bVal) * direction
+      
+      case 'totalTokens':
+        aVal = a.totalTokens ?? 0
+        bVal = b.totalTokens ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'bondedTokens':
+        aVal = a.bondedTokens ?? 0
+        bVal = b.bondedTokens ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'winRate':
+        aVal = a.winRate ?? 0
+        bVal = b.winRate ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgAthMcap':
+        aVal = a.avgAthMcap ?? 0
+        bVal = b.avgAthMcap ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'medianAthMcap':
+        aVal = a.medianAthMcap ?? 0
+        bVal = b.medianAthMcap ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgRugRate':
+        aVal = a.avgRugRate ?? 0
+        bVal = b.avgRugRate ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgRugTime':
+        aVal = a.avgRugTime ?? 0
+        bVal = b.avgRugTime ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'finalScore':
+        aVal = a.scores.finalScore ?? 0
+        bVal = b.scores.finalScore ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgBuyCount':
+        aVal = a.buySellStats.avgBuyCount ?? 0
+        bVal = b.buySellStats.avgBuyCount ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgBuySol':
+        aVal = a.buySellStats.avgBuyTotalSol ?? 0
+        bVal = b.buySellStats.avgBuyTotalSol ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgSellCount':
+        aVal = a.buySellStats.avgSellCount ?? 0
+        bVal = b.buySellStats.avgSellCount ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'avgSellSol':
+        aVal = a.buySellStats.avgSellTotalSol ?? 0
+        bVal = b.buySellStats.avgSellTotalSol ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'roi1st':
+        aVal = a.expectedROI.avgRoi1stBuy ?? 0
+        bVal = b.expectedROI.avgRoi1stBuy ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'roi2nd':
+        aVal = a.expectedROI.avgRoi2ndBuy ?? 0
+        bVal = b.expectedROI.avgRoi2ndBuy ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'roi3rd':
+        aVal = a.expectedROI.avgRoi3rdBuy ?? 0
+        bVal = b.expectedROI.avgRoi3rdBuy ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'whatIfPnl':
+        if (!a.whatIfPnl || !b.whatIfPnl) {
+          if (!a.whatIfPnl && !b.whatIfPnl) return 0
+          return (!a.whatIfPnl ? -1 : 1) * direction
+        }
+        aVal = a.whatIfPnl.avgPnl ?? 0
+        bVal = b.whatIfPnl.avgPnl ?? 0
+        return (aVal - bVal) * direction
+      
+      default:
+        return 0
+    }
+  })
+  
+  return sorted
+})
+
+const handleSort = (column: string) => {
+  if (sortColumn.value === column) {
+    // Toggle direction if clicking the same column
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // Set new column and default to descending
+    sortColumn.value = column
+    sortDirection.value = 'desc'
+  }
+}
+
+const getSortIcon = (column: string) => {
+  if (sortColumn.value !== column) {
+    return null
+  }
+  return sortDirection.value === 'asc' ? '↑' : '↓'
+}
 
 const formatAddress = (address: string): string => {
   if (!address) return ''

@@ -119,15 +119,87 @@
         <table class="w-full text-xs relative">
           <thead class="bg-gray-800 border-b border-gray-700 sticky top-0 z-30">
             <tr>
-              <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Token</th>
-              <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Creator</th>
-              <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Status</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Initial MC</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Peak MC</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Final MC</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">ATH MC</th>
-              <th class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Trades</th>
-              <th class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Created</th>
+              <th 
+                @click="handleSort('name')"
+                class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center gap-1">
+                  <span>Token</span>
+                  <span v-if="getSortIcon('name')" class="text-purple-400">{{ getSortIcon('name') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('creator')"
+                class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center gap-1">
+                  <span>Creator</span>
+                  <span v-if="getSortIcon('creator')" class="text-purple-400">{{ getSortIcon('creator') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('status')"
+                class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center gap-1">
+                  <span>Status</span>
+                  <span v-if="getSortIcon('status')" class="text-purple-400">{{ getSortIcon('status') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('initialMC')"
+                class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-end gap-1">
+                  <span>Initial MC</span>
+                  <span v-if="getSortIcon('initialMC')" class="text-purple-400">{{ getSortIcon('initialMC') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('peakMC')"
+                class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-end gap-1">
+                  <span>Peak MC</span>
+                  <span v-if="getSortIcon('peakMC')" class="text-purple-400">{{ getSortIcon('peakMC') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('finalMC')"
+                class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-end gap-1">
+                  <span>Final MC</span>
+                  <span v-if="getSortIcon('finalMC')" class="text-purple-400">{{ getSortIcon('finalMC') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('athMC')"
+                class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-end gap-1">
+                  <span>ATH MC</span>
+                  <span v-if="getSortIcon('athMC')" class="text-purple-400">{{ getSortIcon('athMC') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('trades')"
+                class="px-2 py-1.5 text-right text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-end gap-1">
+                  <span>Trades</span>
+                  <span v-if="getSortIcon('trades')" class="text-purple-400">{{ getSortIcon('trades') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('created')"
+                class="px-2 py-1.5 text-left text-[10px] font-semibold text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center gap-1">
+                  <span>Created</span>
+                  <span v-if="getSortIcon('created')" class="text-purple-400">{{ getSortIcon('created') }}</span>
+                </div>
+              </th>
               <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Chart</th>
               <th class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
             </tr>
@@ -146,7 +218,7 @@
             </tr>
             <!-- Token Rows -->
             <tr
-              v-for="token in tokens"
+              v-for="token in sortedTokens"
               :key="token.mint"
               class="hover:bg-gray-800/50 transition cursor-pointer"
               @click="$emit('select-token', token)"
@@ -345,6 +417,10 @@ const pagination = ref<PaginationInfo>({
 })
 const refreshing = ref(false)
 
+// Sorting state
+const sortColumn = ref<string | null>(null)
+const sortDirection = ref<'asc' | 'desc'>('desc')
+
 // Filter wallet options for the Select2-like input
 const filteredWalletOptions = computed(() => {
   const options: Array<{ value: string; label: string }> = [
@@ -381,6 +457,96 @@ const visiblePages = computed(() => {
   
   return pages
 })
+
+// Sorted tokens computed property
+const sortedTokens = computed(() => {
+  if (!sortColumn.value) {
+    return tokens.value
+  }
+  
+  const sorted = [...tokens.value]
+  const direction = sortDirection.value === 'asc' ? 1 : -1
+  
+  sorted.sort((a, b) => {
+    let aVal: any
+    let bVal: any
+    
+    switch (sortColumn.value) {
+      case 'name':
+        aVal = (a.name || 'Unnamed Token').toLowerCase()
+        bVal = (b.name || 'Unnamed Token').toLowerCase()
+        return aVal.localeCompare(bVal) * direction
+      
+      case 'symbol':
+        aVal = (a.symbol || '').toLowerCase()
+        bVal = (b.symbol || '').toLowerCase()
+        return aVal.localeCompare(bVal) * direction
+      
+      case 'creator':
+        aVal = a.creator.toLowerCase()
+        bVal = b.creator.toLowerCase()
+        return aVal.localeCompare(bVal) * direction
+      
+      case 'status':
+        aVal = a.bonded ? 1 : 0
+        bVal = b.bonded ? 1 : 0
+        return (aVal - bVal) * direction
+      
+      case 'initialMC':
+        aVal = a.initialMarketCapUsd ?? 0
+        bVal = b.initialMarketCapUsd ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'peakMC':
+        aVal = a.peakMarketCapUsd ?? 0
+        bVal = b.peakMarketCapUsd ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'finalMC':
+        aVal = a.finalMarketCapUsd ?? 0
+        bVal = b.finalMarketCapUsd ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'athMC':
+        aVal = a.athMarketCapUsd ?? 0
+        bVal = b.athMarketCapUsd ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'trades':
+        aVal = a.tradeCount15s ?? 0
+        bVal = b.tradeCount15s ?? 0
+        return (aVal - bVal) * direction
+      
+      case 'created':
+        aVal = new Date(a.createdAt).getTime()
+        bVal = new Date(b.createdAt).getTime()
+        return (aVal - bVal) * direction
+      
+      default:
+        return 0
+    }
+  })
+  
+  return sorted
+})
+
+const handleSort = (column: string) => {
+  if (sortColumn.value === column) {
+    // Toggle direction if clicking the same column
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // Set new column and default to descending
+    sortColumn.value = column
+    sortDirection.value = 'desc'
+  }
+}
+
+const getSortIcon = (column: string) => {
+  if (sortColumn.value !== column) {
+    return null
+  }
+  return sortDirection.value === 'asc' ? '↑' : '↓'
+}
 
 const formatCurrency = (value: number | null): string => {
   if (value === null || value === undefined) return '0'
