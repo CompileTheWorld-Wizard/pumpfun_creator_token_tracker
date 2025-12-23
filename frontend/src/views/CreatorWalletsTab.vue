@@ -1796,6 +1796,7 @@ import * as XLSX from 'xlsx'
 
 const emit = defineEmits<{
   'data-updated': []
+  'update-total': [total: number]
 }>()
 
 // Helper function to process SVG for inline rendering
@@ -2825,6 +2826,11 @@ const loadWallets = async () => {
     )
     wallets.value = response.wallets
     pagination.value = response.pagination
+    
+    // Emit total token count to parent component
+    if (response.totalTokens !== undefined) {
+      emit('update-total', response.totalTokens)
+    }
   } catch (err: any) {
     error.value = err.message || 'Failed to load creator wallets'
     console.error('Error loading creator wallets:', err)
