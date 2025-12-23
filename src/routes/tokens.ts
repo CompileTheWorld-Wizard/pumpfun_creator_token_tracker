@@ -1496,8 +1496,28 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       sqlFilterParams
     );
     
-    // Get token data for multiplier and rug rate calculations ONLY for the filtered creators
-    const creatorAddresses = result.rows.map(row => row.address);
+    // Check if complex filters are active (these require token data)
+    // Complex filters: rugRate, avgRugTime, avgBuySells, expectedROI, finalScore
+    const hasComplexFilters = !!(
+      filters.rugRate || 
+      filters.avgRugTime || 
+      (filters.avgBuySells && Array.isArray(filters.avgBuySells) && filters.avgBuySells.length > 0) ||
+      (filters.expectedROI && Array.isArray(filters.expectedROI) && filters.expectedROI.length > 0) ||
+      filters.finalScore ||
+      (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.some((f: any) => f.type === 'score')) ||
+      (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.some((f: any) => f.type === 'score')) ||
+      (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.some((f: any) => f.type === 'score'))
+    );
+    
+    // Check if sorting by complex fields (these require token data)
+    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
+    const sortingByComplexField = sortColumn && complexSortFields.includes(sortColumn);
+    
+    // Determine which wallets need token data
+    // If complex filters or complex sorting is active, we need tokens for ALL filtered wallets
+    // Otherwise, we only need tokens for paginated wallets (for display)
+    const needsTokensForAll = hasComplexFilters || sortingByComplexField;
+    
     let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
     let allTokensByCreator: Map<string, Array<{ 
       athMarketCapUsd: number | null;
@@ -1506,7 +1526,13 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       marketCapTimeSeries: any;
     }>> = new Map();
     
-    if (creatorAddresses.length > 0) {
+    // Determine which creator addresses need token data
+    const creatorAddressesForTokens = needsTokensForAll 
+      ? result.rows.map(row => row.address)  // All filtered wallets
+      : [];  // Will be set after pagination
+    
+    // Fetch tokens if needed
+    if (creatorAddressesForTokens.length > 0) {
       // Build WHERE clause for token query (same filter as main query)
       let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
       if (!viewAll) {
@@ -1525,7 +1551,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         AND ct.initial_market_cap_usd > 0
         AND ct.ath_market_cap_usd IS NOT NULL
         AND ct.ath_market_cap_usd > 0`,
-        [creatorAddresses]
+        [creatorAddressesForTokens]
       );
       
       // Group tokens by creator for multiplier calculations
@@ -1550,7 +1576,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ct.market_cap_time_series
         FROM tbl_soltrack_created_tokens ct
         ${tokenWhereClause}`,
-        [creatorAddresses]
+        [creatorAddressesForTokens]
       );
       
       // Group all tokens by creator for rug rate calculations
@@ -2047,12 +2073,146 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Recalculate total count after filtering
     const filteredTotal = wallets.length;
     
-    // Calculate total token count from all filtered wallets (not just paginated ones)
-    // This is the sum of totalTokens from all wallets that match the filters
-    const totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
+    // If we didn't fetch tokens for all wallets (no complex filters), fetch them now for paginated wallets only
+    if (!needsTokensForAll && wallets.length > 0) {
+      const paginatedWalletsBeforeTokens = wallets.slice(offset, offset + limit);
+      const paginatedCreatorAddresses = paginatedWalletsBeforeTokens.map(w => w.address);
+      
+      if (paginatedCreatorAddresses.length > 0) {
+        // Build WHERE clause for token query
+        let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+        if (!viewAll) {
+          tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+        }
+        
+        // Get tokens for multiplier calculations (valid tokens only)
+        const tokensResult = await pool.query(
+          `SELECT 
+            ct.creator,
+            ct.initial_market_cap_usd,
+            ct.ath_market_cap_usd
+          FROM tbl_soltrack_created_tokens ct
+          ${tokenWhereClause}
+          AND ct.initial_market_cap_usd IS NOT NULL
+          AND ct.initial_market_cap_usd > 0
+          AND ct.ath_market_cap_usd IS NOT NULL
+          AND ct.ath_market_cap_usd > 0`,
+          [paginatedCreatorAddresses]
+        );
+        
+        // Group tokens by creator for multiplier calculations
+        tokensResult.rows.forEach(row => {
+          const creator = row.creator;
+          if (!tokensByCreator.has(creator)) {
+            tokensByCreator.set(creator, []);
+          }
+          tokensByCreator.get(creator)!.push({
+            initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
+            athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
+          });
+        });
+        
+        // Get ALL tokens for rug rate calculations (including invalid ones)
+        const allTokensResult = await pool.query(
+          `SELECT 
+            ct.creator,
+            ct.ath_market_cap_usd,
+            ct.is_fetched,
+            ct.created_at,
+            ct.market_cap_time_series
+          FROM tbl_soltrack_created_tokens ct
+          ${tokenWhereClause}`,
+          [paginatedCreatorAddresses]
+        );
+        
+        // Group all tokens by creator for rug rate calculations
+        allTokensResult.rows.forEach(row => {
+          const creator = row.creator;
+          if (!allTokensByCreator.has(creator)) {
+            allTokensByCreator.set(creator, []);
+          }
+          allTokensByCreator.get(creator)!.push({
+            athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
+            isFetched: row.is_fetched || false,
+            createdAt: row.created_at,
+            marketCapTimeSeries: row.market_cap_time_series
+          });
+        });
+        
+        // Recalculate stats for paginated wallets now that we have token data
+        for (const wallet of paginatedWalletsBeforeTokens) {
+          const tokens = tokensByCreator.get(wallet.address) || [];
+          const allTokens = allTokensByCreator.get(wallet.address) || [];
+          
+          // Recalculate stats that require token data
+          wallet.multiplierPercentages = Object.fromEntries(
+            Array.from(calculateMultiplierPercentages(tokens).entries()).map(([key, value]) => [
+              key,
+              Math.round(value * 100) / 100
+            ])
+          );
+          
+          wallet.validTokenCount = tokens.filter(
+            t => t.initialMarketCapUsd !== null && 
+                 t.initialMarketCapUsd > 0 && 
+                 t.athMarketCapUsd !== null && 
+                 t.athMarketCapUsd > 0
+          ).length;
+          
+          wallet.avgRugRate = Math.round(calculateRugRate(allTokens, rugThresholdMcap) * 100) / 100;
+          wallet.avgRugTime = (() => {
+            const time = calculateAvgRugTime(allTokens, rugThresholdMcap);
+            return time !== null ? Math.round(time * 100) / 100 : null;
+          })();
+          
+          wallet.buySellStats = calculateBuySellStats(allTokens);
+          wallet.expectedROI = calculateExpectedROI(allTokens);
+          
+          if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
+            wallet.whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
+          }
+          
+          // Recalculate scores with updated stats
+          if (scoringSettings) {
+            const percentileRank = wallet.athMcapPercentileRank !== null ? wallet.athMcapPercentileRank / 100 : null;
+            wallet.scores = calculateCreatorWalletScores(
+              wallet.winRate,
+              wallet.avgAthMcap,
+              wallet.medianAthMcap,
+              calculateMultiplierPercentages(tokens),
+              wallet.avgRugRate,
+              wallet.avgRugTime,
+              scoringSettings,
+              allWalletsData,
+              percentileRank
+            );
+            
+            // Round scores
+            wallet.scores = {
+              winRateScore: Math.round(wallet.scores.winRateScore * 100) / 100,
+              avgAthMcapScore: Math.round(wallet.scores.avgAthMcapScore * 100) / 100,
+              medianAthMcapScore: Math.round(wallet.scores.medianAthMcapScore * 100) / 100,
+              multiplierScore: Math.round(wallet.scores.multiplierScore * 100) / 100,
+              avgRugRateScore: Math.round(wallet.scores.avgRugRateScore * 100) / 100,
+              timeBucketRugRateScore: Math.round(wallet.scores.timeBucketRugRateScore * 100) / 100,
+              individualMultiplierScores: Object.fromEntries(
+                Object.entries(wallet.scores.individualMultiplierScores).map(([key, value]) => [
+                  parseFloat(key),
+                  Math.round(value * 100) / 100
+                ])
+              ),
+              finalScore: Math.round(wallet.scores.finalScore * 100) / 100
+            };
+          }
+        }
+      }
+    }
     
     // Apply pagination to filtered results
     const paginatedWallets = wallets.slice(offset, offset + limit);
+    
+    // Calculate total token count from all filtered wallets (after all filters applied)
+    const totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
     
     res.json({
       wallets: paginatedWallets,
@@ -2062,7 +2222,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         total: filteredTotal,
         totalPages: Math.ceil(filteredTotal / limit)
       },
-      totalTokens: totalTokensCount
+      totalTokensCount: totalTokensCount
     });
   } catch (error: any) {
     console.error('Error fetching creator wallets analytics:', error);
