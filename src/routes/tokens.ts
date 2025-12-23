@@ -1440,27 +1440,23 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       ? `HAVING ${sqlFilterConditions.join(' AND ')}`
       : '';
     
-    // First, get ALL wallets data to calculate percentiles (only for percentile-based filters)
-    // We only need this if there are percentile filters
-    const hasPercentileFilters = filters.avgMcap?.some((f: any) => f.type === 'percentile') || false;
-    let allWalletsData: Array<{ avgAthMcap: number | null; medianAthMcap: number | null }> = [];
+    // Always get ALL wallets data to calculate percentile ranks for display
+    // This is needed to show where each creator ranks among all creators (0-100 percentile)
+    // Note: This query is fast because it only aggregates basic stats, no token details
+    const allWalletsResult = await pool.query(
+      `SELECT 
+        ct.creator,
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${baseWhereClause}
+      GROUP BY ct.creator`
+    );
     
-    if (hasPercentileFilters) {
-      const allWalletsResult = await pool.query(
-        `SELECT 
-          ct.creator,
-          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-        FROM tbl_soltrack_created_tokens ct
-        ${baseWhereClause}
-        GROUP BY ct.creator`
-      );
-      
-      allWalletsData = allWalletsResult.rows.map(row => ({
-        avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
-        medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
-      }));
-    }
+    const allWalletsData = allWalletsResult.rows.map(row => ({
+      avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
+      medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
+    }));
     
     // Determine if we can use SQL sorting for simple fields
     const sqlSortableFields: Record<string, string> = {
