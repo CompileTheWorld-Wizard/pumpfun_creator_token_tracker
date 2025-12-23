@@ -292,7 +292,7 @@
       </div>
 
       <!-- Tab Content -->
-      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" ref="creatorWalletsTabRef" @data-updated="handleDataUpdated" @update-total="tokensTotalCount = $event" />
+      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" ref="creatorWalletsTabRef" @data-updated="handleDataUpdated" />
       <TokensTab v-else ref="tokensTabRef" @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" @data-updated="handleDataUpdated" />
     </main>
 

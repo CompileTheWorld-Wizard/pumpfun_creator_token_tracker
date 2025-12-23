@@ -2047,10 +2047,6 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Recalculate total count after filtering
     const filteredTotal = wallets.length;
     
-    // Calculate total token count from all filtered wallets (not just paginated ones)
-    // This is the sum of totalTokens from all wallets that match the filters
-    const totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
-    
     // Apply pagination to filtered results
     const paginatedWallets = wallets.slice(offset, offset + limit);
     
@@ -2061,8 +2057,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         limit,
         total: filteredTotal,
         totalPages: Math.ceil(filteredTotal / limit)
-      },
-      totalTokens: totalTokensCount
+      }
     });
   } catch (error: any) {
     console.error('Error fetching creator wallets analytics:', error);
