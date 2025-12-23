@@ -292,8 +292,8 @@
       </div>
 
       <!-- Tab Content -->
-      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" ref="creatorWalletsTabRef" />
-      <TokensTab v-else ref="tokensTabRef" @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" />
+      <CreatorWalletsTab v-if="activeTab === 'creator-wallets'" ref="creatorWalletsTabRef" @data-updated="handleDataUpdated" />
+      <TokensTab v-else ref="tokensTabRef" @select-token="selectedToken = $event" @update-total="tokensTotalCount = $event" @data-updated="handleDataUpdated" />
     </main>
 
     <!-- Manage Blacklist Dialog -->
@@ -1286,6 +1286,15 @@ const loadAvgStats = async () => {
       avgRoi3rdBuy: null
     }
   }
+}
+
+const handleDataUpdated = async () => {
+  // Reload dashboard stats when data is updated (refresh, sort, or filters applied)
+  await Promise.all([
+    loadCreatorWallets(),
+    loadAthMcapStats(),
+    loadAvgStats()
+  ])
 }
 
 // Watch for token selection from TokensTab

@@ -373,6 +373,7 @@ import * as XLSX from 'xlsx'
 const emit = defineEmits<{
   'select-token': [token: Token]
   'update-total': [total: number]
+  'data-updated': []
 }>()
 
 // Helper function to process SVG for inline rendering
@@ -469,7 +470,9 @@ const handleSort = (column: string) => {
   }
   // Reload data with new sort parameters
   pagination.value.page = 1
-  loadTokens()
+  loadTokens().then(() => {
+    emit('data-updated')
+  })
 }
 
 const getSortIcon = (column: string) => {
@@ -520,6 +523,7 @@ const handleFilterChange = async () => {
   await loadCreatorWallets()
   pagination.value.page = 1
   await loadTokens()
+  emit('data-updated')
 }
 
 const handleWalletInputFocus = () => {
@@ -773,6 +777,7 @@ const handleRefresh = async () => {
   refreshing.value = true
   try {
     await loadTokens()
+    emit('data-updated')
   } catch (err: any) {
     console.error('Error refreshing data:', err)
   } finally {

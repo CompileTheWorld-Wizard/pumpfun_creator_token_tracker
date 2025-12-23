@@ -1794,6 +1794,10 @@ import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 import * as XLSX from 'xlsx'
 
+const emit = defineEmits<{
+  'data-updated': []
+}>()
+
 // Helper function to process SVG for inline rendering
 const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
   return svg.replace(
@@ -2480,7 +2484,9 @@ const removeFilterPreset = () => {
 // Apply filters
 const applyFilters = () => {
   pagination.value.page = 1
-  loadWallets()
+  loadWallets().then(() => {
+    emit('data-updated')
+  })
 }
 
 // What If functions
@@ -2608,7 +2614,9 @@ const handleSort = (column: string) => {
   }
   // Reload data with new sort parameters
   pagination.value.page = 1
-  loadWallets()
+  loadWallets().then(() => {
+    emit('data-updated')
+  })
 }
 
 const getSortIcon = (column: string) => {
@@ -2833,6 +2841,7 @@ const handleRefresh = async () => {
   refreshing.value = true
   try {
     await loadWallets()
+    emit('data-updated')
   } catch (err: any) {
     console.error('Error refreshing data:', err)
   } finally {
