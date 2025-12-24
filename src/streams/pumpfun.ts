@@ -411,7 +411,7 @@ async function startStreaming(): Promise<void> {
     txnStreamer = new TransactionStreamer(endpoint, xToken);
 
     // Turn off logging
-    txnStreamer.enableLogging(true)
+    txnStreamer.enableLogging(false)
 
     // Add parser to streamer
     txnStreamer.addParser(parser);
