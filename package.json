@@ -32,7 +32,7 @@
   "license": "ISC",
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
-    "@shyft-to/ladybug-sdk": "^0.0.1",
+    "@shyft-to/ladybug-sdk": "^0.0.2",
     "@solana/web3.js": "^1.95.2",
     "@types/bcrypt": "^6.0.0",
     "@types/ioredis": "^4.28.10",
