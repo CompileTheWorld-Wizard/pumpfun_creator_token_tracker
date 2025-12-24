@@ -142,6 +142,7 @@ function initializeParser(): Parser {
 
   // Disable default instruction parsing to use custom parsers
   parser.useDefaultInstructionParsing(true);
+  parser.enableLogging(false);
 
   return parser;
 }
@@ -409,9 +410,6 @@ async function startStreaming(): Promise<void> {
 
     // Create transaction streamer
     txnStreamer = new TransactionStreamer(endpoint, xToken);
-
-    // Turn off logging
-    txnStreamer.enableLogging(false)
 
     // Add parser to streamer
     txnStreamer.addParser(parser);
