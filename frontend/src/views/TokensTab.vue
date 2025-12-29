@@ -368,7 +368,6 @@ import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type Paginat
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 import closeIconSvg from '../icons/close.svg?raw'
-import * as XLSX from 'xlsx'
 
 const emit = defineEmits<{
   'select-token': [token: Token]
@@ -721,51 +720,64 @@ const loadTokens = async () => {
 
 const handleExport = async () => {
   try {
-    // Fetch all tokens for export
-    const limit = 1000000 // Large limit to get all data
+    loading.value = true
+    error.value = ''
+    
+    // Use streaming export endpoint for better performance with large datasets
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+    const params = new URLSearchParams()
+    
+    if (selectedCreatorWallet.value) {
+      params.append('creator', selectedCreatorWallet.value)
+    }
+    
     const viewAll = !selectedCreatorWallet.value
-    const response = await getCreatedTokens(
-      1,
-      limit,
-      selectedCreatorWallet.value || undefined,
-      viewAll
-    )
+    if (viewAll) {
+      params.append('viewAll', 'true')
+    }
     
-    const allTokens = response.tokens
+    const response = await fetch(`${API_BASE_URL}/tokens/export?${params.toString()}`, {
+      method: 'GET',
+      credentials: 'include',
+    })
     
-    // Prepare data for Excel export
-    const exportData = allTokens.map(token => ({
-      'Token Name': token.name || 'Unnamed Token',
-      'Symbol': token.symbol,
-      'Mint Address': token.mint,
-      'Creator Wallet': token.creator,
-      'Bonding Curve': token.bondingCurve,
-      'Status': token.bonded ? 'Bonded' : 'Bonding',
-      'Initial Market Cap (USD)': token.initialMarketCapUsd !== null ? token.initialMarketCapUsd : 'N/A',
-      'Peak Market Cap (USD)': token.peakMarketCapUsd !== null ? token.peakMarketCapUsd : 'N/A',
-      'Final Market Cap (USD)': token.finalMarketCapUsd !== null ? token.finalMarketCapUsd : 'N/A',
-      'ATH Market Cap (USD)': token.athMarketCapUsd !== null ? token.athMarketCapUsd : 'N/A',
-      'Trade Count (15s)': token.tradeCount15s,
-      'Created At': token.createdAt,
-      'Create TX Signature': token.createTxSignature,
-      'Tracked At': token.trackedAt,
-      'Updated At': token.updatedAt
-    }))
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Unauthorized')
+      }
+      const errorData = await response.json().catch(() => ({ error: 'Failed to export data' }))
+      throw new Error(errorData.error || 'Failed to export data')
+    }
     
-    // Create workbook and worksheet
-    const ws = XLSX.utils.json_to_sheet(exportData)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Tokens')
+    // Get the blob from the streaming response
+    const blob = await response.blob()
     
-    // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    const filename = `tokens-${timestamp}.xlsx`
+    // Create a download link
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
     
-    // Write file
-    XLSX.writeFile(wb, filename)
+    // Get filename from Content-Disposition header or use default
+    const contentDisposition = response.headers.get('Content-Disposition')
+    let filename = 'tokens-export.csv'
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+      if (filenameMatch) {
+        filename = filenameMatch[1]
+      }
+    }
+    
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    
+    loading.value = false
   } catch (err: any) {
     console.error('Error exporting data:', err)
     error.value = err.message || 'Failed to export data'
+    loading.value = false
   }
 }
 

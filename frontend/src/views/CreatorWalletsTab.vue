@@ -2857,8 +2857,8 @@ const handleRefresh = async () => {
 
 const handleExport = async () => {
   try {
-    // Fetch all wallets for export
-    const limit = 1000000 // Large limit to get all data
+    loading.value = true
+    error.value = ''
     
     // Build filter object (same logic as loadWallets)
     const filterParams: any = {}
@@ -2941,77 +2941,62 @@ const handleExport = async () => {
       ? whatIfSettings.value
       : null
     
-    const response = await getCreatorWalletsAnalytics(
-      1,
-      limit,
-      false,
-      filterParams,
-      whatIfSettingsToSend,
-      sortColumn.value,
-      sortDirection.value
-    )
+    // Use streaming export endpoint for better performance with large datasets
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
+    const params = new URLSearchParams()
     
-    const allWallets = response.wallets
+    // Match loadWallets logic: always exclude blacklisted (viewAll = false)
+    // This can be made configurable later if needed
     
-    // Prepare data for Excel export
-    const exportData = allWallets.map(wallet => ({
-      'Wallet Address': wallet.address,
-      'Total Tokens': wallet.totalTokens,
-      'Valid Token Count': wallet.validTokenCount,
-      'Bonded Tokens': wallet.bondedTokens,
-      'Win Rate (%)': wallet.winRate.toFixed(2),
-      'Win Rate Score': wallet.scores.winRateScore.toFixed(2),
-      'Avg ATH MCap': wallet.avgAthMcap !== null ? wallet.avgAthMcap : 'N/A',
-      'Avg ATH MCap Score': wallet.scores.avgAthMcapScore.toFixed(2),
-      'Median ATH MCap': wallet.medianAthMcap !== null ? wallet.medianAthMcap : 'N/A',
-      'Median ATH MCap Score': wallet.scores.medianAthMcapScore.toFixed(2),
-      'ATH MCap Percentile Rank': wallet.athMcapPercentileRank !== null ? wallet.athMcapPercentileRank.toFixed(1) : 'N/A',
-      '25th Percentile': wallet.athMcapPercentiles.percentile25th ? 'Yes' : 'No',
-      '50th Percentile': wallet.athMcapPercentiles.percentile50th ? 'Yes' : 'No',
-      '75th Percentile': wallet.athMcapPercentiles.percentile75th ? 'Yes' : 'No',
-      '90th Percentile': wallet.athMcapPercentiles.percentile90th ? 'Yes' : 'No',
-      'Avg Buy Count': wallet.buySellStats.avgBuyCount.toFixed(2),
-      'Avg Buy Total SOL': wallet.buySellStats.avgBuyTotalSol.toFixed(4),
-      'Avg Sell Count': wallet.buySellStats.avgSellCount.toFixed(2),
-      'Avg Sell Total SOL': wallet.buySellStats.avgSellTotalSol.toFixed(4),
-      'Expected ROI 1st Buy': wallet.expectedROI.avgRoi1stBuy.toFixed(2),
-      'Expected ROI 2nd Buy': wallet.expectedROI.avgRoi2ndBuy.toFixed(2),
-      'Expected ROI 3rd Buy': wallet.expectedROI.avgRoi3rdBuy.toFixed(2),
-      'Avg Rug Rate (%)': wallet.avgRugRate.toFixed(2),
-      'Avg Rug Rate Score': wallet.scores.avgRugRateScore.toFixed(2),
-      'Avg Rug Time (seconds)': wallet.avgRugTime !== null ? wallet.avgRugTime.toFixed(2) : 'N/A',
-      'Time Bucket Rug Rate Score': wallet.scores.timeBucketRugRateScore.toFixed(2),
-      'Multiplier Score': wallet.scores.multiplierScore.toFixed(2),
-      'Final Score': wallet.scores.finalScore.toFixed(2),
-      ...(showWhatIfColumn.value && wallet.whatIfPnl ? {
-        'What If Avg PNL': wallet.whatIfPnl.avgPnl.toFixed(2),
-        'What If Avg PNL %': wallet.whatIfPnl.avgPnlPercent.toFixed(2),
-        'What If Tokens Simulated': wallet.whatIfPnl.tokensSimulated
-      } : {}),
-      ...Object.entries(wallet.multiplierPercentages).reduce((acc, [multiplier, percentage]) => {
-        acc[`${multiplier}x Multiplier %`] = percentage.toFixed(2)
-        return acc
-      }, {} as Record<string, string>),
-      ...Object.entries(wallet.scores.individualMultiplierScores).reduce((acc, [multiplier, score]) => {
-        acc[`${multiplier}x Multiplier Score`] = score.toFixed(2)
-        return acc
-      }, {} as Record<string, string>)
-    }))
+    const response = await fetch(`${API_BASE_URL}/tokens/creators/export?${params.toString()}`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        filters: filterParams,
+        whatIfSettings: whatIfSettingsToSend
+      })
+    })
     
-    // Create workbook and worksheet
-    const ws = XLSX.utils.json_to_sheet(exportData)
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Creator Wallets')
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Unauthorized')
+      }
+      const errorData = await response.json().catch(() => ({ error: 'Failed to export data' }))
+      throw new Error(errorData.error || 'Failed to export data')
+    }
     
-    // Generate filename with timestamp
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)
-    const filename = `creator-wallets-${timestamp}.xlsx`
+    // Get the blob from the streaming response
+    const blob = await response.blob()
     
-    // Write file
-    XLSX.writeFile(wb, filename)
+    // Create a download link
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    
+    // Get filename from Content-Disposition header or use default
+    const contentDisposition = response.headers.get('Content-Disposition')
+    let filename = 'creator-wallets-export.csv'
+    if (contentDisposition) {
+      const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i)
+      if (filenameMatch) {
+        filename = filenameMatch[1]
+      }
+    }
+    
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    
+    loading.value = false
   } catch (err: any) {
     console.error('Error exporting data:', err)
     error.value = err.message || 'Failed to export data'
+    loading.value = false
   }
 }
 

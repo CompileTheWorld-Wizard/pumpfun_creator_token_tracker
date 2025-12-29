@@ -2251,6 +2251,572 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
   }
 });
 
+// Export tokens as CSV (streaming for large datasets)
+router.get('/export', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const creatorWallet = req.query.creator as string || null;
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    
+    // Set headers for CSV download
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="tokens-${timestamp}.csv"`);
+    
+    // Build WHERE clause
+    let whereClause = '';
+    const queryParams: any[] = [];
+    let paramIndex = 1;
+    
+    if (viewAll) {
+      if (creatorWallet) {
+        whereClause = `WHERE ct.creator = $${paramIndex}`;
+        queryParams.push(creatorWallet);
+        paramIndex++;
+      } else {
+        whereClause = '';
+      }
+    } else {
+      whereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      
+      if (creatorWallet) {
+        whereClause += ` AND ct.creator = $${paramIndex}`;
+        queryParams.push(creatorWallet);
+        paramIndex++;
+      }
+    }
+    
+    // Write CSV header
+    const header = [
+      'Token Name',
+      'Symbol',
+      'Mint Address',
+      'Creator Wallet',
+      'Bonding Curve',
+      'Status',
+      'Initial Market Cap (USD)',
+      'Peak Market Cap (USD)',
+      'Final Market Cap (USD)',
+      'ATH Market Cap (USD)',
+      'Trade Count (15s)',
+      'Created At',
+      'Create TX Signature',
+      'Tracked At',
+      'Updated At'
+    ].map(field => `"${field.replace(/"/g, '""')}"`).join(',') + '\n';
+    
+    res.write(header);
+    
+    // Stream data in chunks to avoid memory issues
+    const BATCH_SIZE = 1000; // Process 1000 records at a time
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const result = await pool.query(
+        `SELECT 
+          ct.mint,
+          ct.name,
+          ct.symbol,
+          ct.creator,
+          ct.bonding_curve,
+          ct.created_at,
+          ct.create_tx_signature,
+          ct.initial_market_cap_usd,
+          ct.peak_market_cap_usd,
+          ct.final_market_cap_usd,
+          ct.trade_count_15s,
+          ct.bonded,
+          ct.ath_market_cap_usd,
+          ct.tracked_at,
+          ct.updated_at
+        FROM tbl_soltrack_created_tokens ct
+        ${whereClause}
+        ORDER BY ct.created_at DESC
+        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+        [...queryParams, BATCH_SIZE, offset]
+      );
+      
+      if (result.rows.length === 0) {
+        hasMore = false;
+        break;
+      }
+      
+      // Convert rows to CSV and write
+      for (const row of result.rows) {
+        const csvRow = [
+          row.name || 'Unnamed Token',
+          row.symbol || '',
+          row.mint || '',
+          row.creator || '',
+          row.bonding_curve || '',
+          row.bonded ? 'Bonded' : 'Bonding',
+          row.initial_market_cap_usd !== null ? row.initial_market_cap_usd : 'N/A',
+          row.peak_market_cap_usd !== null ? row.peak_market_cap_usd : 'N/A',
+          row.final_market_cap_usd !== null ? row.final_market_cap_usd : 'N/A',
+          row.ath_market_cap_usd !== null ? row.ath_market_cap_usd : 'N/A',
+          row.trade_count_15s || 0,
+          row.created_at || '',
+          row.create_tx_signature || '',
+          row.tracked_at || '',
+          row.updated_at || ''
+        ].map(field => {
+          const str = String(field);
+          return `"${str.replace(/"/g, '""')}"`;
+        }).join(',') + '\n';
+        
+        res.write(csvRow);
+      }
+      
+      offset += BATCH_SIZE;
+      
+      // If we got fewer rows than requested, we're done
+      if (result.rows.length < BATCH_SIZE) {
+        hasMore = false;
+      }
+    }
+    
+    res.end();
+  } catch (error: any) {
+    console.error('Error exporting tokens:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error exporting tokens' 
+      });
+    } else {
+      res.end();
+    }
+  }
+});
+
+// Export creator wallets as CSV (streaming for large datasets)
+router.post('/creators/export', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
+    const filters = req.body?.filters || {};
+    const whatIfSettings = req.body?.whatIfSettings || null;
+    
+    // Set headers for CSV download
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="creator-wallets-${timestamp}.csv"`);
+    
+    // Get applied scoring settings (same logic as analytics endpoint)
+    let scoringSettings: any = null;
+    try {
+      const settingsResult = await pool.query(
+        `SELECT settings
+         FROM tbl_soltrack_applied_settings
+         ORDER BY applied_at DESC
+         LIMIT 1`
+      );
+      
+      if (settingsResult.rows.length === 0) {
+        const defaultResult = await pool.query(
+          `SELECT settings
+           FROM tbl_soltrack_scoring_settings
+           WHERE is_default = TRUE
+           LIMIT 1`
+        );
+        if (defaultResult.rows.length > 0) {
+          scoringSettings = defaultResult.rows[0].settings;
+        }
+      } else {
+        scoringSettings = settingsResult.rows[0].settings;
+      }
+    } catch (settingsError) {
+      console.error('Error fetching scoring settings:', settingsError);
+    }
+    
+    // Build base WHERE clause
+    let baseWhereClause = '';
+    if (!viewAll) {
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+    }
+    
+    const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
+    
+    // Build SQL-level filters (same logic as analytics endpoint)
+    const sqlFilterConditions: string[] = [];
+    const sqlFilterParams: any[] = [];
+    let paramIndex = 1;
+    
+    if (filters.totalTokens) {
+      if (filters.totalTokens.min !== undefined && filters.totalTokens.min !== null) {
+        sqlFilterConditions.push(`COUNT(*) >= $${paramIndex}`);
+        sqlFilterParams.push(filters.totalTokens.min);
+        paramIndex++;
+      }
+      if (filters.totalTokens.max !== undefined && filters.totalTokens.max !== null) {
+        sqlFilterConditions.push(`COUNT(*) <= $${paramIndex}`);
+        sqlFilterParams.push(filters.totalTokens.max);
+        paramIndex++;
+      }
+    }
+    
+    if (filters.bondedTokens) {
+      if (filters.bondedTokens.min !== undefined && filters.bondedTokens.min !== null) {
+        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) >= $${paramIndex}`);
+        sqlFilterParams.push(filters.bondedTokens.min);
+        paramIndex++;
+      }
+      if (filters.bondedTokens.max !== undefined && filters.bondedTokens.max !== null) {
+        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) <= $${paramIndex}`);
+        sqlFilterParams.push(filters.bondedTokens.max);
+        paramIndex++;
+      }
+    }
+    
+    if (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.length > 0) {
+      for (const filter of filters.winRate) {
+        if (filter.type === 'percent') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+      }
+    }
+    
+    if (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.length > 0) {
+      for (const filter of filters.avgMcap) {
+        if (filter.type === 'mcap') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+      }
+    }
+    
+    if (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.length > 0) {
+      for (const filter of filters.medianMcap) {
+        if (filter.type === 'mcap') {
+          if (filter.min !== undefined && filter.min !== null) {
+            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) >= $${paramIndex}`);
+            sqlFilterParams.push(filter.min);
+            paramIndex++;
+          }
+          if (filter.max !== undefined && filter.max !== null) {
+            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) <= $${paramIndex}`);
+            sqlFilterParams.push(filter.max);
+            paramIndex++;
+          }
+        }
+      }
+    }
+    
+    const havingClause = sqlFilterConditions.length > 0 
+      ? `HAVING ${sqlFilterConditions.join(' AND ')}`
+      : '';
+    
+    // Get all wallets data for percentile calculation
+    const allWalletsResult = await pool.query(
+      `SELECT 
+        ct.creator,
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${baseWhereClause}
+      GROUP BY ct.creator`
+    );
+    
+    const allWalletsData = allWalletsResult.rows.map(row => ({
+      avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
+      medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
+    }));
+    
+    const allAvgAthValues = allWalletsData
+      .map(w => w.avgAthMcap)
+      .filter((v): v is number => v !== null && v > 0)
+      .sort((a, b) => a - b);
+    
+    // Get all filtered wallets (we need to fetch all for export, but process in batches)
+    const walletsResult = await pool.query(
+      `SELECT 
+        ct.creator as address,
+        COUNT(*) as total_tokens,
+        COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+        CASE 
+          WHEN COUNT(*) > 0 THEN 
+            ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0
+        END as win_rate,
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+      FROM tbl_soltrack_created_tokens ct
+      ${baseWhereClause}
+      GROUP BY ct.creator
+      ${havingClause}
+      ORDER BY win_rate DESC, total_tokens DESC`,
+      sqlFilterParams
+    );
+    
+    // Build CSV header
+    const headerFields = [
+      'Wallet Address',
+      'Total Tokens',
+      'Valid Token Count',
+      'Bonded Tokens',
+      'Win Rate (%)',
+      'Win Rate Score',
+      'Avg ATH MCap',
+      'Avg ATH MCap Score',
+      'Median ATH MCap',
+      'Median ATH MCap Score',
+      'ATH MCap Percentile Rank',
+      '25th Percentile',
+      '50th Percentile',
+      '75th Percentile',
+      '90th Percentile',
+      'Avg Buy Count',
+      'Avg Buy Total SOL',
+      'Avg Sell Count',
+      'Avg Sell Total SOL',
+      'Expected ROI 1st Buy',
+      'Expected ROI 2nd Buy',
+      'Expected ROI 3rd Buy',
+      'Avg Rug Rate (%)',
+      'Avg Rug Rate Score',
+      'Avg Rug Time (seconds)',
+      'Time Bucket Rug Rate Score',
+      'Multiplier Score',
+      'Final Score'
+    ];
+    
+    // Add What If columns if settings provided
+    const showWhatIf = whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy;
+    if (showWhatIf) {
+      headerFields.push('What If Avg PNL', 'What If Avg PNL %', 'What If Tokens Simulated');
+    }
+    
+    // Add multiplier columns (common multipliers: 1.5, 2, 3, 5, 10)
+    const multipliers = [1.5, 2, 3, 5, 10];
+    multipliers.forEach(mult => {
+      headerFields.push(`${mult}x Multiplier %`);
+    });
+    multipliers.forEach(mult => {
+      headerFields.push(`${mult}x Multiplier Score`);
+    });
+    
+    // Add multiplier columns (we'll determine these from the first wallet)
+    const header = headerFields.map(field => `"${field.replace(/"/g, '""')}"`).join(',') + '\n';
+    res.write(header);
+    
+    // Process wallets in batches to avoid memory issues
+    const BATCH_SIZE = 100; // Process 100 wallets at a time
+    const totalWallets = walletsResult.rows.length;
+    
+    for (let i = 0; i < totalWallets; i += BATCH_SIZE) {
+      const batch = walletsResult.rows.slice(i, i + BATCH_SIZE);
+      const batchAddresses = batch.map(row => row.address);
+      
+      // Fetch tokens for this batch
+      let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+      if (!viewAll) {
+        tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      }
+      
+      const tokensResult = await pool.query(
+        `SELECT 
+          ct.creator,
+          ct.initial_market_cap_usd,
+          ct.ath_market_cap_usd
+        FROM tbl_soltrack_created_tokens ct
+        ${tokenWhereClause}
+        AND ct.initial_market_cap_usd IS NOT NULL
+        AND ct.initial_market_cap_usd > 0
+        AND ct.ath_market_cap_usd IS NOT NULL
+        AND ct.ath_market_cap_usd > 0`,
+        [batchAddresses]
+      );
+      
+      const allTokensResult = await pool.query(
+        `SELECT 
+          ct.creator,
+          ct.ath_market_cap_usd,
+          ct.is_fetched,
+          ct.created_at,
+          ct.market_cap_time_series
+        FROM tbl_soltrack_created_tokens ct
+        ${tokenWhereClause}`,
+        [batchAddresses]
+      );
+      
+      // Group tokens by creator
+      const tokensByCreator = new Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>>();
+      const allTokensByCreator = new Map<string, Array<{ 
+        athMarketCapUsd: number | null;
+        isFetched: boolean;
+        createdAt: Date;
+        marketCapTimeSeries: any;
+      }>>();
+      
+      tokensResult.rows.forEach(row => {
+        const creator = row.creator;
+        if (!tokensByCreator.has(creator)) {
+          tokensByCreator.set(creator, []);
+        }
+        tokensByCreator.get(creator)!.push({
+          initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
+          athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
+        });
+      });
+      
+      allTokensResult.rows.forEach(row => {
+        const creator = row.creator;
+        if (!allTokensByCreator.has(creator)) {
+          allTokensByCreator.set(creator, []);
+        }
+        allTokensByCreator.get(creator)!.push({
+          athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
+          isFetched: row.is_fetched || false,
+          createdAt: row.created_at,
+          marketCapTimeSeries: row.market_cap_time_series
+        });
+      });
+      
+      // Process each wallet in the batch
+      for (const row of batch) {
+        const winRate = parseFloat(row.win_rate) || 0;
+        const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
+        const medianAthMcap = row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null;
+        
+        let percentileRank: number | null = null;
+        if (avgAthMcap !== null && avgAthMcap > 0 && allAvgAthValues.length > 0) {
+          percentileRank = calculatePercentile(avgAthMcap, allAvgAthValues);
+        }
+        
+        const tokens = tokensByCreator.get(row.address) || [];
+        const allTokens = allTokensByCreator.get(row.address) || [];
+        
+        const multiplierPercentages = calculateMultiplierPercentages(tokens);
+        const validTokenCount = tokens.filter(
+          t => t.initialMarketCapUsd !== null && 
+               t.initialMarketCapUsd > 0 && 
+               t.athMarketCapUsd !== null && 
+               t.athMarketCapUsd > 0
+        ).length;
+        
+        const avgRugRate = calculateRugRate(allTokens, rugThresholdMcap);
+        const avgRugTime = calculateAvgRugTime(allTokens, rugThresholdMcap);
+        const buySellStats = calculateBuySellStats(allTokens);
+        const expectedROI = calculateExpectedROI(allTokens);
+        
+        let whatIfPnl = null;
+        if (showWhatIf && whatIfSettings) {
+          whatIfPnl = calculateWhatIfPNL(allTokens, whatIfSettings);
+        }
+        
+        let scores = {
+          winRateScore: 0,
+          avgAthMcapScore: 0,
+          medianAthMcapScore: 0,
+          multiplierScore: 0,
+          avgRugRateScore: 0,
+          timeBucketRugRateScore: 0,
+          individualMultiplierScores: {} as Record<number, number>,
+          finalScore: 0
+        };
+        
+        if (scoringSettings) {
+          scores = calculateCreatorWalletScores(
+            winRate,
+            avgAthMcap,
+            medianAthMcap,
+            multiplierPercentages,
+            avgRugRate,
+            avgRugTime,
+            scoringSettings,
+            allWalletsData,
+            percentileRank
+          );
+        }
+        
+        // Build CSV row
+        const rowData: any[] = [
+          row.address,
+          parseInt(row.total_tokens) || 0,
+          validTokenCount,
+          parseInt(row.bonded_tokens) || 0,
+          winRate.toFixed(2),
+          scores.winRateScore.toFixed(2),
+          avgAthMcap !== null ? avgAthMcap : 'N/A',
+          scores.avgAthMcapScore.toFixed(2),
+          medianAthMcap !== null ? medianAthMcap : 'N/A',
+          scores.medianAthMcapScore.toFixed(2),
+          percentileRank !== null ? percentileRank.toFixed(1) : 'N/A',
+          percentileRank !== null && percentileRank <= 25 ? 'Yes' : 'No',
+          percentileRank !== null && percentileRank <= 50 ? 'Yes' : 'No',
+          percentileRank !== null && percentileRank <= 75 ? 'Yes' : 'No',
+          percentileRank !== null && percentileRank > 75 ? 'Yes' : 'No',
+          buySellStats.avgBuyCount.toFixed(2),
+          buySellStats.avgBuyTotalSol.toFixed(4),
+          buySellStats.avgSellCount.toFixed(2),
+          buySellStats.avgSellTotalSol.toFixed(4),
+          expectedROI.avgRoi1stBuy.toFixed(2),
+          expectedROI.avgRoi2ndBuy.toFixed(2),
+          expectedROI.avgRoi3rdBuy.toFixed(2),
+          avgRugRate.toFixed(2),
+          scores.avgRugRateScore.toFixed(2),
+          avgRugTime !== null ? avgRugTime.toFixed(2) : 'N/A',
+          scores.timeBucketRugRateScore.toFixed(2),
+          scores.multiplierScore.toFixed(2),
+          scores.finalScore.toFixed(2)
+        ];
+        
+        if (showWhatIf && whatIfPnl) {
+          rowData.push(
+            whatIfPnl.avgPnl.toFixed(2),
+            whatIfPnl.avgPnlPercent.toFixed(2),
+            whatIfPnl.tokensSimulated
+          );
+        }
+        
+        // Add multiplier percentages and scores (we'll use common multipliers: 1.5, 2, 3, 5, 10)
+        const multipliers = [1.5, 2, 3, 5, 10];
+        for (const mult of multipliers) {
+          const percentage = multiplierPercentages.get(mult) || 0;
+          rowData.push(percentage.toFixed(2));
+        }
+        for (const mult of multipliers) {
+          const score = scores.individualMultiplierScores[mult] || 0;
+          rowData.push(score.toFixed(2));
+        }
+        
+        const csvRow = rowData.map(field => {
+          const str = String(field);
+          return `"${str.replace(/"/g, '""')}"`;
+        }).join(',') + '\n';
+        
+        res.write(csvRow);
+      }
+    }
+    
+    res.end();
+  } catch (error: any) {
+    console.error('Error exporting creator wallets:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Error exporting creator wallets' 
+      });
+    } else {
+      res.end();
+    }
+  }
+});
+
 export default router;
 
 
