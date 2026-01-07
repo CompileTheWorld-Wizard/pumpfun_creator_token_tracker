@@ -780,16 +780,16 @@ import { getCreatorWalletsFromTokens, getAthMcapStats, getAvgStats, type Token }
 import CreatorWalletsTab from './CreatorWalletsTab.vue'
 import TokensTab from './TokensTab.vue'
 // Import SVG files as raw strings
-import copyIconSvg from '../icons/copy.svg?raw'
-import checkIconSvg from '../icons/check.svg?raw'
-import trashIconSvg from '../icons/trash.svg?raw'
-import searchIconSvg from '../icons/search.svg?raw'
-import closeIconSvg from '../icons/close.svg?raw'
-import manageBlacklistIconSvg from '../icons/manage-blacklist.svg?raw'
-import clearDatabaseIconSvg from '../icons/clear-database.svg?raw'
-import changePasswordIconSvg from '../icons/change-password.svg?raw'
-import startTrackingIconSvg from '../icons/start-tracking.svg?raw'
-import logoutIconSvg from '../icons/logout.svg?raw'
+import copyIconSvg from '../../icons/copy.svg?raw'
+import checkIconSvg from '../../icons/check.svg?raw'
+import trashIconSvg from '../../icons/trash.svg?raw'
+import searchIconSvg from '../../icons/search.svg?raw'
+import closeIconSvg from '../../icons/close.svg?raw'
+import manageBlacklistIconSvg from '../../icons/manage-blacklist.svg?raw'
+import clearDatabaseIconSvg from '../../icons/clear-database.svg?raw'
+import changePasswordIconSvg from '../../icons/change-password.svg?raw'
+import startTrackingIconSvg from '../../icons/start-tracking.svg?raw'
+import logoutIconSvg from '../../icons/logout.svg?raw'
 
 const router = useRouter()
 
