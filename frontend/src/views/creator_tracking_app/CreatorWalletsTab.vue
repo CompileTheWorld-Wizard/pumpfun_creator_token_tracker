@@ -1788,8 +1788,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } from '../services/creatorWallets'
-import { getAppliedSettings, type ScoringSettings } from '../services/settings'
+import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } from '../../services/creatorWallets'
+import { getAppliedSettings, type ScoringSettings } from '../../services/settings'
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 

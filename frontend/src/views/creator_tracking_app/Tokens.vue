@@ -334,13 +334,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, watch, nextTick, computed, type ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout } from '../services/auth'
-import { getCreatedTokens, type Token, type PaginationInfo } from '../services/tokens'
-import { getCreatorWallets } from '../services/wallets'
-import CopyIcon from '../icons/CopyIcon.vue'
-import CheckIcon from '../icons/CheckIcon.vue'
+import { logout } from '../../services/auth'
+import { getCreatedTokens, type Token, type PaginationInfo } from '../../services/tokens'
+import { getCreatorWallets } from '../../services/wallets'
+import CopyIcon from '../../icons/CopyIcon.vue'
+import CheckIcon from '../../icons/CheckIcon.vue'
 
 const router = useRouter()
 
@@ -401,8 +401,8 @@ const handleItemsPerPageChange = () => {
   loadTokens()
 }
 
-const setChartRef = (mint: string, el: HTMLCanvasElement | null) => {
-  if (el) {
+const setChartRef = (mint: string, el: Element | ComponentPublicInstance | null) => {
+  if (el && el instanceof HTMLCanvasElement) {
     chartRefs.value.set(mint, el)
   }
 }
@@ -618,7 +618,8 @@ watch(tokens, async () => {
 
 const loadCreatorWallets = async () => {
   try {
-    creatorWallets.value = await getCreatorWallets()
+    const wallets = await getCreatorWallets()
+    creatorWallets.value = wallets.map(wallet => wallet.address)
   } catch (err: any) {
     console.error('Error loading creator wallets:', err)
   }

@@ -1,8 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
-import MainBoard from '../views/MainBoard.vue'
-import Settings from '../views/Settings.vue'
-import TradingWalletsTab from '../views/TradingWalletsTab.vue'
+import MainBoard from '../views/creator_tracking_app/MainBoard.vue'
+import Settings from '../views/creator_tracking_app/Settings.vue'
+import TradingWalletsTab from '../views/creator_tracking_app/TradingWalletsTab.vue'
 import { checkAuth } from '../services/auth'
 
 const router = createRouter({
