@@ -1792,7 +1792,6 @@ import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } f
 import { getAppliedSettings, type ScoringSettings } from '../services/settings'
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
-import * as XLSX from 'xlsx'
 
 const emit = defineEmits<{
   'data-updated': []

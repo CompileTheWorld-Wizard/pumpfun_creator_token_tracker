@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import MainBoard from '../views/MainBoard.vue'
 import Settings from '../views/Settings.vue'
+import TradingWalletsTab from '../views/TradingWalletsTab.vue'
 import { checkAuth } from '../services/auth'
 
 const router = createRouter({
@@ -18,16 +19,31 @@ const router = createRouter({
       meta: { requiresGuest: true }
     },
     {
-      path: '/board',
-      name: 'MainBoard',
+      path: '/creator-wallets',
+      name: 'CreatorWallets',
       component: MainBoard,
       meta: { requiresAuth: true }
     },
     {
-      path: '/settings',
-      name: 'Settings',
+      path: '/creator-wallets/settings',
+      name: 'CreatorWalletsSettings',
       component: Settings,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/trading-wallets',
+      name: 'TradingWallets',
+      component: TradingWalletsTab,
+      meta: { requiresAuth: true }
+    },
+    // Legacy routes for backward compatibility
+    {
+      path: '/board',
+      redirect: '/creator-wallets'
+    },
+    {
+      path: '/settings',
+      redirect: '/creator-wallets/settings'
     }
   ]
 })
@@ -39,7 +55,7 @@ router.beforeEach(async (to, from, next) => {
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.meta.requiresGuest && isAuthenticated) {
-    next('/board')
+    next('/creator-wallets')
   } else {
     next()
   }
