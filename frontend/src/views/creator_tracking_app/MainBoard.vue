@@ -773,10 +773,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { logout, changePassword, clearDatabase } from '../services/auth'
-import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, type Wallet } from '../services/wallets'
-import { startStream, stopStream, getStreamStatus } from '../services/stream'
-import { getCreatorWalletsFromTokens, getAthMcapStats, getAvgStats, type Token } from '../services/tokens'
+import { logout, changePassword, clearDatabase } from '../../services/auth'
+import { validateWallet, getCreatorWallets, addCreatorWallet, removeCreatorWallet, type Wallet } from '../../services/wallets'
+import { startStream, stopStream, getStreamStatus } from '../../services/stream'
+import { getCreatorWalletsFromTokens, getAthMcapStats, getAvgStats, type Token } from '../../services/tokens'
 import CreatorWalletsTab from './CreatorWalletsTab.vue'
 import TokensTab from './TokensTab.vue'
 // Import SVG files as raw strings

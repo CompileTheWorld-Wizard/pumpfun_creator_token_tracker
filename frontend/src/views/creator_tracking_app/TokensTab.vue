@@ -364,7 +364,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type PaginationInfo } from '../services/tokens'
+import { getCreatedTokens, getCreatorWalletsFromTokens, type Token, type PaginationInfo } from '../../services/tokens'
 import copyIconSvg from '../icons/copy.svg?raw'
 import checkIconSvg from '../icons/check.svg?raw'
 import closeIconSvg from '../icons/close.svg?raw'

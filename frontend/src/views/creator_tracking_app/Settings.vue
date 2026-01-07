@@ -1015,7 +1015,7 @@ import {
   applySettings,
   type ScoringSettings,
   type ScoringPreset
-} from '../services/settings'
+} from '../../services/settings'
 
 const presets = ref<ScoringPreset[]>([])
 const selectedPresetId = ref<number | ''>('')
