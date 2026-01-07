@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '5006', 10);
+const PORT = parseInt(process.env.FUND_SERVER_PORT || process.env.PORT || '5006', 10);
 
 // Middleware
 app.use(cors({

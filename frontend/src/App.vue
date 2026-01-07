@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-gray-950">
-    <!-- Navbar -->
-    <nav class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-50">
+    <!-- Navbar - Only show when not on login page -->
+    <nav v-if="route.path !== '/login'" class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-50">
       <div class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-3">
         <div class="flex justify-between items-center">
           <div>

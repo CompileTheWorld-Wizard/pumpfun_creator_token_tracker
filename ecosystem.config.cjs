@@ -7,7 +7,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 5005
+        CREATOR_SERVER_PORT: 5005
       },
       error_file: './logs/creator_tracking_server-error.log',
       out_file: './logs/creator_tracking_server-out.log',
@@ -30,7 +30,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 5006
+        FUND_SERVER_PORT: 5006
       },
       error_file: './logs/fund_tracking_server-error.log',
       out_file: './logs/fund_tracking_server-out.log',
