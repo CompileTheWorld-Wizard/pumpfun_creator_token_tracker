@@ -6,9 +6,9 @@
         <div class="flex justify-between items-center">
           <div>
             <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              SolTrack
+              {{ pageTitle }}
             </h1>
-            <p class="text-gray-400 text-xs mt-0.5">Multi-Server Analytics Platform</p>
+            <p class="text-gray-400 text-xs mt-0.5">{{ pageSubtitle }}</p>
           </div>
           <div class="flex items-center gap-2">
             <router-link
@@ -39,8 +39,27 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
+
+const pageTitle = computed(() => {
+  if (route.path.startsWith('/creator-wallets')) {
+    return 'Creator Wallet Tracker'
+  } else if (route.path.startsWith('/trading-wallets')) {
+    return 'Trading Wallet Tracker'
+  }
+  return 'SolTrack'
+})
+
+const pageSubtitle = computed(() => {
+  if (route.path.startsWith('/creator-wallets')) {
+    return 'Creator Wallet & Token Analytics'
+  } else if (route.path.startsWith('/trading-wallets')) {
+    return 'Trading Wallet Analytics'
+  }
+  return 'Multi-Server Analytics Platform'
+})
 </script>
 

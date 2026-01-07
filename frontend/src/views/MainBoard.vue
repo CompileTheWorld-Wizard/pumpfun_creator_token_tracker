@@ -1,19 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-950">
-    <!-- Header -->
-    <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-10">
-      <div class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div class="flex justify-between items-center">
-          <div>
-            <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              Creator Wallet Tracker
-            </h1>
-            <p class="text-gray-400 text-xs mt-0.5">Creator Wallet & Token Analytics</p>
-          </div>
-        </div>
-      </div>
-    </header>
-
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Stats Cards -->
@@ -684,71 +670,102 @@
       </div>
     </div>
 
-    <!-- Sticky Action Buttons (Bottom Right) -->
+    <!-- Sticky Action Buttons (Bottom Right) - Icon-only with hover expansion -->
     <div class="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
-      <button
-        @click="showManageDialog = true"
-        class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-1.5 shadow-lg"
-        title="Manage Blacklist"
-      >
-        <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(manageBlacklistIconSvg)"></span>
-        <span class="hidden sm:inline">Manage Blacklist</span>
-        <span v-if="wallets.length > 0" class="px-1.5 py-0.5 bg-red-600/80 text-white text-xs font-bold rounded-full">
-          {{ wallets.length }}
+      <div class="group relative">
+        <button
+          @click="showManageDialog = true"
+          class="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center justify-center shadow-lg overflow-hidden"
+          title="Manage Blacklist"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center flex-shrink-0" v-html="processSvg(manageBlacklistIconSvg)"></span>
+          <span v-if="wallets.length > 0" class="absolute -top-1 -right-1 px-1.5 py-0.5 bg-red-600/80 text-white text-xs font-bold rounded-full">
+            {{ wallets.length }}
+          </span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Manage Blacklist
         </span>
-      </button>
-      <button
-        @click="showClearDatabaseDialog = true"
-        class="px-3 py-2 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-1.5 shadow-lg"
-        title="Clear Database"
-      >
-        <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(clearDatabaseIconSvg)"></span>
-        <span class="hidden sm:inline">Clear Database</span>
-      </button>
-      <button
-        @click="showChangePasswordDialog = true"
-        class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center gap-1.5 shadow-lg"
-        title="Change Password"
-      >
-        <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
-        <span class="hidden sm:inline">Change Password</span>
-      </button>
-      <button
-        @click="toggleTracking"
-        :disabled="trackingLoading"
-        :class="[
-          'px-3 py-2 text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 flex items-center gap-1.5 shadow-lg',
-          isTracking || trackingLoading
-            ? 'bg-red-600/90 hover:bg-red-600 text-white focus:ring-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
-            : 'bg-green-600/90 hover:bg-green-600 text-white focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
-        ]"
-        :title="isTracking ? 'Stop Tracking' : 'Start Tracking'"
-      >
-        <div v-if="trackingLoading" class="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-        <span v-if="!trackingLoading" class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(startTrackingIconSvg)"></span>
-        <span v-if="trackingLoading" class="hidden sm:inline">Finalizing...</span>
-        <span v-else-if="isTracking" class="hidden sm:inline">Stop Tracking</span>
-        <span v-else class="hidden sm:inline">Start Tracking</span>
-      </button>
-      <button
-        @click="$router.push('/creator-wallets/settings')"
-        class="px-3 py-2 bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center gap-1.5 shadow-lg"
-        title="Settings"
-      >
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-        </svg>
-        <span class="hidden sm:inline">Settings</span>
-      </button>
-      <button
-        @click="handleLogout"
-        class="px-3 py-2 bg-red-600/90 hover:bg-red-600 text-white text-xs font-semibold rounded-lg transition focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center gap-1.5 shadow-lg"
-        title="Logout"
-      >
-        <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
-        <span class="hidden sm:inline">Logout</span>
-      </button>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="showClearDatabaseDialog = true"
+          class="w-12 h-12 bg-red-600/90 hover:bg-red-600 text-white rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center justify-center shadow-lg"
+          title="Clear Database"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(clearDatabaseIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-red-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Clear Database
+        </span>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="showChangePasswordDialog = true"
+          class="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center justify-center shadow-lg"
+          title="Change Password"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Change Password
+        </span>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="toggleTracking"
+          :disabled="trackingLoading"
+          :class="[
+            'w-12 h-12 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 flex items-center justify-center shadow-lg',
+            isTracking || trackingLoading
+              ? 'bg-red-600/90 hover:bg-red-600 text-white focus:ring-red-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
+              : 'bg-green-600/90 hover:bg-green-600 text-white focus:ring-green-500/50 disabled:opacity-50 disabled:cursor-not-allowed'
+          ]"
+          :title="isTracking ? 'Stop Tracking' : 'Start Tracking'"
+        >
+          <div v-if="trackingLoading" class="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+          <span v-else class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(startTrackingIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg"
+          :class="isTracking || trackingLoading ? 'bg-red-600/90 text-white' : 'bg-green-600/90 text-white'"
+        >
+          <span v-if="trackingLoading">Finalizing...</span>
+          <span v-else-if="isTracking">Stop Tracking</span>
+          <span v-else>Start Tracking</span>
+        </span>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="$router.push('/creator-wallets/settings')"
+          class="w-12 h-12 bg-blue-600/90 hover:bg-blue-600 text-white rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500/50 flex items-center justify-center shadow-lg"
+          title="Settings"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-blue-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Settings
+        </span>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="handleLogout"
+          class="w-12 h-12 bg-red-600/90 hover:bg-red-600 text-white rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center justify-center shadow-lg"
+          title="Logout"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-red-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Logout
+        </span>
+      </div>
     </div>
   </div>
 </template>
