@@ -96,7 +96,7 @@ app.get('/api/health', (_req, res) => {
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, '../dist-frontend');
+  const distPath = path.join(__dirname, '../../dist-frontend');
   app.use(express.static(distPath));
   
   // Serve index.html for all non-API routes (SPA routing)
