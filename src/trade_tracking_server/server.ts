@@ -1386,6 +1386,9 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
     // Get total buy/sell counts (from ALL data, not paginated)
     const { totalBuys, totalSells } = await getWalletBuySellCounts(wallet);
     
+    // Get average open position (from ALL data, not paginated)
+    const averageOpenPosition = await dbService.getWalletAverageOpenPosition(wallet);
+    
     // Get all wallet trades (ALL data, no pagination/filtering)
     const walletTradesResult = await dbService.getWalletTokens(wallet);
     const walletTrades = walletTradesResult.data;
@@ -1404,6 +1407,7 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
           avgPNLPerToken: 0,
           totalBuys,
           totalSells,
+          averageOpenPosition,
           sellStatistics: []
         }
       });
@@ -1697,6 +1701,7 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
         avgPNLPerToken,
         totalBuys,
         totalSells,
+        averageOpenPosition,
         sellStatistics
       }
     });
