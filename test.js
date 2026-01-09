@@ -4,9 +4,11 @@ dotenv.config();
 
 const parser = new Parser();
 parser.useDefaultInstructionParsing(true);
+parser.enableLogging(false);
 // Initializing parser with Pump.fun IDL
 
 const streamer = new TransactionStreamer(process.env.GRPC_URL, process.env.X_TOKEN);
+
 streamer.addParser(parser);
 // setting up streamer to parse using the Pump.fun parser
 
