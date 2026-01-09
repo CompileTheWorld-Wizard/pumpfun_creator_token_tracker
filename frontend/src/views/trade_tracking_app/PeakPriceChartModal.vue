@@ -160,8 +160,17 @@ const updateChart = async () => {
     const avgFirstSell = firstSellCount > 0 ? firstSellSum / firstSellCount : null
     const avgPeakAfter = peakAfterCount > 0 ? peakAfterSum / peakAfterCount : null
     
+    // Check if canvas is still available after async operation
+    if (!chartCanvas.value) {
+      loading.value = false
+      return
+    }
+    
     const ctx = chartCanvas.value.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      loading.value = false
+      return
+    }
     
     const datasets: any[] = [
       {
