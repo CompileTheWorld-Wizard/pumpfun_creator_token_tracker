@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const parser = new Parser();
+parser.useDefaultInstructionParsing(true);
 // Initializing parser with Pump.fun IDL
 
 const streamer = new TransactionStreamer(process.env.GRPC_URL, process.env.X_TOKEN);
