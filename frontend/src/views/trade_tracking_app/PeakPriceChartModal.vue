@@ -186,21 +186,57 @@ const updateChart = async () => {
       sampleDataPoint: dataPoints[0]
     })
     
+    // Wait for next tick to ensure canvas is rendered
+    await nextTick()
+    
     // Check if canvas is still available after async operation
     if (!chartCanvas.value) {
-      console.error('Canvas element not found')
-      loading.value = false
+      console.error('Canvas element not found, retrying...')
+      // Retry after a short delay
+      setTimeout(async () => {
+        if (!chartCanvas.value) {
+          console.error('Canvas element still not found after retry')
+          error.value = 'Failed to initialize chart canvas'
+          loading.value = false
+          return
+        }
+        await createChartWithData(peakBeforeData, firstSellData, peakAfterData, avgPeakBefore, avgFirstSell, avgPeakAfter)
+      }, 200)
       return
     }
     
-    const ctx = chartCanvas.value.getContext('2d')
-    if (!ctx) {
-      console.error('Canvas context not available')
-      loading.value = false
-      return
-    }
-    
-    const datasets: any[] = [
+    await createChartWithData(peakBeforeData, firstSellData, peakAfterData, avgPeakBefore, avgFirstSell, avgPeakAfter)
+  } catch (err: any) {
+    console.error('Error loading peak price chart:', err)
+    error.value = 'Error loading chart data: ' + (err.message || 'Unknown error')
+    loading.value = false
+  }
+}
+
+const createChartWithData = async (
+  peakBeforeData: any[],
+  firstSellData: any[],
+  peakAfterData: any[],
+  avgPeakBefore: number | null,
+  avgFirstSell: number | null,
+  avgPeakAfter: number | null
+) => {
+  if (!chartCanvas.value) {
+    console.error('Canvas element not found in createChartWithData')
+    error.value = 'Failed to initialize chart canvas'
+    loading.value = false
+    return
+  }
+  
+  const ctx = chartCanvas.value.getContext('2d')
+  if (!ctx) {
+    console.error('Canvas context not available')
+    error.value = 'Failed to get canvas context'
+    loading.value = false
+    return
+  }
+  
+  const datasets: any[] = [
       {
         label: `Peak before 1st Sell (Avg: ${formatMarketCap(avgPeakBefore)})`,
         data: peakBeforeData,
@@ -226,60 +262,60 @@ const updateChart = async () => {
         pointHoverRadius: 7
       }
     ]
-    
-    if (avgPeakBefore !== null) {
-      datasets.push({
-        label: 'Avg Peak Before',
-        data: [{ x: -0.5, y: avgPeakBefore }, { x: 0.5, y: avgPeakBefore }],
-        type: 'line',
-        borderColor: 'rgba(59, 130, 246, 0.8)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        pointRadius: 0,
-        fill: false,
-        showLine: true
-      })
-    }
-    
-    if (avgFirstSell !== null) {
-      datasets.push({
-        label: 'Avg 1st Sell',
-        data: [{ x: 0.5, y: avgFirstSell }, { x: 1.5, y: avgFirstSell }],
-        type: 'line',
-        borderColor: 'rgba(34, 197, 94, 0.8)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        pointRadius: 0,
-        fill: false,
-        showLine: true
-      })
-    }
-    
-    if (avgPeakAfter !== null) {
-      datasets.push({
-        label: 'Avg Peak After',
-        data: [{ x: 1.5, y: avgPeakAfter }, { x: 2.5, y: avgPeakAfter }],
-        type: 'line',
-        borderColor: 'rgba(168, 85, 247, 0.8)',
-        borderWidth: 2,
-        borderDash: [5, 5],
-        pointRadius: 0,
-        fill: false,
-        showLine: true
-      })
-    }
-    
-    // Only create chart if we have at least one dataset with data
-    if (peakBeforeData.length === 0 && firstSellData.length === 0 && peakAfterData.length === 0) {
-      console.error('No data points to display in chart')
-      error.value = 'No market cap data points available to display'
-      loading.value = false
-      return
-    }
-    
-    console.log('Creating chart with datasets:', datasets.map(d => ({ label: d.label, dataCount: d.data.length })))
-    
-    chart = new Chart(ctx, {
+  
+  if (avgPeakBefore !== null) {
+    datasets.push({
+      label: 'Avg Peak Before',
+      data: [{ x: -0.5, y: avgPeakBefore }, { x: 0.5, y: avgPeakBefore }],
+      type: 'line',
+      borderColor: 'rgba(59, 130, 246, 0.8)',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: false,
+      showLine: true
+    })
+  }
+  
+  if (avgFirstSell !== null) {
+    datasets.push({
+      label: 'Avg 1st Sell',
+      data: [{ x: 0.5, y: avgFirstSell }, { x: 1.5, y: avgFirstSell }],
+      type: 'line',
+      borderColor: 'rgba(34, 197, 94, 0.8)',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: false,
+      showLine: true
+    })
+  }
+  
+  if (avgPeakAfter !== null) {
+    datasets.push({
+      label: 'Avg Peak After',
+      data: [{ x: 1.5, y: avgPeakAfter }, { x: 2.5, y: avgPeakAfter }],
+      type: 'line',
+      borderColor: 'rgba(168, 85, 247, 0.8)',
+      borderWidth: 2,
+      borderDash: [5, 5],
+      pointRadius: 0,
+      fill: false,
+      showLine: true
+    })
+  }
+  
+  // Only create chart if we have at least one dataset with data
+  if (peakBeforeData.length === 0 && firstSellData.length === 0 && peakAfterData.length === 0) {
+    console.error('No data points to display in chart')
+    error.value = 'No market cap data points available to display'
+    loading.value = false
+    return
+  }
+  
+  console.log('Creating chart with datasets:', datasets.map(d => ({ label: d.label, dataCount: d.data.length })))
+  
+  chart = new Chart(ctx, {
       type: 'scatter',
       data: {
         datasets: datasets
@@ -431,23 +467,19 @@ const updateChart = async () => {
           intersect: false
         }
       }
-    })
-    
-    loading.value = false
-  } catch (err: any) {
-    console.error('Error loading peak price chart:', err)
-    error.value = 'Error loading chart data: ' + (err.message || 'Unknown error')
-    loading.value = false
-  }
+  })
+  
+  loading.value = false
 }
 
 watch(() => props.show, (newVal) => {
   if (newVal && props.walletAddress) {
     // Wait for modal to be fully rendered before creating chart
     nextTick(() => {
+      // Wait a bit longer to ensure canvas is in DOM
       setTimeout(() => {
         updateChart()
-      }, 100)
+      }, 300)
     })
   } else {
     if (chart) {
