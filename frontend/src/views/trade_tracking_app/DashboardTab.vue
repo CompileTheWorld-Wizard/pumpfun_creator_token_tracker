@@ -1,140 +1,198 @@
 <template>
-  <div class="space-y-4">
+  <div>
     <!-- Wallet Selector -->
-    <div class="mb-4">
-      <label class="block text-sm font-semibold text-gray-300 mb-2">Select Wallet</label>
-      <div class="flex gap-2">
+    <div style="margin-bottom: 20px;">
+      <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+        Select Wallet
+      </label>
+      <div style="display: flex; gap: 10px; align-items: center; width: 100%; flex-wrap: wrap;">
         <select
           v-model="selectedWallet"
           @change="loadDashboardData"
-          class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; height: 42px; box-sizing: border-box; font-family: 'Courier New', monospace;"
         >
           <option value="">-- Select a wallet --</option>
           <option v-for="wallet in wallets" :key="wallet" :value="wallet">
-            {{ wallet.substring(0, 8) }}...{{ wallet.substring(wallet.length - 6) }}
+            {{ wallet }}
           </option>
         </select>
         <button
           @click="loadDashboardData"
-          class="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded font-semibold text-sm hover:from-blue-500 hover:to-blue-600 transition"
+          class="btn-refresh"
+          style="padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          title="Refresh Dashboard Data"
         >
-          🔄 Refresh
+          <span>🔄</span> Refresh
         </button>
         <button
           v-if="selectedWallet"
           @click="exportDashboard"
-          class="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded font-semibold text-sm hover:from-green-500 hover:to-green-600 transition"
+          style="padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          title="Export Dashboard Data to Excel"
         >
-          📥 Export
+          <span>📥</span> Export
         </button>
         <button
           v-if="selectedWallet"
           @click="exportAllWallets"
-          class="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded font-semibold text-sm hover:from-purple-500 hover:to-purple-600 transition"
+          style="padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          title="Export All Wallets Data to Excel"
         >
-          📥 Export All
+          <span>📥</span> Export All
         </button>
         <button
           v-if="selectedWallet"
           @click="removeWallet"
-          class="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded font-semibold text-sm hover:from-red-500 hover:to-red-600 transition"
+          style="padding: 10px 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);"
+          title="Remove wallet and all transactions from database"
         >
-          🗑️ Remove
+          <span>🗑️</span> Remove
         </button>
       </div>
     </div>
 
-    <!-- Wallet Statistics -->
-    <div v-if="selectedWallet && statistics" class="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-      <h3 class="text-lg font-semibold text-blue-400 mb-4">📊 Wallet Statistics</h3>
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Total Wallet PNL SOL</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.totalWalletPNL) }}</div>
+    <!-- Wallet Statistics Section -->
+    <div v-if="selectedWallet && statistics" class="card" style="margin-bottom: 20px; padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+        <div class="section-title" style="color: #3b82f6; margin-bottom: 0;">📊 Wallet Statistics</div>
+        <div v-if="walletSolBalance !== null" style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 0.85rem; color: #94a3b8;">Wallet SOL Balance:</span>
+          <span style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">{{ formatNumber(walletSolBalance) }}</span>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Cumulative PNL %</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.cumulativePNL) }}%</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Wallet PNL SOL</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.totalWalletPNL) }}</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Risk/Reward Profit %</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.riskRewardProfit) }}%</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Cumulative PNL %</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.cumulativePNL) }}%</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Net Invested</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.netInvested) }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Risk/Reward Profit %</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.riskRewardProfit) }}%</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Wallet Avg Buy Size SOL</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.walletAvgBuySize) }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Net Invested</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.netInvested) }}</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Dev Avg Buy Size SOL</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.devAvgBuySize) }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Wallet Average Buy Size in SOL</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.walletAvgBuySize) }}</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Avg PNL per Token</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.avgPNLPerToken) }}%</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Dev Average Buy Size in SOL</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.devAvgBuySize) }}</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Total Buys</div>
-          <div class="text-xl font-bold text-gray-100">{{ statistics.totalBuys || 0 }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Average PNL per Token</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.avgPNLPerToken) }}%</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Total Sells</div>
-          <div class="text-xl font-bold text-gray-100">{{ statistics.totalSells || 0 }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Buys</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalBuys || 0 }}</div>
         </div>
-        <div class="bg-gray-800/50 border border-gray-700 rounded p-3">
-          <div class="text-xs text-gray-400 mb-1">Avg Open Position</div>
-          <div class="text-xl font-bold text-gray-100">{{ formatNumber(statistics.averageOpenPosition) }}</div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Sells</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalSells || 0 }}</div>
+        </div>
+        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Average of Open Position</div>
+          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.averageOpenPosition) }}</div>
         </div>
       </div>
     </div>
 
     <!-- Dashboard Table -->
-    <div v-if="selectedWallet" class="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-      <div v-if="loading" class="text-center py-8 text-gray-400">
+    <div v-if="selectedWallet">
+      <div v-if="loading" style="text-align: center; padding: 40px; color: #94a3b8;">
         Loading dashboard data...
       </div>
-      <div v-else-if="dashboardData.length === 0" class="text-center py-8 text-gray-400">
+      <div v-else-if="dashboardData.length === 0" style="text-align: center; padding: 40px; color: #94a3b8;">
         No data available for this wallet
       </div>
-      <div v-else class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-gray-800">
+      <div v-else class="table-container" style="overflow-x: auto; overflow-y: auto; max-height: 70vh; border: 1px solid #334155; position: relative;">
+        <table style="width: 100%; border-collapse: collapse; background: #0f1419;">
+          <thead style="position: sticky; top: 0; z-index: 10; background: #0f1419;">
             <tr>
-              <th class="px-3 py-2 text-left border-b border-gray-700">Token</th>
-              <th class="px-3 py-2 text-left border-b border-gray-700">PNL SOL</th>
-              <th class="px-3 py-2 text-left border-b border-gray-700">PNL %</th>
-              <th class="px-3 py-2 text-left border-b border-gray-700">Buy Amount</th>
-              <th class="px-3 py-2 text-left border-b border-gray-700">Sells</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155;">Token</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155;">PNL SOL</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155;">PNL %</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155;">Buy Amount</th>
+              <th style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155;">Sells</th>
             </tr>
           </thead>
           <tbody>
             <tr
               v-for="(item, index) in dashboardData"
               :key="index"
-              class="border-b border-gray-800 hover:bg-gray-800/50"
+              style="border-bottom: 1px solid #2d3748;"
+              @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#0f1419'; }"
+              @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = 'transparent'; }"
             >
-              <td class="px-3 py-2 font-mono text-xs">{{ item.tokenAddress?.substring(0, 8) }}...</td>
-              <td class="px-3 py-2" :class="item.pnlSOL >= 0 ? 'text-green-400' : 'text-red-400'">
+              <td style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff; font-family: 'Courier New', monospace;">{{ item.tokenAddress?.substring(0, 8) }}...{{ item.tokenAddress?.substring(item.tokenAddress.length - 6) }}</td>
+              <td style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff;" :style="{ color: item.pnlSOL >= 0 ? '#10b981' : '#ef4444' }">
                 {{ formatNumber(item.pnlSOL) }}
               </td>
-              <td class="px-3 py-2" :class="item.pnlPercent >= 0 ? 'text-green-400' : 'text-red-400'">
+              <td style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff;" :style="{ color: item.pnlPercent >= 0 ? '#10b981' : '#ef4444' }">
                 {{ formatNumber(item.pnlPercent) }}%
               </td>
-              <td class="px-3 py-2">{{ formatNumber(item.walletBuyAmountSOL) }} SOL</td>
-              <td class="px-3 py-2">{{ item.sells?.length || 0 }}</td>
+              <td style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff;">{{ formatNumber(item.walletBuyAmountSOL) }} SOL</td>
+              <td style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff;">{{ item.sells?.length || 0 }}</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
-    <div v-else class="text-center py-8 text-gray-400">
+    <div v-else style="text-align: center; padding: 40px; color: #94a3b8;">
       Select a wallet to load dashboard data
     </div>
   </div>
 </template>
+
+<style scoped>
+.card {
+  background: #1a1f2e;
+  border: 1px solid #2d3748;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), 0 0 15px rgba(16, 185, 129, 0.05);
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #10b981;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: '';
+  width: 3px;
+  height: 18px;
+  background: #10b981;
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+}
+
+.table-container {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #334155;
+  background: #1a1f2e;
+}
+
+.btn-refresh:hover {
+  opacity: 0.9;
+}
+
+button:hover {
+  opacity: 0.9;
+}
+</style>
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
@@ -159,6 +217,7 @@ const wallets = ref<string[]>([])
 const statistics = ref<any>(null)
 const dashboardData = ref<any[]>([])
 const loading = ref(false)
+const walletSolBalance = ref<number | null>(null)
 
 const formatNumber = (value: number | null | undefined): string => {
   if (value === null || value === undefined) return '-'
