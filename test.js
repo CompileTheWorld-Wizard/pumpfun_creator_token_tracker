@@ -61,6 +61,7 @@ async function processData(processed) {
     // Display matched transfers
     if (senders.length > 0 && receivers.length > 0) {
         console.log(`\n=== SOL Transfers (>= ${MIN_SOL_AMOUNT} SOL) ===`);
+        console.log(transaction.signatures[0])
         
         // Match senders with receivers by amount
         const usedReceivers = new Set();
