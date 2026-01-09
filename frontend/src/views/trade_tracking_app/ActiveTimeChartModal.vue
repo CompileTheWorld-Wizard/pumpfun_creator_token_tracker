@@ -6,12 +6,12 @@
         <button class="modal-close" @click="close">×</button>
       </div>
       <div class="modal-body" style="overflow-y: auto;">
-        <div style="margin-bottom: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-          <label style="color: #cbd5e1; font-size: 0.9rem; font-weight: 600;">Time Interval:</label>
+        <div style="margin-bottom: 10px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+          <label style="color: #cbd5e1; font-size: 0.8rem; font-weight: 600;">Time Interval:</label>
           <select
             v-model="interval"
             @change="updateChart"
-            style="padding: 8px 12px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem; cursor: pointer;"
+            style="padding: 6px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem; cursor: pointer;"
           >
             <option value="hour">Hourly</option>
             <option value="quarter_day">Quarter Daily (Morning/Afternoon/Evening/Night)</option>
@@ -19,11 +19,11 @@
             <option value="week">Weekly</option>
             <option value="month">Monthly</option>
           </select>
-          <label style="color: #cbd5e1; font-size: 0.9rem; font-weight: 600;">Chart Type:</label>
+          <label style="color: #cbd5e1; font-size: 0.8rem; font-weight: 600;">Chart Type:</label>
           <select
             v-model="chartType"
             @change="updateChart"
-            style="padding: 8px 12px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem; cursor: pointer;"
+            style="padding: 6px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem; cursor: pointer;"
           >
             <option value="line">Line Chart</option>
             <option value="bar">Bar Chart</option>
@@ -407,25 +407,25 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: 10px 12px;
   border-bottom: 1px solid #334155;
 }
 
 .modal-header h2 {
   margin: 0;
   color: #e0e7ff;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .modal-close {
   background: transparent;
   border: none;
   color: #94a3b8;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -439,6 +439,6 @@ onUnmounted(() => {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 12px;
 }
 </style>

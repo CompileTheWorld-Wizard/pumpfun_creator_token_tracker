@@ -1,9 +1,9 @@
 <template>
   <div>
     <!-- Wallet Filter -->
-    <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap;">
+    <div style="display: flex; gap: 6px; align-items: flex-end; margin-bottom: 10px; flex-wrap: wrap;">
       <div style="flex: 1; min-width: 250px; position: relative;">
-        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+        <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">
           Filter by Wallet
         </label>
         <div style="position: relative;">
@@ -14,12 +14,12 @@
             @click.stop="showWalletDropdown = true"
             type="text"
             placeholder="Search wallet address..."
-            style="width: 100%; padding: 10px 40px 10px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; font-family: 'Courier New', monospace; height: 42px; box-sizing: border-box;"
+            style="width: 100%; padding: 6px 32px 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem; font-family: 'Courier New', monospace; height: 32px; box-sizing: border-box;"
           >
           <button
             v-if="selectedWallet"
             @click="clearWalletFilter"
-            style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; font-size: 1.2rem; color: #64748b; padding: 4px;"
+            style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; font-size: 1rem; color: #64748b; padding: 2px;"
             title="Clear filter"
           >
             ×
@@ -27,12 +27,12 @@
           <div
             v-if="showWalletDropdown"
             v-click-outside="() => showWalletDropdown = false"
-            style="position: absolute; top: 100%; left: 0; right: 0; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px; margin-top: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"
+            style="position: absolute; top: 100%; left: 0; right: 0; background: #1a1f2e; border: 1px solid #334155; border-radius: 4px; margin-top: 3px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"
           >
-            <div style="padding: 4px;">
+            <div style="padding: 3px;">
               <div
                 @click="selectWalletFilter('')"
-                style="padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85rem; color: #e0e7ff; font-weight: 600;"
+                style="padding: 6px 10px; cursor: pointer; border-radius: 3px; font-size: 0.75rem; color: #e0e7ff; font-weight: 600;"
                 :style="{ background: !selectedWallet ? '#334155' : 'transparent' }"
               >
                 <strong>All Wallets</strong>
@@ -41,7 +41,7 @@
                 v-for="wallet in filteredWallets"
                 :key="wallet"
                 @click="selectWalletFilter(wallet)"
-                style="padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85rem; font-family: 'Courier New', monospace; color: #e0e7ff;"
+                style="padding: 6px 10px; cursor: pointer; border-radius: 3px; font-size: 0.75rem; font-family: 'Courier New', monospace; color: #e0e7ff;"
                 :style="{ background: selectedWallet === wallet ? '#334155' : 'transparent' }"
               >
                 {{ wallet }}
@@ -53,7 +53,7 @@
       <button
         @click="loadTransactions"
         class="btn-refresh"
-        style="padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s; margin-bottom: 0;"
+        style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; height: 32px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: all 0.2s; margin-bottom: 0;"
       >
         <span>🔄</span> Refresh
       </button>
@@ -153,16 +153,16 @@
       <button
         @click="previousPage"
         :disabled="currentPage === 1"
-        style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);"
+        style="padding: 4px 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);"
         :style="{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }"
       >
         ← Previous
       </button>
-      <span style="color: #cbd5e1; font-weight: 500; font-size: 0.75rem;">Page {{ currentPage }} of {{ totalPages }}</span>
+      <span style="color: #cbd5e1; font-weight: 500; font-size: 0.7rem;">Page {{ currentPage }} of {{ totalPages }}</span>
       <button
         @click="nextPage"
         :disabled="currentPage === totalPages"
-        style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);"
+        style="padding: 4px 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);"
         :style="{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }"
       >
         Next →
@@ -190,20 +190,20 @@ thead {
 }
 
 th {
-  padding: 10px;
+  padding: 6px 8px;
   text-align: left;
   font-weight: 600;
   color: #10b981;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 2px solid #334155;
 }
 
 td {
-  padding: 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid #2d3748;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #e0e7ff;
 }
 
@@ -213,14 +213,14 @@ tbody tr:last-child td {
 
 .mono {
   font-family: 'Courier New', monospace;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
 }
 
 .platform-badge {
   display: inline-block;
-  padding: 3px 8px;
-  border-radius: 10px;
-  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 0.6rem;
   font-weight: 600;
   text-transform: uppercase;
 }

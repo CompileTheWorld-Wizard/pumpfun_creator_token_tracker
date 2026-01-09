@@ -1,13 +1,13 @@
 <template>
-  <div style="margin-bottom: 20px; padding: 15px; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px;">
+  <div style="margin-bottom: 10px; padding: 8px; background: #1a1f2e; border: 1px solid #334155; border-radius: 4px;">
     <!-- Header -->
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-      <label style="font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <label style="font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">
         {{ filterLabel }}
       </label>
       <button
         @click="$emit('remove')"
-        style="padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;"
+        style="padding: 3px 10px; background: #ef4444; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 0.75rem; transition: all 0.2s;"
         @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#dc2626' }"
         @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#ef4444' }"
       >
@@ -16,12 +16,12 @@
     </div>
 
     <!-- Sell Number Selector (for sell filters) -->
-    <div v-if="isSellFilter" style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
-      <label style="color: #94a3b8; font-size: 0.85rem;">Sell Number:</label>
+    <div v-if="isSellFilter" style="margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+      <label style="color: #94a3b8; font-size: 0.75rem;">Sell Number:</label>
       <select
         :value="filter.sellNumber || 1"
         @change="updateSellNumber"
-        style="padding: 6px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; cursor: pointer;"
+        style="padding: 4px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem; cursor: pointer;"
       >
         <option v-for="i in maxSellOptions" :key="i" :value="i">
           {{ i === 1 ? '1st sell' : i === 2 ? '2nd sell' : i === 3 ? '3rd sell' : `${i}th sell` }}
@@ -30,28 +30,28 @@
     </div>
 
     <!-- Timestamp Filter -->
-    <div v-if="filterType === 'timestamp'" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-      <label style="color: #94a3b8; font-size: 0.85rem; white-space: nowrap;">From:</label>
+    <div v-if="filterType === 'timestamp'" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+      <label style="color: #94a3b8; font-size: 0.75rem; white-space: nowrap;">From:</label>
       <input
         :value="minDateTimeLocal"
         @change="updateTimestampMin"
         type="datetime-local"
-        style="padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; min-width: 180px;"
+        style="padding: 6px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem; min-width: 160px;"
       >
-      <label style="color: #94a3b8; font-size: 0.85rem; white-space: nowrap; margin-left: 10px;">To:</label>
+      <label style="color: #94a3b8; font-size: 0.75rem; white-space: nowrap; margin-left: 6px;">To:</label>
       <input
         :value="maxDateTimeLocal"
         @change="updateTimestampMax"
         type="datetime-local"
-        style="padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; min-width: 180px;"
+        style="padding: 6px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem; min-width: 160px;"
       >
     </div>
 
     <!-- Numeric Filter with Sliders -->
-    <div v-else style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+    <div v-else style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
       <!-- Inputs -->
-      <div style="flex: 1; min-width: 150px;">
-        <div style="display: flex; gap: 10px; align-items: center;">
+      <div style="flex: 1; min-width: 130px;">
+        <div style="display: flex; gap: 6px; align-items: center;">
           <input
             :id="`filter-${filter.id}-min`"
             :value="filter.min"
@@ -60,9 +60,9 @@
             :min="filterType === 'percent' || filterType === 'sol' ? undefined : config.min"
             :step="config.step"
             :placeholder="filterType === 'percent' || filterType === 'sol' ? 'Min' : config.min.toString()"
-            style="width: 100px; padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem;"
+            style="width: 80px; padding: 6px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem;"
           >
-          <span style="color: #94a3b8;">to</span>
+          <span style="color: #94a3b8; font-size: 0.75rem;">to</span>
           <input
             :id="`filter-${filter.id}-max`"
             :value="filter.max"
@@ -71,19 +71,19 @@
             :min="filterType === 'sol' || filterType === 'token' || filterType === 'marketcap' ? config.min : undefined"
             :step="config.step"
             placeholder="Max"
-            style="width: 100px; padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem;"
+            style="width: 80px; padding: 6px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem;"
           >
         </div>
       </div>
 
       <!-- Slider -->
-      <div style="flex: 4; min-width: 300px; position: relative; display: flex; justify-content: space-between; gap: 5px; align-items: center;">
-        <span :id="`filter-${filter.id}-min-label`" style="color: #94a3b8; font-size: 0.85rem; text-align: right; min-width: 50px; flex-shrink: 0;">
+      <div style="flex: 4; min-width: 250px; position: relative; display: flex; justify-content: space-between; gap: 4px; align-items: center;">
+        <span :id="`filter-${filter.id}-min-label`" style="color: #94a3b8; font-size: 0.75rem; text-align: right; min-width: 45px; flex-shrink: 0;">
           {{ minLabelText }}
         </span>
         
-        <div class="dual-range-container" style="position: relative; height: 40px; padding: 15px 0; width: 100%;">
-          <div class="dual-range-track" style="position: absolute; width: 100%; height: 6px; background: #334155; border-radius: 3px; top: 15px; z-index: 1;"></div>
+        <div class="dual-range-container" style="position: relative; height: 32px; padding: 12px 0; width: 100%;">
+          <div class="dual-range-track" style="position: absolute; width: 100%; height: 5px; background: #334155; border-radius: 3px; top: 12px; z-index: 1;"></div>
           <div
             :id="`filter-${filter.id}-progress`"
             class="dual-range-progress"
@@ -98,7 +98,7 @@
             :max="config.max"
             :step="config.step"
             class="dual-range-input"
-            style="position: absolute; width: 100%; top: 10px; z-index: 2;"
+            style="position: absolute; width: 100%; top: 8px; z-index: 2;"
           >
           <input
             :id="`filter-${filter.id}-slider-max`"
@@ -109,11 +109,11 @@
             :max="config.max"
             :step="config.step"
             class="dual-range-input"
-            style="position: absolute; width: 100%; top: 10px; z-index: 3;"
+            style="position: absolute; width: 100%; top: 8px; z-index: 3;"
           >
         </div>
         
-        <span :id="`filter-${filter.id}-max-label`" style="color: #94a3b8; font-size: 0.85rem; text-align: left; min-width: 50px; flex-shrink: 0;">
+        <span :id="`filter-${filter.id}-max-label`" style="color: #94a3b8; font-size: 0.75rem; text-align: left; min-width: 45px; flex-shrink: 0;">
           {{ maxLabelText }}
         </span>
       </div>
@@ -169,10 +169,10 @@ const progressStyle = computed(() => {
   
   return {
     position: 'absolute',
-    height: '6px',
+    height: '5px',
     background: '#3b82f6',
     borderRadius: '3px',
-    top: '15px',
+    top: '12px',
     zIndex: '1',
     left: `${minPercent}%`,
     width: `${maxPercent - minPercent}%`
@@ -390,14 +390,14 @@ onMounted(() => {
   appearance: none;
   background: transparent;
   cursor: pointer;
-  height: 20px;
+  height: 16px;
 }
 
 .dual-range-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   background: #3b82f6;
   border-radius: 50%;
   cursor: pointer;
@@ -406,8 +406,8 @@ onMounted(() => {
 }
 
 .dual-range-input::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   background: #3b82f6;
   border-radius: 50%;
   cursor: pointer;

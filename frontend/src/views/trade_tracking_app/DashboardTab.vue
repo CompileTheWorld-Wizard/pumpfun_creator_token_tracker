@@ -1,15 +1,15 @@
 <template>
   <div>
     <!-- Wallet Selector -->
-    <div style="margin-bottom: 20px;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+    <div style="margin-bottom: 10px;">
+      <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">
         Select Wallet
       </label>
-      <div style="display: flex; gap: 10px; align-items: center; width: 100%; flex-wrap: wrap;">
+      <div style="display: flex; gap: 6px; align-items: center; width: 100%; flex-wrap: wrap;">
         <select
           v-model="selectedWallet"
           @change="loadDashboardData"
-          style="flex: 1; min-width: 200px; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; height: 42px; box-sizing: border-box; font-family: 'Courier New', monospace;"
+          style="flex: 1; min-width: 200px; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem; height: 32px; box-sizing: border-box; font-family: 'Courier New', monospace;"
         >
           <option value="">-- Select a wallet --</option>
           <option v-for="wallet in wallets" :key="wallet" :value="wallet">
@@ -19,7 +19,7 @@
         <button
           @click="loadDashboardData"
           class="btn-refresh"
-          style="padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; height: 32px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
           title="Refresh Dashboard Data"
         >
           <span>🔄</span> Refresh
@@ -27,7 +27,7 @@
         <button
           v-if="selectedWallet"
           @click="exportDashboard"
-          style="padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          style="padding: 6px 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; height: 32px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
           title="Export Dashboard Data to Excel"
         >
           <span>📥</span> Export
@@ -35,7 +35,7 @@
         <button
           v-if="selectedWallet"
           @click="exportAllWallets"
-          style="padding: 10px 20px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+          style="padding: 6px 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; height: 32px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
           title="Export All Wallets Data to Excel"
         >
           <span>📥</span> Export All
@@ -43,7 +43,7 @@
         <button
           v-if="selectedWallet"
           @click="removeWallet"
-          style="padding: 10px 20px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; height: 42px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 6px; transition: all 0.2s; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);"
+          style="padding: 6px 12px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; height: 32px; box-sizing: border-box; white-space: nowrap; display: flex; align-items: center; gap: 4px; transition: all 0.2s; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);"
           title="Remove wallet and all transactions from database"
         >
           <span>🗑️</span> Remove
@@ -52,141 +52,141 @@
     </div>
 
     <!-- Wallet Statistics Section -->
-    <div v-if="selectedWallet && statistics" class="card" style="margin-bottom: 20px; padding: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <div v-if="selectedWallet && statistics" class="card" style="margin-bottom: 10px; padding: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div class="section-title" style="color: #3b82f6; margin-bottom: 0;">📊 Wallet Statistics</div>
-        <div v-if="walletSolBalance !== null" style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-size: 0.85rem; color: #94a3b8;">Wallet SOL Balance:</span>
-          <span style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">{{ formatNumber(walletSolBalance) }} SOL</span>
+        <div v-if="walletSolBalance !== null" style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 0.75rem; color: #94a3b8;">Wallet SOL Balance:</span>
+          <span style="font-size: 1rem; font-weight: 600; color: #3b82f6;">{{ formatNumber(walletSolBalance) }} SOL</span>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Wallet PNL SOL</div>
-          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1.2rem; font-weight: 600;">
-            <div style="margin-bottom: 4px;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px;">
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Total Wallet PNL SOL</div>
+          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1rem; font-weight: 600;">
+            <div style="margin-bottom: 3px;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
               {{ (statistics.totalWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(statistics.totalWalletPNL) }} SOL
             </div>
-            <div style="font-size: 0.9rem; border-top: 1px solid #334155; padding-top: 4px;">
+            <div style="font-size: 0.8rem; border-top: 1px solid #334155; padding-top: 3px;">
               <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
               <span :style="{ color: (whatIfSellTotals.totalWhatIfWalletPNL || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
                 {{ (whatIfSellTotals.totalWhatIfWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.totalWhatIfWalletPNL) }} SOL
               </span>
             </div>
           </div>
-          <div v-else style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+          <div v-else style="font-size: 1rem; font-weight: 600;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
             {{ (statistics.totalWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(statistics.totalWalletPNL) }} SOL
           </div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Cumulative PNL %</div>
-          <div style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.cumulativePNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Cumulative PNL %</div>
+          <div style="font-size: 1rem; font-weight: 600;" :style="{ color: (statistics.cumulativePNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
             {{ formatNumber(statistics.cumulativePNL) }}%
           </div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Risk/Reward Profit %</div>
-          <div style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.riskRewardProfit || 0) >= 0 ? '#10b981' : '#ef4444' }">
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Risk/Reward Profit %</div>
+          <div style="font-size: 1rem; font-weight: 600;" :style="{ color: (statistics.riskRewardProfit || 0) >= 0 ? '#10b981' : '#ef4444' }">
             {{ formatNumber(statistics.riskRewardProfit) }}%
           </div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Net Invested</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.netInvested) }} SOL</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Net Invested</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.netInvested) }} SOL</div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Wallet Average Buy Size in SOL</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.walletAvgBuySize) }} SOL</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Wallet Average Buy Size in SOL</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.walletAvgBuySize) }} SOL</div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Dev Average Buy Size in SOL</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.devAvgBuySize) }} SOL</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Dev Average Buy Size in SOL</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.devAvgBuySize) }} SOL</div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Average PNL per Token</div>
-          <div style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.avgPNLPerToken || 0) >= 0 ? '#10b981' : '#ef4444' }">
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Average PNL per Token</div>
+          <div style="font-size: 1rem; font-weight: 600;" :style="{ color: (statistics.avgPNLPerToken || 0) >= 0 ? '#10b981' : '#ef4444' }">
             {{ formatNumber(statistics.avgPNLPerToken) }}%
           </div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Buys</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalBuys || 0 }}</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Total Buys</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalBuys || 0 }}</div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Sells</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalSells || 0 }}</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Total Sells</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ statistics.totalSells || 0 }}</div>
         </div>
-        <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Average of Open Position</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.averageOpenPosition) }}</div>
+        <div style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Total Average of Open Position</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff;">{{ formatNumber(statistics.averageOpenPosition) }}</div>
         </div>
         <div
           v-if="selectedWallet"
           @click="openActiveTimeChart"
-          style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155; cursor: pointer; transition: all 0.2s;"
+          style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155; cursor: pointer; transition: all 0.2s;"
           @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.borderColor='#3b82f6'; target.style.background='#1e293b' }"
           @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.borderColor='#334155'; target.style.background='#1a1f2e' }"
           title="View Trading Activity Chart"
         >
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">📊 Active Time</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">View Chart</div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">📊 Active Time</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #3b82f6;">View Chart</div>
         </div>
         <div
           v-if="selectedWallet"
           @click="openPeakPriceChart"
-          style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155; cursor: pointer; transition: all 0.2s;"
+          style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155; cursor: pointer; transition: all 0.2s;"
           @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.borderColor='#3b82f6'; target.style.background='#1e293b' }"
           @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.borderColor='#334155'; target.style.background='#1a1f2e' }"
           title="View Peak Price Chart"
         >
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">📈 Peak Price</div>
-          <div style="font-size: 1.2rem; font-weight: 600; color: #3b82f6;">View Chart</div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">📈 Peak Price</div>
+          <div style="font-size: 1rem; font-weight: 600; color: #3b82f6;">View Chart</div>
         </div>
       </div>
     </div>
 
     <!-- Average Profit and Holding Time per Sell Section -->
-    <div v-if="selectedWallet && statistics && sellStatistics.length > 0" class="card" style="margin-bottom: 20px; padding: 20px;">
-      <div class="section-title" style="margin-bottom: 15px;">📈 Average Profit & Holding Time per Sell</div>
-      <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%); border: 1px solid #334155; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 1.5rem;">💰</span>
+    <div v-if="selectedWallet && statistics && sellStatistics.length > 0" class="card" style="margin-bottom: 10px; padding: 10px;">
+      <div class="section-title" style="margin-bottom: 8px;">📈 Average Profit & Holding Time per Sell</div>
+      <div style="margin-bottom: 10px; padding: 8px; background: linear-gradient(135deg, #1a1f2e 0%, #0f1419 100%); border: 1px solid #334155; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
+        <span style="font-size: 1.2rem;">💰</span>
         <div style="flex: 1;">
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Sells PNL</div>
-          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1.3rem; font-weight: 600;">
-            <div style="margin-bottom: 4px;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Total Sells PNL</div>
+          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1.1rem; font-weight: 600;">
+            <div style="margin-bottom: 3px;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
               {{ (totalSellsPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(totalSellsPNL) }} SOL
             </div>
-            <div style="font-size: 0.9rem; border-top: 1px solid #334155; padding-top: 4px;">
+            <div style="font-size: 0.8rem; border-top: 1px solid #334155; padding-top: 3px;">
               <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
               <span :style="{ color: (whatIfSellTotals.totalWhatIfSellPNL || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
                 {{ (whatIfSellTotals.totalWhatIfSellPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.totalWhatIfSellPNL) }} SOL
               </span>
             </div>
           </div>
-          <div v-else style="font-size: 1.3rem; font-weight: 600;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+          <div v-else style="font-size: 1.1rem; font-weight: 600;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
             {{ (totalSellsPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(totalSellsPNL) }} SOL
           </div>
         </div>
       </div>
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px;">
         <div
           v-for="(sellStat, index) in sellStatistics"
           :key="index"
-          style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;"
+          style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;"
         >
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 10px; font-weight: 600;">
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 6px; font-weight: 600;">
             {{ getOrdinal(sellStat.sellNumber) }} Sell
           </div>
           
           <!-- Total SOL PNL -->
-          <div v-if="sellStat.totalSolPNL !== null && sellStat.totalSolPNL !== undefined" style="font-size: 1rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 1.2rem;">💰</span>
+          <div v-if="sellStat.totalSolPNL !== null && sellStat.totalSolPNL !== undefined" style="font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 4px;">
+            <span style="font-size: 1rem;">💰</span>
             <div style="flex: 1;">
               <div v-if="whatIfModeEnabled && whatIfSellTotals && whatIfSellTotals.sellPNLs[sellStat.sellNumber] !== undefined">
                 <div :style="{ color: (sellStat.totalSolPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
                   Total SOL PNL: {{ (sellStat.totalSolPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.totalSolPNL) }} SOL
                 </div>
-                <div style="font-size: 0.85rem; margin-top: 4px; border-top: 1px solid #334155; padding-top: 4px;">
+                <div style="font-size: 0.75rem; margin-top: 3px; border-top: 1px solid #334155; padding-top: 3px;">
                   <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
                   <span :style="{ color: (whatIfSellTotals.sellPNLs[sellStat.sellNumber] || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
                     {{ (whatIfSellTotals.sellPNLs[sellStat.sellNumber] || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.sellPNLs[sellStat.sellNumber]) }} SOL
@@ -200,12 +200,12 @@
           </div>
           
           <!-- Avg Profit -->
-          <div v-if="sellStat.avgProfit !== null && sellStat.avgProfit !== undefined" style="font-size: 0.75rem; margin-bottom: 5px;">
+          <div v-if="sellStat.avgProfit !== null && sellStat.avgProfit !== undefined" style="font-size: 0.7rem; margin-bottom: 4px;">
             <div v-if="whatIfModeEnabled && whatIfSellTotals && whatIfSellTotals.avgProfits[sellStat.sellNumber] !== undefined && whatIfSellTotals.avgProfits[sellStat.sellNumber] !== null">
               <div :style="{ color: (sellStat.avgProfit || 0) >= 0 ? '#10b981' : '#ef4444' }">
                 Avg Profit: {{ (sellStat.avgProfit || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.avgProfit) }}%
               </div>
-              <div style="font-size: 0.7rem; margin-top: 3px; border-top: 1px solid #334155; padding-top: 3px;">
+              <div style="font-size: 0.65rem; margin-top: 2px; border-top: 1px solid #334155; padding-top: 2px;">
                 <span style="color: #3b82f6; font-weight: 600;">🔮 What-If Avg Profit: </span>
                 <span :style="{ color: (whatIfSellTotals.avgProfits[sellStat.sellNumber] || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
                   {{ (whatIfSellTotals.avgProfits[sellStat.sellNumber] || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.avgProfits[sellStat.sellNumber]) }}%
@@ -218,17 +218,17 @@
           </div>
           
           <!-- Avg Sell % of Buy -->
-          <div v-if="sellStat.avgSellPercentOfBuy !== null && sellStat.avgSellPercentOfBuy !== undefined" style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;">
+          <div v-if="sellStat.avgSellPercentOfBuy !== null && sellStat.avgSellPercentOfBuy !== undefined" style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px;">
             Avg Sell % of Buy: {{ formatNumber(sellStat.avgSellPercentOfBuy) }}%
           </div>
           
           <!-- Avg Holding Time -->
-          <div v-if="sellStat.avgHoldingTime !== null && sellStat.avgHoldingTime !== undefined" style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;">
+          <div v-if="sellStat.avgHoldingTime !== null && sellStat.avgHoldingTime !== undefined" style="font-size: 0.7rem; color: #94a3b8; margin-bottom: 4px;">
             Avg Holding Time: {{ formatHoldingTime(sellStat.avgHoldingTime) }}
           </div>
           
           <!-- Total Sells Count -->
-          <div v-if="sellStat.totalSells !== null && sellStat.totalSells !== undefined" style="font-size: 0.75rem; color: #94a3b8;">
+          <div v-if="sellStat.totalSells !== null && sellStat.totalSells !== undefined" style="font-size: 0.7rem; color: #94a3b8;">
             Total Sells: {{ sellStat.totalSells }}
           </div>
         </div>
@@ -236,61 +236,61 @@
     </div>
 
     <!-- What-If Data Manipulation Section -->
-    <div v-if="selectedWallet" class="card" style="margin-bottom: 20px; padding: 20px; border: 2px solid #3b82f6;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <div v-if="selectedWallet" class="card" style="margin-bottom: 10px; padding: 10px; border: 2px solid #3b82f6;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div class="section-title" style="margin-bottom: 0; color: #3b82f6;">🔮 What-If Data Manipulation</div>
-        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-          <input type="checkbox" v-model="whatIfModeEnabled" @change="toggleWhatIfMode" style="width: 20px; height: 20px; cursor: pointer;">
-          <span style="color: #cbd5e1; font-weight: 600; font-size: 0.9rem;">Enable What-If Mode</span>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" v-model="whatIfModeEnabled" @change="toggleWhatIfMode" style="width: 18px; height: 18px; cursor: pointer;">
+          <span style="color: #cbd5e1; font-weight: 600; font-size: 0.8rem;">Enable What-If Mode</span>
         </label>
       </div>
-      <div v-show="whatIfModeEnabled" style="padding: 15px; background: #1a1f2e; border-radius: 8px; border: 1px solid #334155;">
-        <div style="margin-bottom: 15px; color: #94a3b8; font-size: 0.85rem;">
+      <div v-show="whatIfModeEnabled" style="padding: 8px; background: #1a1f2e; border-radius: 4px; border: 1px solid #334155;">
+        <div style="margin-bottom: 8px; color: #94a3b8; font-size: 0.75rem;">
           Adjust wallet's holding time to see how it changes PNL. Use negative values to test shorter holding times.
         </div>
-        <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
-          <div style="flex: 1; min-width: 250px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;">
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">
               Adjust 1st Sell Time (seconds)
             </label>
             <input
               v-model.number="whatIfParams.firstSellTimeAdjustment"
               type="number"
               placeholder="e.g., 10 or -5"
-              style="width: 100%; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem;"
+              style="width: 100%; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem;"
               title="Adjust first sell time by N seconds. Negative values test shorter holding times."
             >
-            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
+            <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 3px;">
               Adjusts first sell time by ±N seconds. Uses market cap at adjusted time.
             </div>
           </div>
-          <div style="flex: 1; min-width: 250px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+          <div style="flex: 1; min-width: 200px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">
               Set All Sells To (seconds after buy)
             </label>
             <input
               v-model.number="whatIfParams.setAllSellsTo"
               type="number"
               placeholder="e.g., 30"
-              style="width: 100%; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem;"
+              style="width: 100%; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem;"
               title="Set all sell events to N seconds after buy"
             >
-            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
+            <div style="font-size: 0.7rem; color: #94a3b8; margin-top: 3px;">
               Sets all sell events to N seconds after buy time.
             </div>
           </div>
         </div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 6px;">
           <button
             @click="calculateWhatIf"
-            style="padding: 10px 20px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s;"
+            style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.2s;"
             title="Calculate What-If PNL"
           >
             <span>🔮</span> Calculate What-If
           </button>
           <button
             @click="resetWhatIf"
-            style="padding: 10px 20px; background: #334155; color: #e0e7ff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 600; transition: all 0.2s;"
+            style="padding: 6px 12px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; font-weight: 600; transition: all 0.2s;"
             title="Reset What-If Mode"
           >
             <span>↺</span> Reset
@@ -300,27 +300,27 @@
     </div>
 
     <!-- Filters Section -->
-    <div v-if="selectedWallet" class="card" style="margin-bottom: 20px; padding: 20px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+    <div v-if="selectedWallet" class="card" style="margin-bottom: 10px; padding: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div class="section-title" style="margin-bottom: 0;">🔍 Filters</div>
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 6px;">
           <button
             @click="showColumnVisibilityDialog = true"
-            style="padding: 8px 16px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+            style="padding: 6px 12px; background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
             title="Toggle Column Visibility"
           >
             <span>👁️</span> Columns
           </button>
           <button
             @click="showAddFilterDialog = true"
-            style="padding: 8px 16px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+            style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
             title="Add Filter"
           >
             <span>➕</span> Add Filter
           </button>
           <button
             @click="applyFilters"
-            style="padding: 8px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: all 0.2s;"
+            style="padding: 6px 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600; display: flex; align-items: center; gap: 4px; transition: all 0.2s;"
             title="Apply Filters"
           >
             <span>✓</span> Apply Filters
@@ -329,7 +329,7 @@
       </div>
 
       <!-- Dynamic Filters Container -->
-      <div v-if="activeFilters.length > 0" style="margin-bottom: 15px;">
+      <div v-if="activeFilters.length > 0" style="margin-bottom: 8px;">
         <FilterItem
           v-for="(filter, index) in activeFilters"
           :key="filter.id || index"
@@ -340,17 +340,17 @@
           @remove="removeFilter(index)"
         />
       </div>
-      <div v-else style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 15px;">
+      <div v-else style="color: #94a3b8; font-size: 0.75rem; margin-bottom: 8px;">
         No filters active. Click "Add Filter" to create one.
       </div>
 
       <!-- Filter Presets -->
-      <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #334155;">
-        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 15px;">
-          <span style="color: #cbd5e1; font-size: 0.9rem; font-weight: 600;">Presets:</span>
+      <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #334155;">
+        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+          <span style="color: #cbd5e1; font-size: 0.8rem; font-weight: 600;">Presets:</span>
           <select
             v-model="selectedPreset"
-            style="flex: 1; min-width: 200px; padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem;"
+            style="flex: 1; min-width: 180px; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.75rem;"
           >
             <option value="">-- Select a preset --</option>
             <option v-for="preset in filterPresets" :key="preset.name" :value="preset.name">
@@ -359,19 +359,19 @@
           </select>
           <button
             @click="loadFilterPreset"
-            style="padding: 8px 16px; background: #334155; color: #e0e7ff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;"
+            style="padding: 6px 12px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;"
           >
             Load
           </button>
           <button
             @click="showSavePresetModal = true"
-            style="padding: 8px 16px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600;"
+            style="padding: 6px 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; font-weight: 600;"
           >
             Save
           </button>
           <button
             @click="deleteFilterPreset"
-            style="padding: 8px 16px; background: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;"
+            style="padding: 6px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;"
           >
             Delete
           </button>
@@ -382,20 +382,20 @@
     <!-- Dashboard Table -->
     <div v-if="selectedWallet">
       <!-- Pagination (Top) -->
-      <div v-if="totalPages > 1" style="margin-bottom: 20px; display: flex; justify-content: center; align-items: center; gap: 10px;">
+      <div v-if="totalPages > 1" style="margin-bottom: 10px; display: flex; justify-content: center; align-items: center; gap: 6px;">
         <button
           @click="previousPage"
           :disabled="currentPage === 1"
-          style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+          style="padding: 4px 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
           :style="{ opacity: currentPage === 1 ? 0.5 : 1, cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }"
         >
           ← Previous
         </button>
-        <span style="color: #cbd5e1; font-weight: 500; font-size: 0.75rem;">Page {{ currentPage }} of {{ totalPages }}</span>
+        <span style="color: #cbd5e1; font-weight: 500; font-size: 0.7rem;">Page {{ currentPage }} of {{ totalPages }}</span>
         <button
           @click="nextPage"
           :disabled="currentPage === totalPages"
-          style="padding: 6px 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+          style="padding: 4px 10px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; border: none; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s;"
           :style="{ opacity: currentPage === totalPages ? 0.5 : 1, cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }"
         >
           Next →
@@ -416,10 +416,10 @@
                 v-for="col in visibleColumns"
                 :key="col.key"
                 @click="sortByColumn(col.key)"
-                style="padding: 12px; text-align: left; background: #1a1f2e; color: #e0e7ff; font-weight: 600; border: 1px solid #334155; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none;"
+                style="padding: 6px 8px; text-align: left; background: #1a1f2e; color: #e0e7ff; font-weight: 600; border: 1px solid #334155; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none; font-size: 0.7rem;"
               >
                 {{ col.label }}
-                <span v-if="sortColumn === col.key" style="margin-left: 4px;">
+                <span v-if="sortColumn === col.key" style="margin-left: 3px;">
                   {{ sortDirection === 'asc' ? '↑' : '↓' }}
                 </span>
               </th>
@@ -436,7 +436,7 @@
               <td
                 v-for="col in visibleColumns"
                 :key="col.key"
-                style="padding: 10px; border: 1px solid #334155; color: #cbd5e1; text-align: center; white-space: nowrap;"
+                style="padding: 6px 8px; border: 1px solid #334155; color: #cbd5e1; text-align: center; white-space: nowrap; font-size: 0.7rem;"
                 :style="getCellStyle(col.key, item)"
               >
                 <span v-html="formatCellValue(col.key, item)"></span>
@@ -463,19 +463,19 @@
             v-model="filterSearchQuery"
             type="text"
             placeholder="Search data points..."
-            style="width: 100%; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem; margin-bottom: 15px;"
+            style="width: 100%; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem; margin-bottom: 10px;"
           >
-          <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
             <div
               v-for="dataPoint in filteredDataPoints"
               :key="dataPoint.key"
               @click="addFilterFromDataPoint(dataPoint)"
-              style="padding: 12px; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px; cursor: pointer; transition: all 0.2s;"
+              style="padding: 8px; background: #1a1f2e; border: 1px solid #334155; border-radius: 4px; cursor: pointer; transition: all 0.2s;"
               @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#334155'; target.style.borderColor = '#3b82f6'; }"
               @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#1a1f2e'; target.style.borderColor = '#334155'; }"
             >
-              <div style="color: #e0e7ff; font-weight: 600; margin-bottom: 4px;">{{ dataPoint.label }}</div>
-              <div style="color: #94a3b8; font-size: 0.85rem;">{{ getFilterTypeLabel(dataPoint.type) }}</div>
+              <div style="color: #e0e7ff; font-weight: 600; margin-bottom: 3px; font-size: 0.8rem;">{{ dataPoint.label }}</div>
+              <div style="color: #94a3b8; font-size: 0.75rem;">{{ getFilterTypeLabel(dataPoint.type) }}</div>
             </div>
           </div>
         </div>
@@ -490,18 +490,18 @@
           <button class="modal-close" @click="showColumnVisibilityDialog = false">×</button>
         </div>
         <div class="modal-body" style="overflow-y: auto;">
-          <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-            <button @click="selectAllColumns" style="padding: 6px 12px; background: #334155; color: #e0e7ff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">Select All</button>
-            <button @click="deselectAllColumns" style="padding: 6px 12px; background: #334155; color: #e0e7ff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85rem;">Deselect All</button>
+          <div style="margin-bottom: 10px; display: flex; gap: 6px;">
+            <button @click="selectAllColumns" style="padding: 4px 10px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Select All</button>
+            <button @click="deselectAllColumns" style="padding: 4px 10px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Deselect All</button>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
             <label
               v-for="col in columnDefinitions"
               :key="col.key"
-              style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #1a1f2e; border-radius: 4px; cursor: pointer;"
+              style="display: flex; align-items: center; gap: 6px; padding: 6px; background: #1a1f2e; border-radius: 4px; cursor: pointer;"
             >
-              <input type="checkbox" v-model="columnVisibility[col.key]" style="width: 20px; height: 20px; cursor: pointer;">
-              <span style="color: #e0e7ff;">{{ col.label }}</span>
+              <input type="checkbox" v-model="columnVisibility[col.key]" style="width: 16px; height: 16px; cursor: pointer;">
+              <span style="color: #e0e7ff; font-size: 0.8rem;">{{ col.label }}</span>
             </label>
           </div>
         </div>
@@ -516,28 +516,28 @@
           <button class="modal-close" @click="showSavePresetModal = false">×</button>
         </div>
         <div class="modal-body">
-          <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">Preset Name</label>
+          <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: #cbd5e1; font-size: 0.8rem;">Preset Name</label>
             <input
               v-model="presetName"
               type="text"
               placeholder="Enter preset name..."
               autocomplete="off"
-              style="width: 100%; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.9rem;"
+              style="width: 100%; padding: 6px 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 4px; font-size: 0.8rem;"
             >
           </div>
-          <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <div style="display: flex; gap: 6px; justify-content: flex-end; margin-top: 10px;">
             <button
               type="button"
               @click="showSavePresetModal = false"
-              style="padding: 10px 20px; background: #334155; color: #e0e7ff; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;"
+              style="padding: 6px 12px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.8rem;"
             >
               Cancel
             </button>
             <button
               type="button"
               @click="confirmSavePreset"
-              style="padding: 10px 20px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.2s;"
+              style="padding: 6px 12px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; transition: all 0.2s; font-size: 0.8rem;"
             >
               Confirm
             </button>
@@ -1300,22 +1300,22 @@ onMounted(async () => {
 }
 
 .section-title {
-  font-size: 0.95rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #10b981;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .section-title::before {
   content: '';
-  width: 3px;
-  height: 18px;
+  width: 2px;
+  height: 14px;
   background: #10b981;
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
 }
 
 .table-container {
@@ -1359,25 +1359,25 @@ button:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: 10px 12px;
   border-bottom: 1px solid #334155;
 }
 
 .modal-header h2 {
   margin: 0;
   color: #e0e7ff;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .modal-close {
   background: transparent;
   border: none;
   color: #94a3b8;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1391,6 +1391,6 @@ button:hover {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 12px;
 }
 </style>

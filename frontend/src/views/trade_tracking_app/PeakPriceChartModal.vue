@@ -6,7 +6,7 @@
         <button class="modal-close" @click="close">×</button>
       </div>
       <div class="modal-body" style="overflow-y: auto;">
-        <div style="margin-bottom: 20px; color: #94a3b8; font-size: 0.85rem;">
+        <div style="margin-bottom: 10px; color: #94a3b8; font-size: 0.75rem;">
           This chart shows peak market caps for tokens with first sell: peak market cap before 1st sell, 1st sell market cap, and peak market cap 10s after 1st sell. Dots are grouped by type. Average values are shown in the legend and as dashed lines on the chart.
         </div>
         <div v-if="loading" style="text-align: center; padding: 40px; color: #94a3b8;">
@@ -442,25 +442,25 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
+  padding: 10px 12px;
   border-bottom: 1px solid #334155;
 }
 
 .modal-header h2 {
   margin: 0;
   color: #e0e7ff;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .modal-close {
   background: transparent;
   border: none;
   color: #94a3b8;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   cursor: pointer;
   padding: 0;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -474,6 +474,6 @@ onUnmounted(() => {
 }
 
 .modal-body {
-  padding: 20px;
+  padding: 12px;
 }
 </style>

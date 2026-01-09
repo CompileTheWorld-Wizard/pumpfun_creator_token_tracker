@@ -3,12 +3,12 @@
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Control Panel -->
-      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4 mb-4">
+      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-2 mb-2">
         <!-- Status Badge -->
-        <div class="mb-4">
+        <div class="mb-2">
           <div 
             :class="[
-              'inline-block px-3 py-1 rounded-full text-sm font-semibold',
+              'inline-block px-2 py-0.5 rounded-full text-xs font-semibold',
               isTracking ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'
             ]"
           >
@@ -17,29 +17,29 @@
         </div>
 
         <!-- Tracking Addresses Section -->
-        <div class="mb-4">
-          <h3 class="text-sm font-semibold text-gray-300 mb-2">📍 Tracking Addresses</h3>
-          <div class="flex gap-2 mb-2">
+        <div class="mb-2">
+          <h3 class="text-xs font-semibold text-gray-300 mb-1">📍 Tracking Addresses</h3>
+          <div class="flex gap-1.5 mb-1.5">
             <input
               v-model="newAddress"
               @keyup.enter="addAddress"
               type="text"
               placeholder="Enter Solana address..."
-              class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="flex-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-100 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               @click="addAddress"
-              class="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded font-semibold text-sm hover:from-blue-500 hover:to-blue-600 transition"
+              class="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded font-semibold text-xs hover:from-blue-500 hover:to-blue-600 transition"
             >
               ➕ Add
             </button>
           </div>
           <!-- Address List -->
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-1.5">
             <div
               v-for="(address, index) in addresses"
               :key="index"
-              class="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm font-mono text-gray-200 flex items-center gap-2"
+              class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs font-mono text-gray-200 flex items-center gap-1.5"
             >
               <span>{{ address.substring(0, 8) }}...{{ address.substring(address.length - 6) }}</span>
               <button
@@ -54,18 +54,18 @@
         </div>
 
         <!-- Start/Stop Buttons -->
-        <div class="flex gap-2">
+        <div class="flex gap-1.5">
           <button
             @click="handleStartTracking"
             :disabled="isTracking || addresses.length === 0"
-            class="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded font-semibold text-sm hover:from-green-500 hover:to-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-2 py-1 bg-gradient-to-r from-green-600 to-green-700 text-white rounded font-semibold text-xs hover:from-green-500 hover:to-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ▶️ Start Tracking
           </button>
           <button
             @click="handleStopTracking"
             :disabled="!isTracking"
-            class="px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white rounded font-semibold text-sm hover:from-red-500 hover:to-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            class="px-2 py-1 bg-gradient-to-r from-red-600 to-red-700 text-white rounded font-semibold text-xs hover:from-red-500 hover:to-red-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ⏹️ Stop Tracking
           </button>
@@ -73,44 +73,44 @@
       </div>
 
       <!-- Skip Tokens Configuration -->
-      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4 mb-4">
+      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-2 mb-2">
         <div 
           @click="skipTokensExpanded = !skipTokensExpanded"
-          class="flex justify-between items-center cursor-pointer mb-2"
+          class="flex justify-between items-center cursor-pointer mb-1.5"
         >
-          <h3 class="text-sm font-semibold text-gray-300">🚫 Skip Tokens (For Analysis)</h3>
-          <span class="text-gray-400">{{ skipTokensExpanded ? '▼' : '▶' }}</span>
+          <h3 class="text-xs font-semibold text-gray-300">🚫 Skip Tokens (For Analysis)</h3>
+          <span class="text-gray-400 text-xs">{{ skipTokensExpanded ? '▼' : '▶' }}</span>
         </div>
-        <div v-show="skipTokensExpanded" class="mt-3">
-          <p class="text-xs text-gray-500 mb-3">
+        <div v-show="skipTokensExpanded" class="mt-2">
+          <p class="text-xs text-gray-500 mb-2">
             Tokens in this list will be skipped when analyzing dev buy amounts. Add common tokens like SOL, USDC, USDT, etc.
           </p>
-          <div class="flex gap-2 mb-2">
+          <div class="flex gap-1.5 mb-1.5">
             <input
               v-model="newSkipTokenMint"
               type="text"
               placeholder="Token mint address..."
-              class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-100 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="flex-1 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-100 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <input
               v-model="newSkipTokenSymbol"
               type="text"
               placeholder="Symbol (optional)"
-              class="w-32 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              class="w-28 px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             <button
               @click="addSkipToken"
-              class="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded font-semibold text-sm hover:from-blue-500 hover:to-blue-600 transition"
+              class="px-2 py-1 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded font-semibold text-xs hover:from-blue-500 hover:to-blue-600 transition"
             >
               ➕ Add
             </button>
           </div>
           <!-- Skip Tokens List -->
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-1.5">
             <div
               v-for="token in skipTokens"
               :key="token.mint_address"
-              class="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 flex items-center gap-2"
+              class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 flex items-center gap-1.5"
             >
               <span>{{ token.symbol || token.mint_address.substring(0, 8) }}...</span>
               <button
@@ -125,12 +125,12 @@
       </div>
 
       <!-- Tabs -->
-      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-        <div class="flex border-b border-gray-800 mb-4">
+      <div class="bg-gray-900/50 border border-gray-800 rounded-lg p-2">
+        <div class="flex border-b border-gray-800 mb-2">
           <button
             @click="activeTab = 'dashboard'"
             :class="[
-              'px-4 py-2 text-sm font-semibold transition',
+              'px-2 py-1 text-xs font-semibold transition',
               activeTab === 'dashboard' 
                 ? 'border-b-2 border-blue-500 text-blue-400' 
                 : 'text-gray-400 hover:text-gray-200'
@@ -141,7 +141,7 @@
           <button
             @click="activeTab = 'transactions'"
             :class="[
-              'px-4 py-2 text-sm font-semibold transition',
+              'px-2 py-1 text-xs font-semibold transition',
               activeTab === 'transactions' 
                 ? 'border-b-2 border-blue-500 text-blue-400' 
                 : 'text-gray-400 hover:text-gray-200'
@@ -152,7 +152,7 @@
         </div>
 
         <!-- Dashboard Tab -->
-        <div v-show="activeTab === 'dashboard'" class="space-y-4">
+        <div v-show="activeTab === 'dashboard'" class="space-y-2">
           <DashboardTab 
             :wallet-address="selectedWallet"
             @wallet-selected="selectedWallet = $event"
@@ -160,7 +160,7 @@
         </div>
 
         <!-- Transactions Tab -->
-        <div v-show="activeTab === 'transactions'" class="space-y-4">
+        <div v-show="activeTab === 'transactions'" class="space-y-2">
           <TransactionsTab />
         </div>
 
