@@ -25,7 +25,7 @@ async function processData(processed) {
 
     // Calculate largest balance change
     let maxChange = 0;
-    meta.preBalances.forEach((preBalance: number, index: number) => {
+    meta.preBalances.forEach((preBalance, index) => {
       const postBalance = meta.postBalances[index] || 0;
       const change = Math.abs(postBalance - preBalance);
       maxChange = Math.max(maxChange, change);
