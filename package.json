@@ -51,6 +51,7 @@
     "bcrypt": "^6.0.0",
     "body-parser": "^2.2.0",
     "bs58": "^6.0.0",
+    "chart.js": "^4.5.1",
     "connect-redis": "^7.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

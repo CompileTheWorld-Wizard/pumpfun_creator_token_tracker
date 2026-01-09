@@ -63,8 +63,19 @@
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;">
         <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
           <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Wallet PNL SOL</div>
-          <div style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
-            {{ formatNumber(statistics.totalWalletPNL) }} SOL
+          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1.2rem; font-weight: 600;">
+            <div style="margin-bottom: 4px;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+              {{ (statistics.totalWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(statistics.totalWalletPNL) }} SOL
+            </div>
+            <div style="font-size: 0.9rem; border-top: 1px solid #334155; padding-top: 4px;">
+              <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
+              <span :style="{ color: (whatIfSellTotals.totalWhatIfWalletPNL || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
+                {{ (whatIfSellTotals.totalWhatIfWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.totalWhatIfWalletPNL) }} SOL
+              </span>
+            </div>
+          </div>
+          <div v-else style="font-size: 1.2rem; font-weight: 600;" :style="{ color: (statistics.totalWalletPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+            {{ (statistics.totalWalletPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(statistics.totalWalletPNL) }} SOL
           </div>
         </div>
         <div style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;">
@@ -141,8 +152,19 @@
         <span style="font-size: 1.5rem;">💰</span>
         <div style="flex: 1;">
           <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Total Sells PNL</div>
-          <div style="font-size: 1.3rem; font-weight: 600;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
-            {{ formatNumber(totalSellsPNL) }} SOL
+          <div v-if="whatIfModeEnabled && whatIfSellTotals" style="font-size: 1.3rem; font-weight: 600;">
+            <div style="margin-bottom: 4px;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+              {{ (totalSellsPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(totalSellsPNL) }} SOL
+            </div>
+            <div style="font-size: 0.9rem; border-top: 1px solid #334155; padding-top: 4px;">
+              <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
+              <span :style="{ color: (whatIfSellTotals.totalWhatIfSellPNL || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
+                {{ (whatIfSellTotals.totalWhatIfSellPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.totalWhatIfSellPNL) }} SOL
+              </span>
+            </div>
+          </div>
+          <div v-else style="font-size: 1.3rem; font-weight: 600;" :style="{ color: (totalSellsPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+            {{ (totalSellsPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(totalSellsPNL) }} SOL
           </div>
         </div>
       </div>
@@ -152,11 +174,63 @@
           :key="index"
           style="padding: 15px; background: #1a1f2e; border-radius: 6px; border: 1px solid #334155;"
         >
-          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 5px;">Sell #{{ sellStat.sellNumber }}</div>
-          <div style="font-size: 1rem; font-weight: 600; color: #e0e7ff; margin-bottom: 8px;">{{ sellStat.count || 0 }} sells</div>
-          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Avg PNL: <span :style="{ color: (sellStat.avgPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">{{ formatNumber(sellStat.avgPNL) }}%</span></div>
-          <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 3px;">Avg Holding Time: {{ formatHoldingTime(sellStat.avgHoldingTime) }}</div>
-          <div style="font-size: 0.75rem; color: #94a3b8;">Avg Sell Amount: {{ formatNumber(sellStat.avgSellAmountSOL) }} SOL</div>
+          <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 10px; font-weight: 600;">
+            {{ getOrdinal(sellStat.sellNumber) }} Sell
+          </div>
+          
+          <!-- Total SOL PNL -->
+          <div v-if="sellStat.totalSolPNL !== null && sellStat.totalSolPNL !== undefined" style="font-size: 1rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 1.2rem;">💰</span>
+            <div style="flex: 1;">
+              <div v-if="whatIfModeEnabled && whatIfSellTotals && whatIfSellTotals.sellPNLs[sellStat.sellNumber] !== undefined">
+                <div :style="{ color: (sellStat.totalSolPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+                  Total SOL PNL: {{ (sellStat.totalSolPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.totalSolPNL) }} SOL
+                </div>
+                <div style="font-size: 0.85rem; margin-top: 4px; border-top: 1px solid #334155; padding-top: 4px;">
+                  <span style="color: #3b82f6; font-weight: 600;">🔮 What-If PNL SOL: </span>
+                  <span :style="{ color: (whatIfSellTotals.sellPNLs[sellStat.sellNumber] || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
+                    {{ (whatIfSellTotals.sellPNLs[sellStat.sellNumber] || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.sellPNLs[sellStat.sellNumber]) }} SOL
+                  </span>
+                </div>
+              </div>
+              <div v-else :style="{ color: (sellStat.totalSolPNL || 0) >= 0 ? '#10b981' : '#ef4444' }">
+                Total SOL PNL: {{ (sellStat.totalSolPNL || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.totalSolPNL) }} SOL
+              </div>
+            </div>
+          </div>
+          
+          <!-- Avg Profit -->
+          <div v-if="sellStat.avgProfit !== null && sellStat.avgProfit !== undefined" style="font-size: 0.75rem; margin-bottom: 5px;">
+            <div v-if="whatIfModeEnabled && whatIfSellTotals && whatIfSellTotals.avgProfits[sellStat.sellNumber] !== undefined && whatIfSellTotals.avgProfits[sellStat.sellNumber] !== null">
+              <div :style="{ color: (sellStat.avgProfit || 0) >= 0 ? '#10b981' : '#ef4444' }">
+                Avg Profit: {{ (sellStat.avgProfit || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.avgProfit) }}%
+              </div>
+              <div style="font-size: 0.7rem; margin-top: 3px; border-top: 1px solid #334155; padding-top: 3px;">
+                <span style="color: #3b82f6; font-weight: 600;">🔮 What-If Avg Profit: </span>
+                <span :style="{ color: (whatIfSellTotals.avgProfits[sellStat.sellNumber] || 0) >= 0 ? '#3b82f6' : '#ef4444' }">
+                  {{ (whatIfSellTotals.avgProfits[sellStat.sellNumber] || 0) >= 0 ? '+' : '' }}{{ formatNumber(whatIfSellTotals.avgProfits[sellStat.sellNumber]) }}%
+                </span>
+              </div>
+            </div>
+            <div v-else :style="{ color: (sellStat.avgProfit || 0) >= 0 ? '#10b981' : '#ef4444' }">
+              Avg Profit: {{ (sellStat.avgProfit || 0) >= 0 ? '+' : '' }}{{ formatNumber(sellStat.avgProfit) }}%
+            </div>
+          </div>
+          
+          <!-- Avg Sell % of Buy -->
+          <div v-if="sellStat.avgSellPercentOfBuy !== null && sellStat.avgSellPercentOfBuy !== undefined" style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;">
+            Avg Sell % of Buy: {{ formatNumber(sellStat.avgSellPercentOfBuy) }}%
+          </div>
+          
+          <!-- Avg Holding Time -->
+          <div v-if="sellStat.avgHoldingTime !== null && sellStat.avgHoldingTime !== undefined" style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 5px;">
+            Avg Holding Time: {{ formatHoldingTime(sellStat.avgHoldingTime) }}
+          </div>
+          
+          <!-- Total Sells Count -->
+          <div v-if="sellStat.totalSells !== null && sellStat.totalSells !== undefined" style="font-size: 0.75rem; color: #94a3b8;">
+            Total Sells: {{ sellStat.totalSells }}
+          </div>
         </div>
       </div>
     </div>
@@ -473,7 +547,18 @@
       </div>
     </div>
 
-    <!-- Chart Modals will be added as separate components -->
+    <!-- Chart Modals -->
+    <ActiveTimeChartModal
+      :show="showActiveTimeChart"
+      :wallet-address="selectedWallet"
+      @close="showActiveTimeChart = false"
+    />
+    
+    <PeakPriceChartModal
+      :show="showPeakPriceChart"
+      :wallet-address="selectedWallet"
+      @close="showPeakPriceChart = false"
+    />
   </div>
 </template>
 
@@ -489,10 +574,11 @@ import {
   fetchDashboardFilterPreset,
   saveDashboardFilterPreset,
   deleteDashboardFilterPreset,
-  calculateWhatIf as calculateWhatIfAPI,
-  fetchWalletActivity
+  calculateWhatIf as calculateWhatIfAPI
 } from '../../services/tradeTracking'
 import FilterItem from './FilterItem.vue'
+import ActiveTimeChartModal from './ActiveTimeChartModal.vue'
+import PeakPriceChartModal from './PeakPriceChartModal.vue'
 
 const props = defineProps<{
   walletAddress?: string
@@ -512,6 +598,7 @@ const walletSolBalance = ref<number | null>(null)
 const sellStatistics = ref<any[]>([])
 const totalSellsPNL = ref<number>(0)
 const maxSells = ref<number>(0)
+const whatIfSellTotals = ref<any>(null)
 
 // Pagination
 const currentPage = ref(1)
@@ -532,6 +619,8 @@ const showColumnVisibilityDialog = ref(false)
 const showSavePresetModal = ref(false)
 const presetName = ref('')
 const filterSearchQuery = ref('')
+const showActiveTimeChart = ref(false)
+const showPeakPriceChart = ref(false)
 
 // What-If Mode
 const whatIfModeEnabled = ref(false)
@@ -684,9 +773,10 @@ const formatHoldingTime = (seconds: number | null | undefined): string => {
   return `${(seconds / 86400).toFixed(1)}d`
 }
 
-const formatFilterValue = (value: any): string => {
-  if (value === null || value === undefined) return '-'
-  return typeof value === 'number' ? value.toFixed(2) : String(value)
+const getOrdinal = (n: number): string => {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return n + (s[(v - 20) % 10] || s[v] || s[0])
 }
 
 const formatCellValue = (key: string, item: any): string => {
@@ -753,11 +843,6 @@ const getCellStyle = (key: string, item: any): Record<string, string> => {
   return style
 }
 
-const getFilterLabel = (key: string): string => {
-  const dp = DATA_POINTS.find(d => d.key === key)
-  return dp ? dp.label : key
-}
-
 const getFilterTypeLabel = (type: string): string => {
   const labels: Record<string, string> = {
     sol: 'SOL Amount',
@@ -801,6 +886,11 @@ const loadDashboardData = async () => {
       // Calculate max sells from dashboard data
       if (dataResult.success && dataResult.data) {
         maxSells.value = Math.max(...(dataResult.data.map((item: any) => (item.sells?.length || 0))), 0)
+      }
+      
+      // Recalculate what-if totals if what-if mode is enabled
+      if (whatIfModeEnabled.value && whatIfData.value.length > 0) {
+        calculateWhatIfSellTotals()
       }
     }
     
@@ -987,7 +1077,13 @@ const deselectAllColumns = () => {
 const toggleWhatIfMode = () => {
   if (!whatIfModeEnabled.value) {
     whatIfData.value = []
+    whatIfSellTotals.value = null
     whatIfParams.value = { firstSellTimeAdjustment: null, setAllSellsTo: null }
+  } else {
+    // Recalculate if data exists
+    if (whatIfData.value.length > 0) {
+      calculateWhatIfSellTotals()
+    }
   }
 }
 
@@ -1002,27 +1098,95 @@ const calculateWhatIf = async () => {
   
   if (result.success) {
     whatIfData.value = result.whatIfData || []
+    calculateWhatIfSellTotals()
     await loadDashboardData()
   } else {
     alert('Failed to calculate what-if PNL: ' + result.error)
   }
 }
 
+const calculateWhatIfSellTotals = () => {
+  if (!whatIfModeEnabled.value || !whatIfData.value || whatIfData.value.length === 0) {
+    whatIfSellTotals.value = null
+    return
+  }
+  
+  const sellPNLs: Record<number, number> = {}
+  const avgProfits: Record<number, number | null> = {}
+  let totalWhatIfSellPNL = 0
+  let totalWhatIfWalletPNL = 0
+  let totalWhatIfBuyAmountSOL = 0
+  let totalWhatIfGasAndFees = 0
+  
+  whatIfData.value.forEach((tokenData: any) => {
+    const tokenBuyAmount = tokenData.walletBuyAmountSOL || 0
+    const tokenGasAndFees = tokenData.totalGasAndFees || 0
+    totalWhatIfBuyAmountSOL += tokenBuyAmount
+    totalWhatIfGasAndFees += tokenGasAndFees
+    
+    if (tokenData.sells && tokenData.sells.length > 0) {
+      let tokenTotalAdjustedSellAmount = 0
+      tokenData.sells.forEach((sell: any) => {
+        const sellNumber = sell.sellNumber
+        if (!sellPNLs[sellNumber]) {
+          sellPNLs[sellNumber] = 0
+        }
+        const adjustedPNL = sell.adjustedSellPNL || 0
+        sellPNLs[sellNumber] += adjustedPNL
+        totalWhatIfSellPNL += adjustedPNL
+        tokenTotalAdjustedSellAmount += sell.adjustedSellAmountSOL || 0
+      })
+      
+      // Calculate token-level PNL
+      const tokenPNL = tokenTotalAdjustedSellAmount - tokenBuyAmount - tokenGasAndFees
+      totalWhatIfWalletPNL += tokenPNL
+    } else {
+      // No sells - loss is the buy amount + fees
+      totalWhatIfWalletPNL -= (tokenBuyAmount + tokenGasAndFees)
+    }
+  })
+  
+  // Calculate averages
+  Object.keys(sellPNLs).forEach(sellNumStr => {
+    const sellNum = parseInt(sellNumStr)
+    const count = sellStatistics.value.find(s => s.sellNumber === sellNum)?.totalSells || 0
+    if (count > 0) {
+      avgProfits[sellNum] = sellPNLs[sellNum] / count
+    } else {
+      avgProfits[sellNum] = null
+    }
+  })
+  
+  whatIfSellTotals.value = {
+    sellPNLs,
+    avgProfits,
+    totalWhatIfSellPNL,
+    totalWhatIfWalletPNL
+  }
+}
+
 const resetWhatIf = () => {
   whatIfModeEnabled.value = false
   whatIfData.value = []
+  whatIfSellTotals.value = null
   whatIfParams.value = { firstSellTimeAdjustment: null, setAllSellsTo: null }
   loadDashboardData()
 }
 
 const openActiveTimeChart = () => {
-  // TODO: Implement chart modal
-  alert('Active Time Chart - Coming soon')
+  if (!selectedWallet.value) {
+    alert('Please select a wallet first')
+    return
+  }
+  showActiveTimeChart.value = true
 }
 
 const openPeakPriceChart = () => {
-  // TODO: Implement chart modal
-  alert('Peak Price Chart - Coming soon')
+  if (!selectedWallet.value) {
+    alert('Please select a wallet first')
+    return
+  }
+  showPeakPriceChart.value = true
 }
 
 const previousPage = () => {

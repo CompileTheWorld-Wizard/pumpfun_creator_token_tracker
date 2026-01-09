@@ -1402,6 +1402,7 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
           sellStatistics: []
         }
       });
+      return;
     }
     
     // Get all token mints
@@ -1738,18 +1739,6 @@ app.post("/api/dashboard-data/:wallet", requireAuth, async (_req, res) => {
         totalPages: 0
       });
       return;
-    } else {
-      res.status(200).json({ 
-        success: true, 
-        data: [], 
-        totalBuys, 
-        totalSells, 
-        averageOpenPosition,
-        totalCount: 0,
-        page,
-        limit,
-        totalPages: 0
-      });
     }
     
     // Get all token mints (for all trades, to get token info efficiently)

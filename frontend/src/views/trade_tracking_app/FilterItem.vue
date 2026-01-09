@@ -8,8 +8,8 @@
       <button
         @click="$emit('remove')"
         style="padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;"
-        @mouseenter="(e) => { e.currentTarget.style.background = '#dc2626' }"
-        @mouseleave="(e) => { e.currentTarget.style.background = '#ef4444' }"
+        @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#dc2626' }"
+        @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#ef4444' }"
       >
         Remove
       </button>
@@ -87,7 +87,7 @@
           <div
             :id="`filter-${filter.id}-progress`"
             class="dual-range-progress"
-            :style="progressStyle"
+            :style="progressStyle as any"
           ></div>
           <input
             :id="`filter-${filter.id}-slider-min`"
@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { computed, onMounted, nextTick } from 'vue'
 
 const props = defineProps<{
   filter: any
