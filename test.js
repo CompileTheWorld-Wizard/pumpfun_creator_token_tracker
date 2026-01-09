@@ -9,7 +9,7 @@ const streamer = new TransactionStreamer(process.env.GRPC_URL, process.env.X_TOK
 streamer.addParser(parser);
 // setting up streamer to parse using the Pump.fun parser
 
-streamer.addAddresses([]);
+streamer.addAddresses(["11111111111111111111111111111111"]);
 // adds the address to stream data from
 
 async function processData(processed) {
