@@ -14,10 +14,8 @@ streamer.addAddresses(["11111111111111111111111111111111"]);
 // adds the address to stream data from
 
 async function processData(processed) {
-    console.log(JSON.stringify(processed, null, 2));
     //handle the incoming transaction
     const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
-    const TRANSFER_INSTRUCTION_DISCRIMINATOR = [2, 0, 0, 0, 0, 0, 0, 0]; // System Program Transfer instruction
     
     const { meta, transaction } = processed;
     
@@ -25,71 +23,41 @@ async function processData(processed) {
         return;
     }
 
-    const accountKeys = transaction.message.accountKeys || transaction.message.staticAccountKeys || [];
-    const instructions = transaction.message.compiledInstructions || [];
+    // Check both compiledInstructions (version 0) and instructions (legacy)
+    const instructions = transaction.message.compiledInstructions || transaction.message.instructions || [];
     
     // Find system program transfers
     for (const instruction of instructions) {
       // Check if this instruction is from the system program
-      const programIdIndex = instruction.programIdIndex;
-      const programId = accountKeys[programIdIndex];
-      const programIdString = typeof programId === 'string' ? programId : (programId?.pubkey || programId);
-      
-      if (programIdString !== SYSTEM_PROGRAM_ID) {
+      if (instruction.programId !== SYSTEM_PROGRAM_ID) {
         continue;
       }
       
-      // Check if this is a transfer instruction (discriminator [2, 0, 0, 0, 0, 0, 0, 0])
-      const instructionData = instruction.data || [];
-      if (instructionData.length < 8) {
+      // Check if this is a transfer instruction (parser already parsed it)
+      if (!instruction.data || instruction.data.name !== "transfer") {
         continue;
       }
       
-      // Check discriminator (first 8 bytes)
-      const discriminator = instructionData.slice(0, 8);
-      const isTransfer = discriminator.every((byte, idx) => byte === TRANSFER_INSTRUCTION_DISCRIMINATOR[idx]);
-      
-      if (!isTransfer) {
+      // Extract transfer data from parsed instruction
+      const transferData = instruction.data.data;
+      if (!transferData || !transferData.fromPubkey || !transferData.toPubkey || transferData.lamports === undefined) {
         continue;
       }
       
-      // Extract amount (next 8 bytes as u64 little-endian)
-      if (instructionData.length < 16) {
-        continue;
-      }
-      
-      const amountBytes = instructionData.slice(8, 16);
-      let amount = 0n;
-      for (let i = 0; i < 8; i++) {
-        amount |= BigInt(amountBytes[i]) << BigInt(i * 8);
-      }
-      const amountLamports = Number(amount);
+      const sender = transferData.fromPubkey;
+      const receiver = transferData.toPubkey;
+      const amountLamports = Number(transferData.lamports);
       const amountSOL = amountLamports / 1e9;
-      
-      // Extract sender and receiver from account indices
-      const accountIndices = instruction.accountKeyIndexes || [];
-      if (accountIndices.length < 2) {
-        continue;
-      }
-      
-      const senderIndex = accountIndices[0];
-      const receiverIndex = accountIndices[1];
-      
-      const sender = accountKeys[senderIndex];
-      const receiver = accountKeys[receiverIndex];
-      
-      const senderString = typeof sender === 'string' ? sender : (sender?.pubkey || sender);
-      const receiverString = typeof receiver === 'string' ? receiver : (receiver?.pubkey || receiver);
       
       // Display the transfer
       console.log(`\n💰 System Program Transfer:`);
       console.log(`  Signature: ${transaction.signatures[0]}`);
       console.log(`  Slot: ${meta.slot}`);
-      console.log(`  Sender: ${senderString}`);
-      console.log(`  Receiver: ${receiverString}`);
+      console.log(`  Sender: ${sender}`);
+      console.log(`  Receiver: ${receiver}`);
       console.log(`  Amount: ${amountSOL.toFixed(9)} SOL (${amountLamports} lamports)`);
       if (meta.fee) {
-        console.log(`  Fee: ${(meta.fee / 1e9).toFixed(9)} SOL`);
+        console.log(`  Fee: ${(Number(meta.fee) / 1e9).toFixed(9)} SOL`);
       }
     }
   }
