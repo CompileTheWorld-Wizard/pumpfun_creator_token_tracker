@@ -16,6 +16,11 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:5005',
         changeOrigin: true
+      },
+      '/trade-api': {
+        target: 'http://localhost:5007',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/trade-api/, '/api')
       }
     }
   },

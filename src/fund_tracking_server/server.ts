@@ -1,6 +1,9 @@
 import express from 'express';
+import session from 'express-session';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { sessionStore } from '../shared/sessionStore.js';
+import { getSessionConfig, requireAuth } from '../shared/auth.js';
 
 dotenv.config();
 
@@ -53,10 +56,23 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Health check
+// Session configuration - using shared Redis store
+app.use(session({
+  ...getSessionConfig(),
+  store: sessionStore,
+}));
+
+// Health check (public)
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', server: 'fund_tracking_server' });
 });
+
+// All other API routes require authentication
+// Add your protected routes here with requireAuth middleware
+// Example:
+// app.get('/api/some-endpoint', requireAuth, (req, res) => {
+//   res.json({ data: 'protected data' });
+// });
 
 // Start server
 const HOST = process.env.HOST || '0.0.0.0';

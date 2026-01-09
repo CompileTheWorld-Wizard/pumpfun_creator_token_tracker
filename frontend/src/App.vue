@@ -29,6 +29,15 @@
             >
               Trading Wallet Tracker
             </router-link>
+            <router-link
+              to="/trade-tracking"
+              class="px-4 py-2 text-sm font-semibold rounded transition"
+              :class="$route.path.startsWith('/trade-tracking') 
+                ? 'bg-purple-600/90 text-white' 
+                : 'bg-gray-800 hover:bg-gray-700 text-gray-200'"
+            >
+              Trade Tracking
+            </router-link>
           </div>
         </div>
       </div>
@@ -49,6 +58,8 @@ const pageTitle = computed(() => {
     return 'Creator Wallet Tracker'
   } else if (route.path.startsWith('/trading-wallets')) {
     return 'Trading Wallet Tracker'
+  } else if (route.path.startsWith('/trade-tracking')) {
+    return 'Solana Transaction Tracker'
   }
   return 'SolTrack'
 })
@@ -58,6 +69,8 @@ const pageSubtitle = computed(() => {
     return 'Creator Wallet & Token Analytics'
   } else if (route.path.startsWith('/trading-wallets')) {
     return 'Trading Wallet Analytics'
+  } else if (route.path.startsWith('/trade-tracking')) {
+    return 'Real-time monitoring and parsing of Solana transactions'
   }
   return 'Multi-Server Analytics Platform'
 })

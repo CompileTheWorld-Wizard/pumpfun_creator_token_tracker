@@ -223,13 +223,13 @@
           </div>
         </div>
 
-        <!-- Multiplier Configs (Full Width) -->
+        <!-- Multiplier Configs (Multiple Columns) -->
         <div class="bg-gray-900/80 border border-gray-800 rounded-lg p-3">
           <h2 class="text-base font-bold text-gray-100 mb-2">% of Tokens That At Least "X"x From Starting MCAP</h2>
           <div v-if="displaySettings.multiplierConfigs.length === 0" class="text-xs text-gray-500 text-center py-2">
             No multiplier configurations
           </div>
-          <div v-else class="space-y-2">
+          <div v-else class="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div
               v-for="(config, configIndex) in displaySettings.multiplierConfigs"
               :key="configIndex"

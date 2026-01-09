@@ -3,6 +3,7 @@ import Login from '../views/Login.vue'
 import MainBoard from '../views/creator_tracking_app/MainBoard.vue'
 import Settings from '../views/creator_tracking_app/Settings.vue'
 import TradingWalletsTab from '../views/creator_tracking_app/TradingWalletsTab.vue'
+import TradeTracking from '../views/trade_tracking_app/TradeTracking.vue'
 import { checkAuth } from '../services/auth'
 
 const router = createRouter({
@@ -34,6 +35,12 @@ const router = createRouter({
       path: '/trading-wallets',
       name: 'TradingWallets',
       component: TradingWalletsTab,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/trade-tracking',
+      name: 'TradeTracking',
+      component: TradeTracking,
       meta: { requiresAuth: true }
     },
     // Legacy routes for backward compatibility
