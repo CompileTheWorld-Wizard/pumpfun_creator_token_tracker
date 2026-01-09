@@ -60,7 +60,7 @@ const formatMarketCap = (value: number | null | undefined): string => {
 }
 
 const updateChart = async () => {
-  if (!props.walletAddress || !chartCanvas.value) return
+  if (!props.walletAddress) return
   
   loading.value = true
   error.value = ''
@@ -186,25 +186,25 @@ const updateChart = async () => {
       sampleDataPoint: dataPoints[0]
     })
     
-    // Wait for next tick to ensure canvas is rendered
+    // Set loading to false so canvas becomes visible in DOM
+    loading.value = false
+    
+    // Wait for Vue to update the DOM and render the canvas
     await nextTick()
     
-    // Check if canvas is still available after async operation
+    // Additional wait to ensure canvas is fully rendered
+    await new Promise(resolve => setTimeout(resolve, 150))
+    
+    // Check if canvas is available after making it visible
     if (!chartCanvas.value) {
-      console.error('Canvas element not found, retrying...')
-      // Retry after a short delay
-      setTimeout(async () => {
-        if (!chartCanvas.value) {
-          console.error('Canvas element still not found after retry')
-          error.value = 'Failed to initialize chart canvas'
-          loading.value = false
-          return
-        }
-        await createChartWithData(peakBeforeData, firstSellData, peakAfterData, avgPeakBefore, avgFirstSell, avgPeakAfter)
-      }, 200)
+      console.error('Canvas element not found after making visible')
+      console.log('Loading state:', loading.value)
+      console.log('Error state:', error.value)
+      error.value = 'Failed to initialize chart canvas. Please try again.'
       return
     }
     
+    console.log('Canvas found, creating chart...')
     await createChartWithData(peakBeforeData, firstSellData, peakAfterData, avgPeakBefore, avgFirstSell, avgPeakAfter)
   } catch (err: any) {
     console.error('Error loading peak price chart:', err)
@@ -314,6 +314,8 @@ const createChartWithData = async (
   }
   
   console.log('Creating chart with datasets:', datasets.map(d => ({ label: d.label, dataCount: d.data.length })))
+  console.log('Canvas element:', chartCanvas.value)
+  console.log('Canvas dimensions:', chartCanvas.value?.offsetWidth, chartCanvas.value?.offsetHeight)
   
   chart = new Chart(ctx, {
       type: 'scatter',
