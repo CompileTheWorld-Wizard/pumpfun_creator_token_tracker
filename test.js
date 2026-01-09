@@ -18,7 +18,6 @@ async function processData(processed) {
     const MIN_LAMPORTS = MIN_SOL_AMOUNT * 1e9; // Convert to lamports
     
     const { meta, transaction } = processed;
-    console.log(transaction.message)
     
     if (!meta || !transaction || !meta.preBalances || !meta.postBalances) {
         return;
