@@ -14,7 +14,7 @@ streamer.addAddresses(["11111111111111111111111111111111"]);
 // adds the address to stream data from
 
 async function processData(processed) {
-  console.log(JSON.stringify(processed, null, 2));
+    console.log(JSON.stringify(processed, null, 2));
     //handle the incoming transaction
     const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
     const TRANSFER_INSTRUCTION_DISCRIMINATOR = [2, 0, 0, 0, 0, 0, 0, 0]; // System Program Transfer instruction
