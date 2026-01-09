@@ -1254,7 +1254,7 @@
     <div class="bg-gray-900/80 border border-gray-800 rounded overflow-hidden flex flex-col">
       <div class="overflow-x-auto overflow-y-auto relative" style="max-height: calc(100vh - 350px);">
         <!-- Loading Overlay -->
-        <div v-if="loading" class="absolute inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center z-0" style="top: 0;">
+        <div v-if="loading" class="absolute inset-0 bg-gray-900 flex items-center justify-center z-[9999]" style="top: 0;">
           <div class="flex items-center gap-2 bg-gray-900/60 backdrop-blur-md px-4 py-3 rounded-lg border border-gray-700/50">
             <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-500"></div>
             <span class="text-xs text-gray-200 font-medium">Loading creator wallets...</span>
