@@ -416,8 +416,7 @@
                 v-for="col in visibleColumns"
                 :key="col.key"
                 @click="sortByColumn(col.key)"
-                style="padding: 10px; text-align: left; font-weight: 600; color: #10b981; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #334155; cursor: pointer; user-select: none;"
-                :style="{ background: sortColumn === col.key ? '#1a1f2e' : '#0f1419' }"
+                style="padding: 12px; text-align: left; background: #1a1f2e; color: #e0e7ff; font-weight: 600; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none;"
               >
                 {{ col.label }}
                 <span v-if="sortColumn === col.key" style="margin-left: 4px;">
@@ -430,17 +429,17 @@
             <tr
               v-for="(item, index) in sortedData"
               :key="index"
-              style="border-bottom: 1px solid #2d3748;"
-              @mouseenter="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = '#0f1419'; }"
-              @mouseleave="(e) => { const target = e.currentTarget as HTMLElement; if (target) target.style.background = 'transparent'; }"
+              :ref="el => { if (el) rowRefs[index] = el as HTMLTableRowElement }"
+              @click="(e) => selectRow(index)"
+              style="cursor: pointer;"
             >
               <td
                 v-for="col in visibleColumns"
                 :key="col.key"
-                style="padding: 10px; border-bottom: 1px solid #2d3748; font-size: 0.75rem; color: #e0e7ff; font-family: 'Courier New', monospace;"
+                style="padding: 10px; border: 1px solid #334155; color: #cbd5e1; text-align: center; white-space: nowrap;"
                 :style="getCellStyle(col.key, item)"
               >
-                {{ formatCellValue(col.key, item) }}
+                <span v-html="formatCellValue(col.key, item)"></span>
               </td>
             </tr>
           </tbody>
@@ -632,6 +631,8 @@ const whatIfParams = ref({
 
 // Column visibility
 const columnVisibility = ref<Record<string, boolean>>({})
+const rowRefs = ref<Record<number, HTMLTableRowElement>>({})
+const selectedRowIndex = ref<number | null>(null)
 const columnDefinitions = ref([
   // PNL Group
   { key: 'pnlSOL', label: 'PNL per token in SOL', order: 0, group: 'PNL' },
@@ -700,6 +701,9 @@ const sortedData = computed(() => {
     const comparison = aVal > bVal ? 1 : aVal < bVal ? -1 : 0
     return sortDirection.value === 'asc' ? comparison : -comparison
   })
+  
+  // Clear selected row when data changes
+  selectedRowIndex.value = null
   
   return sorted
 })
@@ -783,10 +787,33 @@ const formatCellValue = (key: string, item: any): string => {
   const value = item[key]
   if (value === null || value === undefined) return '-'
   
-  // Handle address truncation
+  // Handle address truncation with links
   if (key.includes('Address') || key === 'transactionSignature') {
     if (typeof value === 'string' && value.length > 14) {
-      return `${value.substring(0, 8)}...${value.substring(value.length - 6)}`
+      const truncated = `${value.substring(0, 8)}...${value.substring(value.length - 6)}`
+      let url = ''
+      if (key === 'tokenAddress') {
+        url = `https://solscan.io/token/${value}`
+      } else if (key === 'creatorAddress') {
+        url = `https://solscan.io/account/${value}`
+      } else if (key === 'transactionSignature') {
+        url = `https://solscan.io/tx/${value}`
+      }
+      if (url) {
+        return `<a href="${url}" target="_blank" style="color: #3b82f6; text-decoration: none;">${truncated}</a>`
+      }
+      return truncated
+    }
+    let url = ''
+    if (key === 'tokenAddress') {
+      url = `https://solscan.io/token/${value}`
+    } else if (key === 'creatorAddress') {
+      url = `https://solscan.io/account/${value}`
+    } else if (key === 'transactionSignature') {
+      url = `https://solscan.io/tx/${value}`
+    }
+    if (url) {
+      return `<a href="${url}" target="_blank" style="color: #3b82f6; text-decoration: none;">${value}</a>`
     }
     return String(value)
   }
@@ -841,6 +868,31 @@ const getCellStyle = (key: string, item: any): Record<string, string> => {
   }
   
   return style
+}
+
+const selectRow = (index: number) => {
+  // Reset previous row
+  if (selectedRowIndex.value !== null && rowRefs.value[selectedRowIndex.value]) {
+    const prevRow = rowRefs.value[selectedRowIndex.value]
+    prevRow.style.backgroundColor = ''
+    const prevLinks = prevRow.querySelectorAll('a')
+    prevLinks.forEach(link => {
+      link.style.color = '#3b82f6'
+      link.style.textDecoration = 'none'
+    })
+  }
+  
+  // Highlight clicked row
+  const row = rowRefs.value[index]
+  if (row) {
+    row.style.backgroundColor = '#3b82f6'
+    const links = row.querySelectorAll('a')
+    links.forEach(link => {
+      link.style.color = '#ffffff'
+      link.style.textDecoration = 'underline'
+    })
+    selectedRowIndex.value = index
+  }
 }
 
 const getFilterTypeLabel = (type: string): string => {

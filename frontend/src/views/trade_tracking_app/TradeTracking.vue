@@ -175,17 +175,6 @@
           >
             📊 Recent Transactions
           </button>
-          <button
-            @click="activeTab = 'analysis'"
-            :class="[
-              'px-4 py-2 text-sm font-semibold transition',
-              activeTab === 'analysis' 
-                ? 'border-b-2 border-blue-500 text-blue-400' 
-                : 'text-gray-400 hover:text-gray-200'
-            ]"
-          >
-            📈 Analysis
-          </button>
         </div>
 
         <!-- Dashboard Tab -->
@@ -201,10 +190,6 @@
           <TransactionsTab />
         </div>
 
-        <!-- Analysis Tab -->
-        <div v-show="activeTab === 'analysis'" class="space-y-4">
-          <AnalysisTab />
-        </div>
       </div>
     </main>
 
@@ -261,7 +246,6 @@ import {
 import { logout } from '../../services/auth'
 import DashboardTab from './DashboardTab.vue'
 import TransactionsTab from './TransactionsTab.vue'
-import AnalysisTab from './AnalysisTab.vue'
 import PasswordChangeModal from './PasswordChangeModal.vue'
 // Import SVG files as raw strings
 import changePasswordIconSvg from '../../icons/change-password.svg?raw'
