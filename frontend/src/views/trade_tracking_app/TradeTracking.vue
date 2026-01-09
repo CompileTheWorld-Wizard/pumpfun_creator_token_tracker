@@ -1,31 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-950 text-gray-100">
-    <!-- Header -->
-    <div class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-50">
-      <div class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-3">
-        <div class="flex justify-between items-center">
-          <div>
-            <h1 class="text-xl font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              🔍 Solana Transaction Tracker
-            </h1>
-            <p class="text-gray-400 text-xs mt-0.5">Real-time monitoring and parsing of Solana transactions</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <!-- SOL Price Display -->
-            <div class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg">
-              <span class="text-blue-400">SOL</span>
-              <span id="solPriceValue" class="text-green-400 font-semibold">{{ solPrice || '--' }}</span>
-              <span class="text-gray-500 text-xs">USD</span>
-            </div>
-            <!-- Header Stats -->
-            <div class="px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg">
-              <span class="text-sm">{{ totalTransactions || 0 }} / {{ trackedAddresses || 0 }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Control Panel -->
@@ -201,6 +175,18 @@
 
     <!-- Sticky Action Buttons (Bottom Right) - Icon-only with hover expansion -->
     <div class="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+      <!-- SOL Price Display -->
+      <div class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg">
+        <span class="text-blue-400 font-semibold">SOL</span>
+        <span id="solPriceValue" class="text-green-400 font-semibold">{{ solPrice || '--' }}</span>
+        <span class="text-gray-500 text-xs">USD</span>
+      </div>
+      
+      <!-- Header Stats -->
+      <div class="px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg">
+        <span class="text-sm text-gray-200">{{ totalTransactions || 0 }} / {{ trackedAddresses || 0 }}</span>
+      </div>
+      
       <div class="group relative">
         <button
           @click="showPasswordModal = true"
@@ -276,6 +262,7 @@ const loadStatus = async () => {
     isTracking.value = result.data.isRunning || false
     addresses.value = result.data.addresses || []
     trackedAddresses.value = addresses.value.length
+    totalTransactions.value = result.data.totalTransactions || 0
   }
 }
 
