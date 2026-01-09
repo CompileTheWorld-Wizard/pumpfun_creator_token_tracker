@@ -22,93 +22,24 @@ async function processData(processed) {
     if (!meta || !transaction || !meta.preBalances || !meta.postBalances) {
         return;
     }
-    
-    const accountKeys = transaction.message.accountKeys || transaction.message.staticAccountKeys;
-    const preBalances = meta.preBalances;
-    const postBalances = meta.postBalances;
-    
-    // Helper to get address string from account key (handles both PublicKey objects and strings)
-    const getAddress = (account) => {
-        if (typeof account === 'string') return account;
-        if (account && account.toString) return account.toString();
-        if (account && account.pubkey) return account.pubkey.toString();
-        return String(account);
-    };
-    
-    // Calculate balance changes for each account
-    const balanceChanges = accountKeys.map((account, index) => {
-        const preBalance = BigInt(preBalances[index] || 0);
-        const postBalance = BigInt(postBalances[index] || 0);
-        const change = Number(postBalance - preBalance);
-        
-        return {
-            address: getAddress(account),
-            change: change,
-            isSender: change < 0,
-            isReceiver: change > 0
-        };
+
+    // Calculate largest balance change
+    let maxChange = 0;
+    meta.preBalances.forEach((preBalance: number, index: number) => {
+      const postBalance = meta.postBalances[index] || 0;
+      const change = Math.abs(postBalance - preBalance);
+      maxChange = Math.max(maxChange, change);
     });
     
-    // Filter for significant transfers (absolute value >= MIN_LAMPORTS)
-    const significantTransfers = balanceChanges.filter(
-        bc => Math.abs(bc.change) >= MIN_LAMPORTS
-    );
-    
-    // Separate senders and receivers
-    const senders = significantTransfers.filter(bc => bc.isSender);
-    const receivers = significantTransfers.filter(bc => bc.isReceiver);
-    
-    // Display matched transfers
-    if (senders.length > 0 && receivers.length > 0) {
-        console.log(`\n=== SOL Transfers (>= ${MIN_SOL_AMOUNT} SOL) ===`);
-        console.log(transaction.signatures[0])
-        
-        // Match senders with receivers by amount
-        const usedReceivers = new Set();
-        
-        senders.forEach(sender => {
-            const senderAmount = Math.abs(sender.change);
-            const amountSOL = senderAmount / 1e9;
-            
-            // Find best matching receiver (exact match or closest, accounting for fees)
-            let bestMatch = null;
-            let bestDiff = Infinity;
-            
-            receivers.forEach((receiver, idx) => {
-                if (usedReceivers.has(idx)) return;
-                
-                const diff = Math.abs(receiver.change - senderAmount);
-                // Allow up to 0.001 SOL difference for fees (1000000 lamports)
-                if (diff < 1000000 && diff < bestDiff) {
-                    bestDiff = diff;
-                    bestMatch = { receiver, idx };
-                }
-            });
-            
-            if (bestMatch) {
-                usedReceivers.add(bestMatch.idx);
-                console.log(`FROM: ${sender.address}`);
-                console.log(`TO:   ${bestMatch.receiver.address}`);
-                console.log(`AMOUNT: ${amountSOL.toFixed(9)} SOL\n`);
-            } else {
-                // No matching receiver found, show sender only
-                console.log(`FROM: ${sender.address}`);
-                console.log(`TO:   [Unknown/Multiple]`);
-                console.log(`AMOUNT: ${amountSOL.toFixed(9)} SOL\n`);
-            }
-        });
-        
-        // Show any unmatched receivers
-        receivers.forEach((receiver, idx) => {
-            if (!usedReceivers.has(idx)) {
-                const amountSOL = receiver.change / 1e9;
-                console.log(`FROM: [Unknown]`);
-                console.log(`TO:   ${receiver.address}`);
-                console.log(`AMOUNT: ${amountSOL.toFixed(9)} SOL\n`);
-            }
-        });
-        
-        console.log("===========================\n");
+    // Only log transactions with > 10 SOL moved
+    const changeInSOL = maxChange / 1e9;
+    if (changeInSOL > 10) {
+      console.log(`\n💰 High-Value Transaction:`);
+      console.log(`  Signature: ${transaction.signatures[0]}`);
+      console.log(`  Slot: ${transaction.slot}`);
+      console.log(`  Max SOL Transfer: ${changeInSOL.toFixed(2)} SOL`);
+      console.log(`  Fee: ${meta.fee / 1e9} SOL`);
+      console.log(`  Accounts: ${transaction.message?.staticAccountKeys?.length || 0}`);
     }
   }
 
