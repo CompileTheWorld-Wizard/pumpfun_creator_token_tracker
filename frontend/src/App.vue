@@ -21,22 +21,13 @@
               Creator Wallet Tracker
             </router-link>
             <router-link
-              to="/trading-wallets"
-              class="px-4 py-2 text-sm font-semibold rounded transition"
-              :class="$route.path.startsWith('/trading-wallets') 
-                ? 'bg-purple-600/90 text-white' 
-                : 'bg-gray-800 hover:bg-gray-700 text-gray-200'"
-            >
-              Trading Wallet Tracker
-            </router-link>
-            <router-link
               to="/trade-tracking"
               class="px-4 py-2 text-sm font-semibold rounded transition"
               :class="$route.path.startsWith('/trade-tracking') 
                 ? 'bg-purple-600/90 text-white' 
                 : 'bg-gray-800 hover:bg-gray-700 text-gray-200'"
             >
-              Trade Tracking
+              Trading Wallet Tracker
             </router-link>
           </div>
         </div>
@@ -56,10 +47,8 @@ const route = useRoute()
 const pageTitle = computed(() => {
   if (route.path.startsWith('/creator-wallets')) {
     return 'Creator Wallet Tracker'
-  } else if (route.path.startsWith('/trading-wallets')) {
-    return 'Trading Wallet Tracker'
   } else if (route.path.startsWith('/trade-tracking')) {
-    return 'Solana Transaction Tracker'
+    return 'Trading Wallet Tracker'
   }
   return 'SolTrack'
 })
@@ -67,8 +56,6 @@ const pageTitle = computed(() => {
 const pageSubtitle = computed(() => {
   if (route.path.startsWith('/creator-wallets')) {
     return 'Creator Wallet & Token Analytics'
-  } else if (route.path.startsWith('/trading-wallets')) {
-    return 'Trading Wallet Analytics'
   } else if (route.path.startsWith('/trade-tracking')) {
     return 'Real-time monitoring and parsing of Solana transactions'
   }

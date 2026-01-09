@@ -2,20 +2,53 @@
   <div>
     <!-- Wallet Filter -->
     <div style="display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap;">
-      <div style="flex: 1; min-width: 250px;">
+      <div style="flex: 1; min-width: 250px; position: relative;">
         <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
           Filter by Wallet
         </label>
-        <select
-          v-model="selectedWallet"
-          @change="loadTransactions"
-          style="width: 100%; padding: 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; font-family: 'Courier New', monospace; height: 42px; box-sizing: border-box;"
-        >
-          <option value="">All Wallets</option>
-          <option v-for="wallet in wallets" :key="wallet" :value="wallet">
-            {{ wallet }}
-          </option>
-        </select>
+        <div style="position: relative;">
+          <input
+            v-model="walletSearchQuery"
+            @input="filterWalletOptions"
+            @focus="showWalletDropdown = true"
+            @click.stop="showWalletDropdown = true"
+            type="text"
+            placeholder="Search wallet address..."
+            style="width: 100%; padding: 10px 40px 10px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; font-family: 'Courier New', monospace; height: 42px; box-sizing: border-box;"
+          >
+          <button
+            v-if="selectedWallet"
+            @click="clearWalletFilter"
+            style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; font-size: 1.2rem; color: #64748b; padding: 4px;"
+            title="Clear filter"
+          >
+            ×
+          </button>
+          <div
+            v-if="showWalletDropdown"
+            v-click-outside="() => showWalletDropdown = false"
+            style="position: absolute; top: 100%; left: 0; right: 0; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px; margin-top: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 6px rgba(0,0,0,0.5);"
+          >
+            <div style="padding: 4px;">
+              <div
+                @click="selectWalletFilter('')"
+                style="padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85rem; color: #e0e7ff; font-weight: 600;"
+                :style="{ background: !selectedWallet ? '#334155' : 'transparent' }"
+              >
+                <strong>All Wallets</strong>
+              </div>
+              <div
+                v-for="wallet in filteredWallets"
+                :key="wallet"
+                @click="selectWalletFilter(wallet)"
+                style="padding: 8px 12px; cursor: pointer; border-radius: 4px; font-size: 0.85rem; font-family: 'Courier New', monospace; color: #e0e7ff;"
+                :style="{ background: selectedWallet === wallet ? '#334155' : 'transparent' }"
+              >
+                {{ wallet }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
       <button
         @click="loadTransactions"
@@ -233,8 +266,26 @@ a:hover {
 import { ref, onMounted } from 'vue'
 import { fetchTransactions, fetchAllWallets } from '../../services/tradeTracking'
 
+// Click outside directive
+const vClickOutside = {
+  mounted(el: any, binding: any) {
+    el.clickOutsideEvent = (event: MouseEvent) => {
+      if (!(el === event.target || el.contains(event.target))) {
+        binding.value()
+      }
+    }
+    document.addEventListener('click', el.clickOutsideEvent)
+  },
+  unmounted(el: any) {
+    document.removeEventListener('click', el.clickOutsideEvent)
+  }
+}
+
 const selectedWallet = ref('')
 const wallets = ref<string[]>([])
+const filteredWallets = ref<string[]>([])
+const walletSearchQuery = ref('')
+const showWalletDropdown = ref(false)
 const transactions = ref<any[]>([])
 const loading = ref(false)
 const currentPage = ref(1)
@@ -343,7 +394,33 @@ const loadWallets = async () => {
   const result = await fetchAllWallets()
   if (result.success) {
     wallets.value = result.wallets || []
+    filteredWallets.value = wallets.value
   }
+}
+
+const filterWalletOptions = () => {
+  const query = walletSearchQuery.value.toLowerCase()
+  if (!query) {
+    filteredWallets.value = wallets.value
+  } else {
+    filteredWallets.value = wallets.value.filter(wallet =>
+      wallet.toLowerCase().includes(query)
+    )
+  }
+}
+
+const selectWalletFilter = (address: string) => {
+  selectedWallet.value = address
+  walletSearchQuery.value = address || ''
+  showWalletDropdown.value = false
+  loadTransactions()
+}
+
+const clearWalletFilter = () => {
+  selectedWallet.value = ''
+  walletSearchQuery.value = ''
+  showWalletDropdown.value = false
+  loadTransactions()
 }
 
 const previousPage = () => {
