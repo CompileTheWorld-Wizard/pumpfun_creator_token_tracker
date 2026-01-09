@@ -1383,6 +1383,9 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
       // Continue without SOL balance if fetch fails
     }
     
+    // Get total buy/sell counts (from ALL data, not paginated)
+    const { totalBuys, totalSells } = await getWalletBuySellCounts(wallet);
+    
     // Get all wallet trades (ALL data, no pagination/filtering)
     const walletTradesResult = await dbService.getWalletTokens(wallet);
     const walletTrades = walletTradesResult.data;
@@ -1399,6 +1402,8 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
           walletAvgBuySize: 0,
           devAvgBuySize: 0,
           avgPNLPerToken: 0,
+          totalBuys,
+          totalSells,
           sellStatistics: []
         }
       });
@@ -1690,6 +1695,8 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
         walletAvgBuySize,
         devAvgBuySize,
         avgPNLPerToken,
+        totalBuys,
+        totalSells,
         sellStatistics
       }
     });
