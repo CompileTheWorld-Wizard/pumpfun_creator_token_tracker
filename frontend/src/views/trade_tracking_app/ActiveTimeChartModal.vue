@@ -29,14 +29,14 @@
             <option value="bar">Bar Chart</option>
           </select>
         </div>
-        <div v-if="loading" style="text-align: center; padding: 40px; color: #94a3b8;">
-          Loading chart data...
-        </div>
-        <div v-else-if="error" style="text-align: center; padding: 20px; color: #ef4444;">
+        <div v-if="error" style="text-align: center; padding: 20px; color: #ef4444;">
           {{ error }}
         </div>
         <div v-else style="position: relative; height: 400px; margin-bottom: 20px;">
           <canvas ref="chartCanvas"></canvas>
+          <div v-if="loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; background: rgba(15, 20, 25, 0.8); color: #94a3b8;">
+            Loading chart data...
+          </div>
         </div>
       </div>
     </div>
@@ -205,8 +205,17 @@ const updateChart = async () => {
     const pnlPercentData = result.data.map((item: ActivityDataItem) => item.pnlPercent || 0)
     const pnlSOLData = result.data.map((item: ActivityDataItem) => item.pnlSOL || 0)
     
+    // Check if canvas is still available after async operation
+    if (!chartCanvas.value) {
+      loading.value = false
+      return
+    }
+    
     const ctx = chartCanvas.value.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      loading.value = false
+      return
+    }
     
     chart = new Chart(ctx, {
       type: chartType.value,
