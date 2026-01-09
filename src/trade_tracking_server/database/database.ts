@@ -84,6 +84,15 @@ class DatabaseService {
     }
 
     try {
+      // Test database connection first
+      console.log('🔌 Testing database connection...');
+      await this.pool.query('SELECT NOW()');
+      console.log('✅ Database connection successful');
+      
+      // Check if database exists and is accessible
+      const dbName = process.env.DB_NAME || 'solscan';
+      console.log(`📊 Using database: ${dbName}`);
+      
       const createTableQuery = `
         CREATE TABLE IF NOT EXISTS tbl_solscan_transactions (
           id SERIAL PRIMARY KEY,
@@ -407,8 +416,13 @@ class DatabaseService {
 
       this.isInitialized = true;
       console.log('✅ Database initialized successfully');
-    } catch (error) {
-      console.error('❌ Failed to initialize database:', error);
+    } catch (error: any) {
+      const errorMessage = error?.message || String(error);
+      const errorStack = error?.stack || '';
+      console.error('❌ Failed to initialize database:', errorMessage);
+      if (errorStack) {
+        console.error('Stack trace:', errorStack);
+      }
       throw error;
     }
   }

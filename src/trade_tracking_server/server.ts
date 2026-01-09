@@ -123,8 +123,13 @@ async function initializeApp() {
     await dbService.initializeDefaultSkipTokens();
     tracker.initialize();
     console.log("✅ Application initialized successfully");
-  } catch (error) {
-    console.error("❌ Failed to initialize application:", error);
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || '';
+    console.error("❌ Failed to initialize application:", errorMessage);
+    if (errorStack) {
+      console.error("Stack trace:", errorStack);
+    }
     throw error;
   }
 }
@@ -2687,8 +2692,13 @@ async function main() {
     app.listen(PORT, HOST, () => {
       console.log(`Trade tracking server running on http://${HOST}:${PORT}`);
     });
-  } catch (error) {
-    console.error("Failed to start server:", error);
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || '';
+    console.error("Failed to start server:", errorMessage);
+    if (errorStack) {
+      console.error("Stack trace:", errorStack);
+    }
     process.exit(1);
   }
 }
