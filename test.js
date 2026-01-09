@@ -48,6 +48,8 @@ async function processData(processed) {
       const receiver = transferData.toPubkey;
       const amountLamports = Number(transferData.lamports);
       const amountSOL = amountLamports / 1e9;
+
+      if (amountSOL < 10) continue;
       
       // Display the transfer
       console.log(`\n💰 System Program Transfer:`);
