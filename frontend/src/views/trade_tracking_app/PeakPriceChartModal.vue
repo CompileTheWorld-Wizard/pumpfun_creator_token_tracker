@@ -15,7 +15,7 @@
         <div v-else-if="error" style="text-align: center; padding: 20px; color: #ef4444;">
           {{ error }}
         </div>
-        <div v-else style="position: relative; height: 500px; margin-bottom: 20px;">
+        <div v-else style="position: relative; width: 100%; min-height: 500px; height: 500px; margin-bottom: 20px;">
           <canvas ref="chartCanvas"></canvas>
         </div>
       </div>
@@ -174,14 +174,28 @@ const updateChart = async () => {
     const avgFirstSell = firstSellCount > 0 ? firstSellSum / firstSellCount : null
     const avgPeakAfter = peakAfterCount > 0 ? peakAfterSum / peakAfterCount : null
     
+    // Debug logging
+    console.log('Chart Data Summary:', {
+      dataPointsCount: dataPoints.length,
+      peakBeforeDataCount: peakBeforeData.length,
+      firstSellDataCount: firstSellData.length,
+      peakAfterDataCount: peakAfterData.length,
+      avgPeakBefore,
+      avgFirstSell,
+      avgPeakAfter,
+      sampleDataPoint: dataPoints[0]
+    })
+    
     // Check if canvas is still available after async operation
     if (!chartCanvas.value) {
+      console.error('Canvas element not found')
       loading.value = false
       return
     }
     
     const ctx = chartCanvas.value.getContext('2d')
     if (!ctx) {
+      console.error('Canvas context not available')
       loading.value = false
       return
     }
@@ -254,6 +268,16 @@ const updateChart = async () => {
         showLine: true
       })
     }
+    
+    // Only create chart if we have at least one dataset with data
+    if (peakBeforeData.length === 0 && firstSellData.length === 0 && peakAfterData.length === 0) {
+      console.error('No data points to display in chart')
+      error.value = 'No market cap data points available to display'
+      loading.value = false
+      return
+    }
+    
+    console.log('Creating chart with datasets:', datasets.map(d => ({ label: d.label, dataCount: d.data.length })))
     
     chart = new Chart(ctx, {
       type: 'scatter',
@@ -419,8 +443,11 @@ const updateChart = async () => {
 
 watch(() => props.show, (newVal) => {
   if (newVal && props.walletAddress) {
+    // Wait for modal to be fully rendered before creating chart
     nextTick(() => {
-      updateChart()
+      setTimeout(() => {
+        updateChart()
+      }, 100)
     })
   } else {
     if (chart) {
@@ -498,5 +525,11 @@ onUnmounted(() => {
 
 .modal-body {
   padding: 12px;
+  overflow-y: auto;
+}
+
+canvas {
+  max-width: 100%;
+  height: auto !important;
 }
 </style>
