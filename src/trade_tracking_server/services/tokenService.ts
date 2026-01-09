@@ -183,7 +183,7 @@ export class TokenService {
     
     // Determine which token is which (token1 or token2 is the mint we're looking for)
     let tokenIn: string;
-    let tokenOut: string;
+    // let tokenOut: string;
     let amountIn: number;
     let amountOut: number;
     let decimalIn: number;
@@ -197,7 +197,7 @@ export class TokenService {
         return null;
       }
       tokenIn = routers.token1;
-      tokenOut = routers.token2;
+      // tokenOut = routers.token2;
       amountIn = routers.amount1;
       amountOut = routers.amount2;
       decimalIn = routers.token1_decimals || 0;
@@ -211,7 +211,7 @@ export class TokenService {
         return null;
       }
       tokenIn = routers.token2;
-      tokenOut = routers.token1;
+      // tokenOut = routers.token1;
       amountIn = routers.amount2;
       amountOut = routers.amount1;
       decimalIn = routers.token2_decimals || 0;
