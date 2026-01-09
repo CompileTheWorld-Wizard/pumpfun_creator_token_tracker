@@ -176,15 +176,23 @@
     <!-- Sticky Action Buttons (Bottom Right) - Icon-only with hover expansion -->
     <div class="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
       <!-- SOL Price Display -->
-      <div class="flex items-center gap-2 px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg">
-        <span class="text-blue-400 font-semibold">SOL</span>
-        <span id="solPriceValue" class="text-green-400 font-semibold">{{ solPrice || '--' }}</span>
-        <span class="text-gray-500 text-xs">USD</span>
+      <div class="group relative">
+        <div class="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg transition-all duration-300 flex items-center justify-center cursor-default">
+          <span class="text-green-400 font-semibold text-sm">$</span>
+        </div>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          <span class="text-blue-400">SOL</span> <span class="text-green-400">{{ solPrice || '--' }}</span> <span class="text-gray-500">USD</span>
+        </span>
       </div>
       
       <!-- Header Stats -->
-      <div class="px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg">
-        <span class="text-sm text-gray-200">{{ totalTransactions || 0 }} / {{ trackedAddresses || 0 }}</span>
+      <div class="group relative">
+        <div class="w-12 h-12 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg shadow-lg transition-all duration-300 flex items-center justify-center cursor-default">
+          <span class="text-gray-200 font-semibold text-sm">{{ totalTransactions || 0 }}</span>
+        </div>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Transactions: <span class="text-green-400">{{ totalTransactions || 0 }}</span> / Wallets: <span class="text-blue-400">{{ trackedAddresses || 0 }}</span>
+        </span>
       </div>
       
       <div class="group relative">

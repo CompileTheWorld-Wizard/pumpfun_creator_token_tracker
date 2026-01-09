@@ -416,7 +416,7 @@
                 v-for="col in visibleColumns"
                 :key="col.key"
                 @click="sortByColumn(col.key)"
-                style="padding: 12px; text-align: left; background: #1a1f2e; color: #e0e7ff; font-weight: 600; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none;"
+                style="padding: 12px; text-align: left; background: #1a1f2e; color: #e0e7ff; font-weight: 600; border: 1px solid #334155; border-bottom: 2px solid #334155; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none;"
               >
                 {{ col.label }}
                 <span v-if="sortColumn === col.key" style="margin-left: 4px;">
@@ -430,7 +430,7 @@
               v-for="(item, index) in sortedData"
               :key="index"
               :ref="el => { if (el) rowRefs[index] = el as HTMLTableRowElement }"
-              @click="(e) => selectRow(index)"
+              @click="() => selectRow(index)"
               style="cursor: pointer;"
             >
               <td
