@@ -24,7 +24,7 @@ async function processData(processed) {
         return;
     }
     
-    const accountKeys = transaction.message.accountKeys;
+    const accountKeys = transaction.message.accountKeys || transaction.message.staticAccountKeys;
     const preBalances = meta.preBalances;
     const postBalances = meta.postBalances;
     
