@@ -174,18 +174,6 @@ const updateChart = async () => {
     const avgFirstSell = firstSellCount > 0 ? firstSellSum / firstSellCount : null
     const avgPeakAfter = peakAfterCount > 0 ? peakAfterSum / peakAfterCount : null
     
-    // Debug logging
-    console.log('Chart Data Summary:', {
-      dataPointsCount: dataPoints.length,
-      peakBeforeDataCount: peakBeforeData.length,
-      firstSellDataCount: firstSellData.length,
-      peakAfterDataCount: peakAfterData.length,
-      avgPeakBefore,
-      avgFirstSell,
-      avgPeakAfter,
-      sampleDataPoint: dataPoints[0]
-    })
-    
     // Set loading to false so canvas becomes visible in DOM
     loading.value = false
     
@@ -197,14 +185,10 @@ const updateChart = async () => {
     
     // Check if canvas is available after making it visible
     if (!chartCanvas.value) {
-      console.error('Canvas element not found after making visible')
-      console.log('Loading state:', loading.value)
-      console.log('Error state:', error.value)
       error.value = 'Failed to initialize chart canvas. Please try again.'
       return
     }
     
-    console.log('Canvas found, creating chart...')
     await createChartWithData(peakBeforeData, firstSellData, peakAfterData, avgPeakBefore, avgFirstSell, avgPeakAfter)
   } catch (err: any) {
     console.error('Error loading peak price chart:', err)
@@ -222,7 +206,6 @@ const createChartWithData = async (
   avgPeakAfter: number | null
 ) => {
   if (!chartCanvas.value) {
-    console.error('Canvas element not found in createChartWithData')
     error.value = 'Failed to initialize chart canvas'
     loading.value = false
     return
@@ -230,7 +213,6 @@ const createChartWithData = async (
   
   const ctx = chartCanvas.value.getContext('2d')
   if (!ctx) {
-    console.error('Canvas context not available')
     error.value = 'Failed to get canvas context'
     loading.value = false
     return
@@ -307,15 +289,10 @@ const createChartWithData = async (
   
   // Only create chart if we have at least one dataset with data
   if (peakBeforeData.length === 0 && firstSellData.length === 0 && peakAfterData.length === 0) {
-    console.error('No data points to display in chart')
     error.value = 'No market cap data points available to display'
     loading.value = false
     return
   }
-  
-  console.log('Creating chart with datasets:', datasets.map(d => ({ label: d.label, dataCount: d.data.length })))
-  console.log('Canvas element:', chartCanvas.value)
-  console.log('Canvas dimensions:', chartCanvas.value?.offsetWidth, chartCanvas.value?.offsetHeight)
   
   chart = new Chart(ctx, {
       type: 'scatter',
