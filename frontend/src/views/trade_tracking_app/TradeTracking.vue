@@ -21,16 +21,6 @@
             <div class="px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700 rounded-lg">
               <span class="text-sm">{{ totalTransactions || 0 }} / {{ trackedAddresses || 0 }}</span>
             </div>
-            <!-- Change Password Button -->
-            <button
-              @click="showPasswordModal = true"
-              class="px-4 py-2 text-sm font-semibold rounded transition bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 flex items-center gap-2"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
-              </svg>
-              Change Password
-            </button>
           </div>
         </div>
       </div>
@@ -223,11 +213,41 @@
       v-if="showPasswordModal"
       @close="showPasswordModal = false"
     />
+
+    <!-- Sticky Action Buttons (Bottom Right) - Icon-only with hover expansion -->
+    <div class="fixed bottom-6 right-6 z-40 flex flex-col gap-2">
+      <div class="group relative">
+        <button
+          @click="showPasswordModal = true"
+          class="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center justify-center shadow-lg"
+          title="Change Password"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(changePasswordIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Change Password
+        </span>
+      </div>
+      
+      <div class="group relative">
+        <button
+          @click="handleLogout"
+          class="w-12 h-12 bg-red-600/90 hover:bg-red-600 text-white rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-red-500/50 flex items-center justify-center shadow-lg"
+          title="Logout"
+        >
+          <span class="w-5 h-5 inline-flex items-center justify-center" v-html="processSvg(logoutIconSvg)"></span>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-red-600/90 text-white text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Logout
+        </span>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { 
   fetchTrackingStatus, 
   setAddresses, 
@@ -238,10 +258,16 @@ import {
   removeSkipToken as removeSkipTokenAPI,
   fetchSolPrice
 } from '../../services/tradeTracking'
+import { logout } from '../../services/auth'
 import DashboardTab from './DashboardTab.vue'
 import TransactionsTab from './TransactionsTab.vue'
 import AnalysisTab from './AnalysisTab.vue'
 import PasswordChangeModal from './PasswordChangeModal.vue'
+// Import SVG files as raw strings
+import changePasswordIconSvg from '../../icons/change-password.svg?raw'
+import logoutIconSvg from '../../icons/logout.svg?raw'
+
+const router = useRouter()
 
 const addresses = ref<string[]>([])
 const newAddress = ref('')
@@ -380,4 +406,16 @@ onUnmounted(() => {
   if (statusInterval) clearInterval(statusInterval)
   if (solPriceInterval) clearInterval(solPriceInterval)
 })
+
+const processSvg = (svg: string, sizeClass: string = 'w-4 h-4') => {
+  return svg.replace(
+    '<svg',
+    `<svg class="${sizeClass}" style="display: block;"`
+  )
+}
+
+const handleLogout = async () => {
+  await logout()
+  router.push('/login')
+}
 </script>
