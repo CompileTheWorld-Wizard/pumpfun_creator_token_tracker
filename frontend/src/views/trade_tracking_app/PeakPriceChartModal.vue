@@ -2,7 +2,7 @@
   <div v-if="show" class="modal-overlay" @click.self="close">
     <div class="modal" style="max-width: 900px; max-height: 90vh;">
       <div class="modal-header">
-        <h2>📈 Token Peak Price Chart</h2>
+        <h2>📈 Token Peak Market Cap Chart</h2>
         <button class="modal-close" @click="close">×</button>
       </div>
       <div class="modal-body" style="overflow-y: auto;">

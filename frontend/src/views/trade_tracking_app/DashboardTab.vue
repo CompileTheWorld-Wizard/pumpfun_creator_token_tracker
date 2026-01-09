@@ -662,8 +662,8 @@ const columnDefinitions = ref([
   { key: 'walletBuyPercentOfRemainingSupply', label: 'Wallet buy % of the remaining supply', order: 16, group: 'Supply Percentages' },
   
   // Price & Market Cap Group
-  { key: 'tokenPeakPriceBeforeFirstSell', label: 'Token Peak Price Before 1st Sell', order: 17, group: 'Price & Market Cap' },
-  { key: 'tokenPeakPrice10sAfterFirstSell', label: 'Token Peak Price 10s After 1st Sell', order: 18, group: 'Price & Market Cap' },
+  { key: 'tokenPeakMarketCapBeforeFirstSell', label: 'Token Peak Market Cap Before 1st Sell', order: 17, group: 'Price & Market Cap' },
+  { key: 'tokenPeakMarketCap10sAfterFirstSell', label: 'Token Peak Market Cap 10s After 1st Sell', order: 18, group: 'Price & Market Cap' },
   { key: 'walletBuyMarketCap', label: 'Wallet Buy Market Cap', order: 23, group: 'Price & Market Cap' },
   
   // Buy Counts Group
@@ -842,6 +842,12 @@ const formatCellValue = (key: string, item: any): string => {
   
   // Handle numbers
   if (typeof value === 'number') {
+    // For very small numbers (like prices), use more decimal places
+    if (Math.abs(value) > 0 && Math.abs(value) < 0.01) {
+      // Use up to 9 decimal places for small numbers, but remove trailing zeros
+      const formatted = value.toFixed(9).replace(/\.?0+$/, '')
+      return formatted
+    }
     // For large numbers, use locale string
     if (Math.abs(value) >= 1000) {
       return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
