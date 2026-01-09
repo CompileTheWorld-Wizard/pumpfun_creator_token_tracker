@@ -2,6 +2,8 @@
  * Token Service
  * Handles fetching token creator and first buy amount using Solscan API
  */
+import dotenv from 'dotenv';
+dotenv.config();
 
 interface SolscanActivity {
   block_id: number;
