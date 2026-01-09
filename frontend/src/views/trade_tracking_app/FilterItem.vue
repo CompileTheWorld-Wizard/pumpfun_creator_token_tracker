@@ -1,0 +1,425 @@
+<template>
+  <div style="margin-bottom: 20px; padding: 15px; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px;">
+    <!-- Header -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+      <label style="font-weight: 600; color: #cbd5e1; font-size: 0.9rem;">
+        {{ filterLabel }}
+      </label>
+      <button
+        @click="$emit('remove')"
+        style="padding: 4px 12px; background: #ef4444; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; transition: all 0.2s;"
+        @mouseenter="(e) => { e.currentTarget.style.background = '#dc2626' }"
+        @mouseleave="(e) => { e.currentTarget.style.background = '#ef4444' }"
+      >
+        Remove
+      </button>
+    </div>
+
+    <!-- Sell Number Selector (for sell filters) -->
+    <div v-if="isSellFilter" style="margin-bottom: 12px; display: flex; align-items: center; gap: 10px;">
+      <label style="color: #94a3b8; font-size: 0.85rem;">Sell Number:</label>
+      <select
+        :value="filter.sellNumber || 1"
+        @change="updateSellNumber"
+        style="padding: 6px 10px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; cursor: pointer;"
+      >
+        <option v-for="i in maxSellOptions" :key="i" :value="i">
+          {{ i === 1 ? '1st sell' : i === 2 ? '2nd sell' : i === 3 ? '3rd sell' : `${i}th sell` }}
+        </option>
+      </select>
+    </div>
+
+    <!-- Timestamp Filter -->
+    <div v-if="filterType === 'timestamp'" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      <label style="color: #94a3b8; font-size: 0.85rem; white-space: nowrap;">From:</label>
+      <input
+        :value="minDateTimeLocal"
+        @change="updateTimestampMin"
+        type="datetime-local"
+        style="padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; min-width: 180px;"
+      >
+      <label style="color: #94a3b8; font-size: 0.85rem; white-space: nowrap; margin-left: 10px;">To:</label>
+      <input
+        :value="maxDateTimeLocal"
+        @change="updateTimestampMax"
+        type="datetime-local"
+        style="padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem; min-width: 180px;"
+      >
+    </div>
+
+    <!-- Numeric Filter with Sliders -->
+    <div v-else style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+      <!-- Inputs -->
+      <div style="flex: 1; min-width: 150px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input
+            :id="`filter-${filter.id}-min`"
+            :value="filter.min"
+            @input="updateMin"
+            type="number"
+            :min="filterType === 'percent' || filterType === 'sol' ? undefined : config.min"
+            :step="config.step"
+            :placeholder="filterType === 'percent' || filterType === 'sol' ? 'Min' : config.min.toString()"
+            style="width: 100px; padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem;"
+          >
+          <span style="color: #94a3b8;">to</span>
+          <input
+            :id="`filter-${filter.id}-max`"
+            :value="filter.max"
+            @input="updateMax"
+            type="number"
+            :min="filterType === 'sol' || filterType === 'token' || filterType === 'marketcap' ? config.min : undefined"
+            :step="config.step"
+            placeholder="Max"
+            style="width: 100px; padding: 8px; border: 1px solid #334155; background: #0f1419; color: #e0e7ff; border-radius: 6px; font-size: 0.85rem;"
+          >
+        </div>
+      </div>
+
+      <!-- Slider -->
+      <div style="flex: 4; min-width: 300px; position: relative; display: flex; justify-content: space-between; gap: 5px; align-items: center;">
+        <span :id="`filter-${filter.id}-min-label`" style="color: #94a3b8; font-size: 0.85rem; text-align: right; min-width: 50px; flex-shrink: 0;">
+          {{ minLabelText }}
+        </span>
+        
+        <div class="dual-range-container" style="position: relative; height: 40px; padding: 15px 0; width: 100%;">
+          <div class="dual-range-track" style="position: absolute; width: 100%; height: 6px; background: #334155; border-radius: 3px; top: 15px; z-index: 1;"></div>
+          <div
+            :id="`filter-${filter.id}-progress`"
+            class="dual-range-progress"
+            :style="progressStyle"
+          ></div>
+          <input
+            :id="`filter-${filter.id}-slider-min`"
+            :value="minSliderValue"
+            @input="updateMinFromSlider"
+            type="range"
+            :min="config.min"
+            :max="config.max"
+            :step="config.step"
+            class="dual-range-input"
+            style="position: absolute; width: 100%; top: 10px; z-index: 2;"
+          >
+          <input
+            :id="`filter-${filter.id}-slider-max`"
+            :value="maxSliderValue"
+            @input="updateMaxFromSlider"
+            type="range"
+            :min="config.min"
+            :max="config.max"
+            :step="config.step"
+            class="dual-range-input"
+            style="position: absolute; width: 100%; top: 10px; z-index: 3;"
+          >
+        </div>
+        
+        <span :id="`filter-${filter.id}-max-label`" style="color: #94a3b8; font-size: 0.85rem; text-align: left; min-width: 50px; flex-shrink: 0;">
+          {{ maxLabelText }}
+        </span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+
+const props = defineProps<{
+  filter: any
+  dataPoint: any
+  maxSells?: number
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:filter', filter: any): void
+  (e: 'remove'): void
+}>()
+
+const config = computed(() => getFilterConfig(props.filter.type))
+const filterType = computed(() => props.filter.type)
+const isSellFilter = computed(() => props.dataPoint?.isArray && props.dataPoint?.field === 'sells')
+const maxSellOptions = computed(() => Math.max(props.maxSells || 10, 10))
+
+const filterLabel = computed(() => {
+  let label = props.filter.label
+  if (isSellFilter.value && props.filter.sellNumber) {
+    const sellNumText = props.filter.sellNumber === 1 ? '1st' : props.filter.sellNumber === 2 ? '2nd' : props.filter.sellNumber === 3 ? '3rd' : `${props.filter.sellNumber}th`
+    label = `${props.filter.label} (${sellNumText} sell)`
+  }
+  return label
+})
+
+const minSliderValue = computed(() => {
+  const val = props.filter.min
+  if (val === null || val === undefined) return config.value.min
+  return Math.max(config.value.min, Math.min(config.value.max, val))
+})
+
+const maxSliderValue = computed(() => {
+  const val = props.filter.max
+  if (val === null || val === undefined) return config.value.max
+  return Math.max(config.value.min, Math.min(config.value.max, val))
+})
+
+const progressStyle = computed(() => {
+  const minVal = minSliderValue.value
+  const maxVal = maxSliderValue.value
+  const minPercent = ((minVal - config.value.min) / (config.value.max - config.value.min)) * 100
+  const maxPercent = ((maxVal - config.value.min) / (config.value.max - config.value.min)) * 100
+  
+  return {
+    position: 'absolute',
+    height: '6px',
+    background: '#3b82f6',
+    borderRadius: '3px',
+    top: '15px',
+    zIndex: '1',
+    left: `${minPercent}%`,
+    width: `${maxPercent - minPercent}%`
+  }
+})
+
+const minLabelText = computed(() => {
+  const actualMin = props.filter.min !== null && props.filter.min !== undefined ? props.filter.min : config.value.min
+  
+  if (filterType.value === 'sol') {
+    if (actualMin === null || actualMin === undefined) return '-20'
+    if (actualMin < -20) return '-20<'
+    return actualMin.toFixed(2)
+  } else if (filterType.value === 'token') {
+    return actualMin >= 0 ? actualMin.toLocaleString() : '0'
+  } else if (filterType.value === 'marketcap') {
+    return actualMin >= 0 ? actualMin.toLocaleString() : '0'
+  } else if (filterType.value === 'percent') {
+    if (actualMin === null || actualMin === undefined) return '-100%'
+    if (actualMin < -100) return `-(${Math.abs(actualMin).toFixed(0)}+)%`
+    return `${actualMin.toFixed(2)}%`
+  }
+  return String(actualMin)
+})
+
+const maxLabelText = computed(() => {
+  const actualMax = props.filter.max !== null && props.filter.max !== undefined ? props.filter.max : config.value.max
+  
+  if (filterType.value === 'sol') {
+    if (actualMax > 20) return '20+'
+    if (actualMax === null || actualMax === undefined) return '20+'
+    return actualMax.toFixed(2)
+  } else if (filterType.value === 'token') {
+    if (actualMax > 1000000000) return '10^9+'
+    if (actualMax === null || actualMax === undefined) return '10^9+'
+    return actualMax.toLocaleString()
+  } else if (filterType.value === 'marketcap') {
+    if (actualMax > 10000) return '10,000+'
+    if (actualMax === null || actualMax === undefined) return '10,000+'
+    return actualMax.toLocaleString()
+  } else if (filterType.value === 'percent') {
+    if (actualMax === null || actualMax === undefined) return '100%'
+    if (actualMax > 100) return '+(100+)%'
+    return `${actualMax.toFixed(2)}%`
+  }
+  return String(actualMax)
+})
+
+const minDateTimeLocal = computed(() => {
+  if (!props.filter.min) return ''
+  try {
+    const date = new Date(props.filter.min)
+    if (isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  } catch {
+    return ''
+  }
+})
+
+const maxDateTimeLocal = computed(() => {
+  if (!props.filter.max) return ''
+  try {
+    const date = new Date(props.filter.max)
+    if (isNaN(date.getTime())) return ''
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day}T${hours}:${minutes}`
+  } catch {
+    return ''
+  }
+})
+
+function getFilterConfig(type: string) {
+  switch(type) {
+    case 'sol':
+      return { min: -20, max: 20, defaultMin: -20, defaultMax: 20, step: 0.01, minLabel: '-20', maxLabel: '20+' }
+    case 'token':
+      return { min: 0, max: 1000000000, defaultMin: 0, defaultMax: 1000000000, step: 1, maxLabel: '10^9+' }
+    case 'percent':
+      return { min: -100, max: 100, defaultMin: -100, defaultMax: 100, step: 0.01, minLabel: '-100%', maxLabel: '100%' }
+    case 'marketcap':
+      return { min: 0, max: 10000, defaultMin: 0, defaultMax: 10000, step: 0.01, minLabel: '0', maxLabel: '10,000+' }
+    default:
+      return { min: 0, max: 100, defaultMin: 0, defaultMax: 100, step: 0.01 }
+  }
+}
+
+function updateMin(e: Event) {
+  const input = e.target as HTMLInputElement
+  const val = input.value === '' ? null : parseFloat(input.value)
+  
+  if (isNaN(val as number) && val !== null) return
+  
+  const updatedFilter = { ...props.filter, min: val }
+  if (val !== null && val > (props.filter.max ?? config.value.max)) {
+    updatedFilter.max = val
+  }
+  emit('update:filter', updatedFilter)
+}
+
+function updateMax(e: Event) {
+  const input = e.target as HTMLInputElement
+  const val = input.value === '' ? null : parseFloat(input.value)
+  
+  if (isNaN(val as number) && val !== null) return
+  
+  const updatedFilter = { ...props.filter, max: val }
+  if (val !== null && val < (props.filter.min ?? config.value.min)) {
+    updatedFilter.min = val
+  }
+  emit('update:filter', updatedFilter)
+}
+
+function updateMinFromSlider(e: Event) {
+  const slider = e.target as HTMLInputElement
+  const val = parseFloat(slider.value)
+  
+  const updatedFilter = { ...props.filter, min: val }
+  if (val > (props.filter.max ?? config.value.max)) {
+    updatedFilter.max = val
+  }
+  emit('update:filter', updatedFilter)
+}
+
+function updateMaxFromSlider(e: Event) {
+  const slider = e.target as HTMLInputElement
+  const val = parseFloat(slider.value)
+  
+  const updatedFilter = { ...props.filter, max: val }
+  if (val < (props.filter.min ?? config.value.min)) {
+    updatedFilter.min = val
+  }
+  emit('update:filter', updatedFilter)
+}
+
+function updateSellNumber(e: Event) {
+  const select = e.target as HTMLSelectElement
+  const newSellNumber = parseInt(select.value)
+  emit('update:filter', { ...props.filter, sellNumber: newSellNumber })
+}
+
+function updateTimestampMin(e: Event) {
+  const input = e.target as HTMLInputElement
+  const updatedFilter = { ...props.filter }
+  if (input.value) {
+    const date = new Date(input.value)
+    updatedFilter.min = date.toISOString()
+  } else {
+    updatedFilter.min = null
+  }
+  emit('update:filter', updatedFilter)
+}
+
+function updateTimestampMax(e: Event) {
+  const input = e.target as HTMLInputElement
+  const updatedFilter = { ...props.filter }
+  if (input.value) {
+    const date = new Date(input.value)
+    updatedFilter.max = date.toISOString()
+  } else {
+    updatedFilter.max = null
+  }
+  emit('update:filter', updatedFilter)
+}
+
+// Setup slider z-index handling
+onMounted(() => {
+  if (filterType.value === 'timestamp') return
+  
+  nextTick(() => {
+    const minSlider = document.getElementById(`filter-${props.filter.id}-slider-min`) as HTMLInputElement
+    const maxSlider = document.getElementById(`filter-${props.filter.id}-slider-max`) as HTMLInputElement
+    
+    if (!minSlider || !maxSlider) return
+    
+    let activeSlider: string | null = null
+    
+    minSlider.addEventListener('mousedown', () => {
+      minSlider.style.zIndex = '4'
+      maxSlider.style.zIndex = '3'
+      activeSlider = 'min'
+    })
+    
+    maxSlider.addEventListener('mousedown', () => {
+      maxSlider.style.zIndex = '4'
+      minSlider.style.zIndex = '2'
+      activeSlider = 'max'
+    })
+    
+    document.addEventListener('mouseup', () => {
+      if (activeSlider === 'min') {
+        minSlider.style.zIndex = '3'
+        maxSlider.style.zIndex = '3'
+      } else if (activeSlider === 'max') {
+        minSlider.style.zIndex = '2'
+        maxSlider.style.zIndex = '3'
+      }
+      activeSlider = null
+    })
+  })
+})
+</script>
+
+<style scoped>
+.dual-range-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+  height: 20px;
+}
+
+.dual-range-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #1a1f2e;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dual-range-input::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #3b82f6;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid #1a1f2e;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.dual-range-input:focus {
+  outline: none;
+}
+
+.dual-range-input:focus::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
+}
+</style>

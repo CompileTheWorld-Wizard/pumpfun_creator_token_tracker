@@ -256,25 +256,15 @@
 
       <!-- Dynamic Filters Container -->
       <div v-if="activeFilters.length > 0" style="margin-bottom: 15px;">
-        <div
+        <FilterItem
           v-for="(filter, index) in activeFilters"
-          :key="index"
-          style="margin-bottom: 10px; padding: 12px; background: #1a1f2e; border: 1px solid #334155; border-radius: 6px;"
-        >
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <span style="color: #e0e7ff; font-weight: 600; font-size: 0.9rem;">{{ getFilterLabel(filter.key) }}</span>
-            <button
-              @click="removeFilter(index)"
-              style="background: transparent; border: none; color: #ef4444; cursor: pointer; font-size: 1.2rem; padding: 0 8px;"
-              title="Remove Filter"
-            >
-              ×
-            </button>
-          </div>
-          <div style="color: #94a3b8; font-size: 0.85rem;">
-            Min: {{ formatFilterValue(filter.min) }} - Max: {{ formatFilterValue(filter.max) }}
-          </div>
-        </div>
+          :key="filter.id || index"
+          :filter="filter"
+          :data-point="getDataPoint(filter.key)"
+          :max-sells="maxSells"
+          @update:filter="updateFilter(index, $event)"
+          @remove="removeFilter(index)"
+        />
       </div>
       <div v-else style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 15px;">
         No filters active. Click "Add Filter" to create one.
@@ -502,6 +492,7 @@ import {
   calculateWhatIf as calculateWhatIfAPI,
   fetchWalletActivity
 } from '../../services/tradeTracking'
+import FilterItem from './FilterItem.vue'
 
 const props = defineProps<{
   walletAddress?: string
@@ -520,6 +511,7 @@ const loading = ref(false)
 const walletSolBalance = ref<number | null>(null)
 const sellStatistics = ref<any[]>([])
 const totalSellsPNL = ref<number>(0)
+const maxSells = ref<number>(0)
 
 // Pagination
 const currentPage = ref(1)
@@ -552,17 +544,58 @@ const whatIfParams = ref({
 // Column visibility
 const columnVisibility = ref<Record<string, boolean>>({})
 const columnDefinitions = ref([
-  { key: 'tokenAddress', label: 'Token Address', group: 'Token Info' },
-  { key: 'pnlSOL', label: 'PNL SOL', group: 'PNL' },
-  { key: 'pnlPercent', label: 'PNL %', group: 'PNL' },
-  { key: 'walletBuyAmountSOL', label: 'Buy Amount SOL', group: 'Wallet Buy' },
-  { key: 'sells', label: 'Sells', group: 'Sells' }
-  // Add more columns as needed
+  // PNL Group
+  { key: 'pnlSOL', label: 'PNL per token in SOL', order: 0, group: 'PNL' },
+  { key: 'pnlPercent', label: '% PNL per token', order: 1, group: 'PNL' },
+  
+  // Token Info Group
+  { key: 'tokenName', label: 'Token Name', order: 2, group: 'Token Info' },
+  { key: 'tokenSymbol', label: 'Token Symbol', order: 3, group: 'Token Info' },
+  { key: 'tokenAddress', label: 'Token Address', order: 4, group: 'Token Info' },
+  { key: 'creatorAddress', label: 'Creator Address', order: 5, group: 'Token Info' },
+  { key: 'creatorTokenCount', label: 'Creator Token Count', order: 6, group: 'Token Info' },
+  { key: 'numberOfSocials', label: 'Number of Socials', order: 7, group: 'Token Info' },
+  
+  // Dev Buy Group
+  { key: 'devBuyAmountSOL', label: 'Dev Buy Amount in SOL', order: 8, group: 'Dev Buy' },
+  { key: 'devBuyAmountTokens', label: 'Dev Buy Amount in Tokens', order: 11, group: 'Dev Buy' },
+  
+  // Wallet Buy Group
+  { key: 'walletBuyAmountSOL', label: 'Wallet Buy Amount in SOL', order: 9, group: 'Wallet Buy' },
+  { key: 'walletBuyAmountTokens', label: 'Wallet Buy Amount in Tokens', order: 12, group: 'Wallet Buy' },
+  { key: 'walletBuySOLPercentOfDev', label: 'Wallet buy SOL % of dev', order: 10, group: 'Wallet Buy' },
+  { key: 'walletBuyTokensPercentOfDev', label: 'Wallet buy Tokens % of dev', order: 13, group: 'Wallet Buy' },
+  
+  // Supply Percentages Group
+  { key: 'devBuyTokensPercentOfTotalSupply', label: 'Dev buy Tokens % of total supply', order: 14, group: 'Supply Percentages' },
+  { key: 'walletBuyPercentOfTotalSupply', label: 'Wallet buy % of total supply', order: 15, group: 'Supply Percentages' },
+  { key: 'walletBuyPercentOfRemainingSupply', label: 'Wallet buy % of the remaining supply', order: 16, group: 'Supply Percentages' },
+  
+  // Price & Market Cap Group
+  { key: 'tokenPeakPriceBeforeFirstSell', label: 'Token Peak Price Before 1st Sell', order: 17, group: 'Price & Market Cap' },
+  { key: 'tokenPeakPrice10sAfterFirstSell', label: 'Token Peak Price 10s After 1st Sell', order: 18, group: 'Price & Market Cap' },
+  { key: 'walletBuyMarketCap', label: 'Wallet Buy Market Cap', order: 23, group: 'Price & Market Cap' },
+  
+  // Buy Counts Group
+  { key: 'buysBeforeFirstSell', label: 'Buys Before First Sell', order: 26, group: 'Buy Counts' },
+  { key: 'buysAfterFirstSell', label: 'Buys After First Sell (10s)', order: 27, group: 'Buy Counts' },
+  
+  // Position & Timing Group
+  { key: 'walletBuyPositionAfterDev', label: 'Wallet Buy Position After Dev', order: 19, group: 'Position & Timing' },
+  { key: 'walletBuyBlockNumber', label: 'Wallet Buy Block #', order: 20, group: 'Position & Timing' },
+  { key: 'walletBuyBlockNumberAfterDev', label: 'Wallet Buy Block # After Dev', order: 21, group: 'Position & Timing' },
+  { key: 'walletBuyTimestamp', label: 'Wallet Buy Timestamp', order: 22, group: 'Position & Timing' },
+  
+  // Transaction Group
+  { key: 'walletGasAndFeesAmount', label: 'Wallet Gas & Fees Amount', order: 24, group: 'Transaction' },
+  { key: 'transactionSignature', label: 'Transaction Signature', order: 25, group: 'Transaction' }
 ])
 
 // Computed
 const visibleColumns = computed(() => {
-  return columnDefinitions.value.filter(col => columnVisibility.value[col.key] !== false)
+  return columnDefinitions.value
+    .filter(col => columnVisibility.value[col.key] !== false)
+    .sort((a, b) => (a.order || 0) - (b.order || 0))
 })
 
 const sortedData = computed(() => {
@@ -585,7 +618,7 @@ const sortedData = computed(() => {
 const filteredDataPoints = computed(() => {
   const activeKeys = activeFilters.value.map(f => f.key)
   const available = DATA_POINTS.filter(dp => {
-    if (Array.isArray(dp) && dp.field === 'sells') return true
+    if (dp.isArray && dp.field === 'sells') return true
     return !activeKeys.includes(dp.key)
   })
   
@@ -600,11 +633,41 @@ const filteredDataPoints = computed(() => {
 
 // Data point definitions
 const DATA_POINTS = [
+  // SOL Amount filters
   { key: 'pnlSOL', label: 'PNL per token in SOL', type: 'sol', field: 'pnlSOL' },
   { key: 'devBuyAmountSOL', label: 'Dev Buy Amount in SOL', type: 'sol', field: 'devBuyAmountSOL' },
   { key: 'walletBuyAmountSOL', label: 'Wallet Buy Amount in SOL', type: 'sol', field: 'walletBuyAmountSOL' },
+  { key: 'walletGasAndFeesAmount', label: 'Wallet Gas & Fees Amount', type: 'sol', field: 'walletGasAndFeesAmount' },
+  
+  // Market Cap filters
+  { key: 'walletBuyMarketCap', label: 'Wallet Buy Market Cap', type: 'marketcap', field: 'walletBuyMarketCap' },
+  { key: 'tokenPeakMarketCapBeforeFirstSell', label: 'Token Peak Market Cap Before 1st Sell', type: 'marketcap', field: 'tokenPeakMarketCapBeforeFirstSell' },
+  { key: 'tokenPeakMarketCap10sAfterFirstSell', label: 'Token Peak Market Cap 10s After 1st Sell', type: 'marketcap', field: 'tokenPeakMarketCap10sAfterFirstSell' },
+  { key: 'walletBuyBlockNumberAfterDev', label: 'Wallet Block # after dev', type: 'marketcap', field: 'walletBuyBlockNumberAfterDev' },
+  { key: 'walletBuyPositionAfterDev', label: 'Wallet Position after dev', type: 'marketcap', field: 'walletBuyPositionAfterDev' },
+  
+  // Token Amount filters
+  { key: 'devBuyAmountTokens', label: 'Dev Buy Amount in Tokens', type: 'token', field: 'devBuyAmountTokens' },
+  { key: 'walletBuyAmountTokens', label: 'Wallet Buy Amount in Tokens', type: 'token', field: 'walletBuyAmountTokens' },
+  
+  // Percentage filters
   { key: 'pnlPercent', label: '% PNL per token', type: 'percent', field: 'pnlPercent' },
-  // Add more data points as needed
+  { key: 'walletBuySOLPercentOfDev', label: 'Wallet buy SOL % of dev', type: 'percent', field: 'walletBuySOLPercentOfDev' },
+  { key: 'walletBuyTokensPercentOfDev', label: 'Wallet buy Tokens % of dev', type: 'percent', field: 'walletBuyTokensPercentOfDev' },
+  { key: 'devBuyTokensPercentOfTotalSupply', label: 'Dev buy Tokens % of total supply', type: 'percent', field: 'devBuyTokensPercentOfTotalSupply' },
+  { key: 'walletBuyPercentOfTotalSupply', label: 'Wallet buy % of total supply', type: 'percent', field: 'walletBuyPercentOfTotalSupply' },
+  { key: 'walletBuyPercentOfRemainingSupply', label: 'Wallet buy % of the remaining supply', type: 'percent', field: 'walletBuyPercentOfRemainingSupply' },
+  
+  // Sell-related filters
+  { key: 'sellAmountSOL', label: 'Wallet Sell Amount in SOL', type: 'sol', field: 'sells', isArray: true, arrayField: 'sellAmountSOL' },
+  { key: 'sellAmountTokens', label: 'Wallet Sell Amount in Tokens', type: 'token', field: 'sells', isArray: true, arrayField: 'sellAmountTokens' },
+  { key: 'sellMarketCap', label: 'Wallet Sell Market Cap', type: 'marketcap', field: 'sells', isArray: true, arrayField: 'marketCap' },
+  { key: 'sellPercentOfBuy', label: 'Sell % of Buy', type: 'percent', field: 'sells', isArray: true, arrayField: 'sellPercentOfBuy' },
+  { key: 'firstSellPNL', label: 'Sell PNL', type: 'percent', field: 'sells', isArray: true, arrayField: 'firstSellPNL' },
+  { key: 'sellTimestamp', label: 'Wallet Sell Timestamp', type: 'timestamp', field: 'sells', isArray: true, arrayField: 'timestamp' },
+  
+  // Timestamp filters
+  { key: 'walletBuyTimestamp', label: 'Wallet Buy Timestamp', type: 'timestamp', field: 'walletBuyTimestamp' }
 ]
 
 // Methods
@@ -629,24 +692,64 @@ const formatFilterValue = (value: any): string => {
 const formatCellValue = (key: string, item: any): string => {
   const value = item[key]
   if (value === null || value === undefined) return '-'
-  if (key === 'tokenAddress') {
-    return `${value.substring(0, 8)}...${value.substring(value.length - 6)}`
+  
+  // Handle address truncation
+  if (key.includes('Address') || key === 'transactionSignature') {
+    if (typeof value === 'string' && value.length > 14) {
+      return `${value.substring(0, 8)}...${value.substring(value.length - 6)}`
+    }
+    return String(value)
   }
+  
+  // Handle sells array
   if (key === 'sells') {
     return Array.isArray(value) ? value.length.toString() : '0'
   }
+  
+  // Handle timestamps
+  if (key.includes('Timestamp') || key.includes('Time')) {
+    try {
+      return new Date(value).toLocaleString()
+    } catch {
+      return String(value)
+    }
+  }
+  
+  // Handle percentages
+  if (key.includes('Percent') || key.includes('%')) {
+    if (typeof value === 'number') {
+      return `${value.toFixed(2)}%`
+    }
+    return String(value)
+  }
+  
+  // Handle numbers
   if (typeof value === 'number') {
+    // For large numbers, use locale string
+    if (Math.abs(value) >= 1000) {
+      return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    }
     return value.toFixed(2)
   }
+  
   return String(value)
 }
 
 const getCellStyle = (key: string, item: any): Record<string, string> => {
   const style: Record<string, string> = {}
+  
+  // Color code PNL values
   if (key === 'pnlSOL' || key === 'pnlPercent') {
     const value = item[key] || 0
     style.color = value >= 0 ? '#10b981' : '#ef4444'
   }
+  
+  // Monospace for addresses and signatures
+  if (key.includes('Address') || key === 'transactionSignature' || key.includes('Block')) {
+    style.fontFamily = "'Courier New', monospace"
+    style.fontSize = '0.7rem'
+  }
+  
   return style
 }
 
@@ -694,6 +797,11 @@ const loadDashboardData = async () => {
       walletSolBalance.value = statsResult.statistics?.solBalance || null
       sellStatistics.value = statsResult.statistics?.sellStatistics || []
       totalSellsPNL.value = statsResult.statistics?.totalSellsPNL || 0
+      
+      // Calculate max sells from dashboard data
+      if (dataResult.success && dataResult.data) {
+        maxSells.value = Math.max(...(dataResult.data.map((item: any) => (item.sells?.length || 0))), 0)
+      }
     }
     
     if (dataResult.success) {
@@ -741,19 +849,73 @@ const sortByColumn = (column: string) => {
   }
 }
 
+const getDataPoint = (key: string) => {
+  return DATA_POINTS.find(dp => dp.key === key)
+}
+
 const addFilterFromDataPoint = (dataPoint: any) => {
-  const filter = {
+  const config = getFilterConfig(dataPoint.type)
+  
+  const filter: any = {
+    id: Date.now() + Math.random(),
     key: dataPoint.key,
+    label: dataPoint.label,
     type: dataPoint.type,
-    min: null,
-    max: null
+    min: config.defaultMin,
+    max: config.defaultMax
   }
+  
+  // Add sellNumber for sell filters
+  if (dataPoint.isArray && dataPoint.field === 'sells') {
+    const existingFiltersForThisKey = activeFilters.value.filter(f => f.key === dataPoint.key)
+    const existingSellNumbers = existingFiltersForThisKey
+      .filter(f => f.sellNumber !== null && f.sellNumber !== undefined)
+      .map(f => f.sellNumber)
+      .sort((a, b) => a - b)
+    
+    let defaultSellNumber = 1
+    for (let i = 1; i <= 20; i++) {
+      if (!existingSellNumbers.includes(i)) {
+        defaultSellNumber = i
+        break
+      }
+    }
+    
+    filter.sellNumber = defaultSellNumber
+  } else {
+    // For non-sell filters, prevent duplicates
+    if (activeFilters.value.find(f => f.key === dataPoint.key)) {
+      return
+    }
+  }
+  
   activeFilters.value.push(filter)
   showAddFilterDialog.value = false
 }
 
+const updateFilter = (index: number, updatedFilter: any) => {
+  activeFilters.value[index] = updatedFilter
+}
+
 const removeFilter = (index: number) => {
   activeFilters.value.splice(index, 1)
+}
+
+function getFilterConfig(type: string) {
+  switch(type) {
+    case 'sol':
+      return { min: -20, max: 20, defaultMin: -20, defaultMax: 20, step: 0.01, minLabel: '-20', maxLabel: '20+' }
+    case 'token':
+      return { min: 0, max: 1000000000, defaultMin: 0, defaultMax: 1000000000, step: 1, maxLabel: '10^9+' }
+    case 'percent':
+      return { min: -100, max: 100, defaultMin: -100, defaultMax: 100, step: 0.01, minLabel: '-100%', maxLabel: '100%' }
+    case 'marketcap':
+      return { min: 0, max: 10000, defaultMin: 0, defaultMax: 10000, step: 0.01, minLabel: '0', maxLabel: '10,000+' }
+    case 'timestamp':
+      return { min: null, max: null, defaultMin: null, defaultMax: null, step: null }
+    default:
+      return { min: 0, max: 100, defaultMin: 0, defaultMax: 100, step: 0.01 }
+  }
 }
 
 const applyFilters = async () => {
