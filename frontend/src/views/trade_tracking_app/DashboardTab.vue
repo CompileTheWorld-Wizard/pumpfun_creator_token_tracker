@@ -329,7 +329,7 @@
       </div>
 
       <!-- Dynamic Filters Container -->
-      <div v-if="activeFilters.length > 0" style="margin-bottom: 8px;">
+      <div v-if="activeFilters.length > 0" class="filters-grid" style="margin-bottom: 8px;">
         <FilterItem
           v-for="(filter, index) in activeFilters"
           :key="filter.id || index"
@@ -1323,6 +1323,30 @@ onMounted(async () => {
   border-radius: 8px;
   border: 1px solid #334155;
   background: #1a1f2e;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 1400px) {
+  .filters-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 1000px) {
+  .filters-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .filters-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .btn-refresh:hover {
