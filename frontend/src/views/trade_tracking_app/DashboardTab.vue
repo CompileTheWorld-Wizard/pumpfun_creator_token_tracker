@@ -453,12 +453,12 @@
     <!-- Modals -->
     <!-- Add Filter Modal -->
     <div v-if="showAddFilterDialog" class="modal-overlay" @click.self="showAddFilterDialog = false">
-      <div class="modal" style="max-width: 600px; max-height: 80vh;">
-        <div class="modal-header">
+      <div class="modal" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="flex-shrink: 0;">
           <h2>➕ Add Filter</h2>
           <button class="modal-close" @click="showAddFilterDialog = false">×</button>
         </div>
-        <div class="modal-body" style="overflow-y: auto;">
+        <div class="modal-body" style="overflow-y: auto; flex: 1; min-height: 0; max-height: calc(80vh - 60px);">
           <input
             v-model="filterSearchQuery"
             type="text"
@@ -484,13 +484,13 @@
 
     <!-- Column Visibility Modal -->
     <div v-if="showColumnVisibilityDialog" class="modal-overlay" @click.self="showColumnVisibilityDialog = false">
-      <div class="modal" style="max-width: 600px; max-height: 80vh;">
-        <div class="modal-header">
+      <div class="modal" style="max-width: 600px; max-height: 80vh; display: flex; flex-direction: column;">
+        <div class="modal-header" style="flex-shrink: 0;">
           <h2>👁️ Column Visibility</h2>
           <button class="modal-close" @click="showColumnVisibilityDialog = false">×</button>
         </div>
-        <div class="modal-body" style="overflow-y: auto;">
-          <div style="margin-bottom: 10px; display: flex; gap: 6px;">
+        <div class="modal-body" style="overflow-y: auto; flex: 1; min-height: 0; max-height: calc(80vh - 60px);">
+          <div style="margin-bottom: 10px; display: flex; gap: 6px; flex-shrink: 0;">
             <button @click="selectAllColumns" style="padding: 4px 10px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Select All</button>
             <button @click="deselectAllColumns" style="padding: 4px 10px; background: #334155; color: #e0e7ff; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem;">Deselect All</button>
           </div>
