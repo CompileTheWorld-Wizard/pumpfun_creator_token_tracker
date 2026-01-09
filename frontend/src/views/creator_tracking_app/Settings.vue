@@ -1,27 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-950">
-    <!-- Header -->
-    <header class="bg-gray-900/80 backdrop-blur-xl border-b border-gray-800 sticky top-0 z-10">
-      <div class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-2">
-        <div class="flex justify-between items-center">
-          <div>
-            <h1 class="text-lg font-bold bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-              Scoring Settings
-            </h1>
-            <p class="text-gray-400 text-xs mt-0.5">Manage scoring system configuration</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              @click="$router.push('/creator-wallets')"
-              class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold rounded transition"
-            >
-              Back to Board
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
-
     <!-- Main Content -->
     <main class="w-[90%] mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <!-- Setting Management -->
@@ -286,6 +264,24 @@
         <p class="text-gray-400 text-xs mb-2">No setting selected. Please select a setting or create a new one.</p>
       </div>
     </main>
+
+    <!-- Back to Board Button (Bottom Right) -->
+    <div class="fixed bottom-6 right-6 z-40">
+      <div class="group relative">
+        <button
+          @click="$router.push('/creator-wallets')"
+          class="w-12 h-12 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-500/50 flex items-center justify-center shadow-lg"
+          title="Back to Board"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+          </svg>
+        </button>
+        <span class="absolute right-full mr-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-800 text-gray-200 text-xs font-semibold px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none shadow-lg">
+          Back to Board
+        </span>
+      </div>
+    </div>
 
     <!-- Edit Settings Dialog -->
     <div
