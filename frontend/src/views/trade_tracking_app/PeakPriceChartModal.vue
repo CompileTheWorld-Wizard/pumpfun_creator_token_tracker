@@ -89,11 +89,25 @@ const updateChart = async () => {
       const firstSell = token.sells[0]
       const tokenLabel = token.tokenSymbol || token.tokenName || `Token ${index + 1}`
       
-      const peakMarketCapBeforeSell = token.tokenPeakMarketCapBeforeFirstSell
-      const firstSellMarketCap = firstSell.marketCap
-      const peakMarketCapAfterSell = token.tokenPeakMarketCap10sAfterFirstSell
+      // Parse values to ensure they're numbers
+      const peakMarketCapBeforeSell = token.tokenPeakMarketCapBeforeFirstSell != null 
+        ? (typeof token.tokenPeakMarketCapBeforeFirstSell === 'string' 
+            ? parseFloat(token.tokenPeakMarketCapBeforeFirstSell) 
+            : token.tokenPeakMarketCapBeforeFirstSell)
+        : null
+      const firstSellMarketCap = firstSell?.marketCap != null
+        ? (typeof firstSell.marketCap === 'string'
+            ? parseFloat(firstSell.marketCap)
+            : firstSell.marketCap)
+        : null
+      const peakMarketCapAfterSell = token.tokenPeakMarketCap10sAfterFirstSell != null
+        ? (typeof token.tokenPeakMarketCap10sAfterFirstSell === 'string'
+            ? parseFloat(token.tokenPeakMarketCap10sAfterFirstSell)
+            : token.tokenPeakMarketCap10sAfterFirstSell)
+        : null
       
-      if (peakMarketCapBeforeSell !== null || firstSellMarketCap !== null || peakMarketCapAfterSell !== null) {
+      // Include token if at least one market cap value exists (including 0)
+      if (peakMarketCapBeforeSell != null || firstSellMarketCap != null || peakMarketCapAfterSell != null) {
         dataPoints.push({
           token: tokenLabel,
           tokenAddress: token.tokenAddress,
@@ -124,7 +138,7 @@ const updateChart = async () => {
     let peakAfterCount = 0
     
     dataPoints.forEach((dp) => {
-      if (dp.peakMarketCapBeforeSell !== null && dp.peakMarketCapBeforeSell !== undefined) {
+      if (dp.peakMarketCapBeforeSell != null && typeof dp.peakMarketCapBeforeSell === 'number') {
         peakBeforeData.push({ 
           x: 0 + addJitter(), 
           y: dp.peakMarketCapBeforeSell,
@@ -134,7 +148,7 @@ const updateChart = async () => {
         peakBeforeSum += dp.peakMarketCapBeforeSell
         peakBeforeCount++
       }
-      if (dp.firstSellMarketCap !== null && dp.firstSellMarketCap !== undefined) {
+      if (dp.firstSellMarketCap != null && typeof dp.firstSellMarketCap === 'number') {
         firstSellData.push({ 
           x: 1 + addJitter(), 
           y: dp.firstSellMarketCap,
@@ -144,7 +158,7 @@ const updateChart = async () => {
         firstSellSum += dp.firstSellMarketCap
         firstSellCount++
       }
-      if (dp.peakMarketCapAfterSell !== null && dp.peakMarketCapAfterSell !== undefined) {
+      if (dp.peakMarketCapAfterSell != null && typeof dp.peakMarketCapAfterSell === 'number') {
         peakAfterData.push({ 
           x: 2 + addJitter(), 
           y: dp.peakMarketCapAfterSell,
@@ -364,7 +378,7 @@ const updateChart = async () => {
             max: 2.5
           },
           y: {
-            beginAtZero: false,
+            beginAtZero: true,
             ticks: {
               color: '#94a3b8',
               callback: function(value: any) {
