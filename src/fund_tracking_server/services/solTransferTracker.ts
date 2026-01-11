@@ -60,7 +60,7 @@ export class SolTransferTracker {
    */
   private async processTransaction(processed: any): Promise<void> {
     try {
-      const { meta, transaction } = processed;
+      const { slot, meta, transaction } = processed;
       
       if (!meta || !transaction || !transaction.message) {
         return;
@@ -99,7 +99,6 @@ export class SolTransferTracker {
         
         // Get signature and slot
         const signature = transaction.signatures?.[0];
-        const slot = meta.slot ? Number(meta.slot) : null;
 
         if (!signature || slot === null) {
           console.warn('⚠️ Missing signature or slot for transfer');

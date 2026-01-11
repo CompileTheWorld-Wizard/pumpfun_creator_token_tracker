@@ -19,7 +19,7 @@ async function processData(processed) {
     //handle the incoming transaction
     const SYSTEM_PROGRAM_ID = "11111111111111111111111111111111";
     
-    const { meta, transaction } = processed;
+    const { slot, meta, transaction } = processed;
     console.log(JSON.stringify(processed))
     
     if (!meta || !transaction || !transaction.message) {
