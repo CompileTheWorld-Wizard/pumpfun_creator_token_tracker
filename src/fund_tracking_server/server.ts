@@ -191,19 +191,14 @@ async function startServer() {
     console.log('📊 Initializing database...');
     await dbService.initialize();
 
-    // Initialize SOL transfer tracker
+    // Note: SOL transfer tracker will be initialized and started only when user clicks start button
     const grpcUrl = process.env.GRPC_URL;
     const xToken = process.env.X_TOKEN;
 
     if (!grpcUrl || !xToken) {
-      console.warn('⚠️  GRPC_URL or X_TOKEN not set. SOL transfer tracking will not be enabled.');
+      console.warn('⚠️  GRPC_URL or X_TOKEN not set. SOL transfer tracking will not be available.');
     } else {
-      console.log('🔍 Initializing SOL transfer tracker...');
-      solTransferTracker.initialize(grpcUrl, xToken);
-      
-      // Start tracking
-      console.log('🚀 Starting SOL transfer tracking...');
-      solTransferTracker.start();
+      console.log('✅ SOL transfer tracker ready (will start when user clicks start button)');
     }
 
     // Start server
