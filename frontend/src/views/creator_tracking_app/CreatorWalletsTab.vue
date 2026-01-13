@@ -1470,12 +1470,13 @@
             <tr
               v-for="wallet in wallets"
               :key="wallet.address"
-              class="hover:bg-gray-800/50 transition"
+              class="hover:bg-gray-800/50 transition cursor-pointer"
+              @click="handleRowClick(wallet.address)"
             >
               <td class="px-2 py-1.5 whitespace-nowrap border border-gray-700">
                 <div class="flex items-center gap-1.5">
                   <button
-                    @click="copyToClipboard(wallet.address)"
+                    @click.stop="copyToClipboard(wallet.address)"
                     class="p-0.5 hover:bg-gray-700 rounded transition flex-shrink-0"
                     :class="copiedAddress === wallet.address ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
                     :title="copiedAddress === wallet.address ? 'Copied!' : 'Copy wallet address'"
@@ -1783,12 +1784,87 @@
         </form>
       </div>
     </div>
+
+    <!-- Receiver Wallets Dialog -->
+    <div
+      v-if="showReceiverWalletsDialog"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50"
+      @click.self="showReceiverWalletsDialog = false"
+    >
+      <div class="bg-gray-900 border border-gray-800 rounded-lg p-6 w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between mb-4 flex-shrink-0">
+          <h3 class="text-lg font-bold text-gray-100">
+            Wallets that received SOL from {{ selectedCreatorAddress ? formatAddress(selectedCreatorAddress) : '' }}
+          </h3>
+          <button
+            @click="showReceiverWalletsDialog = false"
+            class="text-gray-400 hover:text-gray-200 transition text-xl leading-none"
+          >
+            ×
+          </button>
+        </div>
+        <div class="flex-1 overflow-y-auto">
+          <div v-if="loadingReceivers" class="text-center py-8">
+            <div class="text-gray-400 text-sm">Loading...</div>
+          </div>
+          <div v-else-if="receiverWallets.length === 0" class="text-center py-8">
+            <div class="text-gray-400 text-sm">No wallets found that received more than {{ minSolAmount }} SOL</div>
+          </div>
+          <div v-else class="space-y-2">
+            <div
+              v-for="(wallet, index) in receiverWallets"
+              :key="wallet.address"
+              class="bg-gray-800 border border-gray-700 rounded p-3 flex items-center justify-between"
+            >
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <div class="text-xs font-semibold text-gray-300 bg-gray-700 px-2 py-1 rounded">
+                  #{{ index + 1 }}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs font-mono text-gray-200 truncate">{{ wallet.address }}</div>
+                  <div class="text-[10px] text-gray-400 mt-0.5">
+                    Total received: <span class="text-green-400 font-semibold">{{ wallet.totalReceived.toFixed(4) }} SOL</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                @click.stop="copyToClipboard(wallet.address)"
+                class="p-1.5 hover:bg-gray-700 rounded transition flex-shrink-0"
+                :class="copiedAddress === wallet.address ? 'text-green-400' : 'text-gray-400 hover:text-purple-400'"
+                :title="copiedAddress === wallet.address ? 'Copied!' : 'Copy wallet address'"
+              >
+                <span class="w-4 h-4 inline-flex items-center justify-center" v-html="processSvg(copiedAddress === wallet.address ? checkIconSvg : copyIconSvg, 'w-4 h-4')"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4 pt-4 border-t border-gray-700 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <label class="text-xs font-semibold text-gray-300">Minimum SOL amount:</label>
+            <input
+              v-model.number="minSolAmount"
+              type="number"
+              step="0.1"
+              min="0"
+              class="px-2 py-1 bg-gray-800 border border-gray-700 rounded text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 w-24"
+              @change="handleMinAmountChange"
+            />
+            <button
+              @click="loadReceiverWallets"
+              class="px-3 py-1 bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold rounded transition"
+            >
+              Refresh
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getCreatorWalletsAnalytics, type CreatorWallet, type PaginationInfo } from '../../services/creatorWallets'
+import { getCreatorWalletsAnalytics, getReceiverWallets, type CreatorWallet, type PaginationInfo, type ReceiverWallet } from '../../services/creatorWallets'
 import { getAppliedSettings, type ScoringSettings } from '../../services/settings'
 import copyIconSvg from '../../icons/copy.svg?raw'
 import checkIconSvg from '../../icons/check.svg?raw'
@@ -1811,6 +1887,13 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const copiedAddress = ref<string | null>(null)
 const itemsPerPage = ref<number | string>(20)
+
+// Receiver wallets dialog state
+const showReceiverWalletsDialog = ref(false)
+const receiverWallets = ref<ReceiverWallet[]>([])
+const loadingReceivers = ref(false)
+const selectedCreatorAddress = ref<string | null>(null)
+const minSolAmount = ref(0)
 const viewMode = ref<'data' | 'score'>('data')
 const pagination = ref<PaginationInfo>({
   page: 1,
@@ -2629,6 +2712,36 @@ const getSortIcon = (column: string) => {
 const formatAddress = (address: string): string => {
   if (!address) return ''
   return `${address.slice(0, 8)}...${address.slice(-8)}`
+}
+
+const handleRowClick = async (walletAddress: string) => {
+  selectedCreatorAddress.value = walletAddress
+  showReceiverWalletsDialog.value = true
+  await loadReceiverWallets()
+}
+
+const loadReceiverWallets = async () => {
+  if (!selectedCreatorAddress.value) return
+  
+  loadingReceivers.value = true
+  try {
+    receiverWallets.value = await getReceiverWallets(
+      selectedCreatorAddress.value,
+      minSolAmount.value,
+      3
+    )
+  } catch (error: any) {
+    console.error('Error loading receiver wallets:', error)
+    receiverWallets.value = []
+  } finally {
+    loadingReceivers.value = false
+  }
+}
+
+const handleMinAmountChange = () => {
+  if (selectedCreatorAddress.value) {
+    loadReceiverWallets()
+  }
 }
 
 const getWinRateColor = (winRate: number): string => {

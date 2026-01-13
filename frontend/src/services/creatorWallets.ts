@@ -173,3 +173,38 @@ export async function getCreatorWalletsAnalytics(
   };
 }
 
+export interface ReceiverWallet {
+  address: string;
+  totalReceived: number;
+}
+
+export async function getReceiverWallets(
+  creatorAddress: string,
+  minAmount: number = 0,
+  limit: number = 3
+): Promise<ReceiverWallet[]> {
+  const params = new URLSearchParams({
+    minAmount: minAmount.toString(),
+    limit: limit.toString(),
+  });
+
+  const response = await fetch(`${API_BASE_URL}/wallets/${creatorAddress}/receivers?${params.toString()}`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new Error('Unauthorized');
+    }
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch receiver wallets');
+  }
+
+  const data = await response.json();
+  return data.wallets || [];
+}
+

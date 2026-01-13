@@ -336,5 +336,49 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
   }
 });
 
+// Get wallets that received more than X SOL from a creator wallet
+router.get('/:address/receivers', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { address } = req.params;
+    const minAmount = parseFloat(req.query.minAmount as string) || 0;
+    const limit = parseInt(req.query.limit as string) || 3;
+
+    if (!address) {
+      res.status(400).json({ 
+        error: 'Wallet address is required' 
+      });
+      return;
+    }
+
+    // Query the fund tracking database for wallets that received SOL from this creator wallet
+    // Note: This assumes both databases are in the same PostgreSQL instance
+    const query = `
+      SELECT 
+        receiver as address,
+        SUM(amount)::numeric as total_received
+      FROM tbl_fund_sol_transfers
+      WHERE sender = $1
+      GROUP BY receiver
+      HAVING SUM(amount) > $2
+      ORDER BY total_received DESC
+      LIMIT $3
+    `;
+
+    const result = await pool.query(query, [address, minAmount, limit]);
+    
+    res.json({ 
+      wallets: result.rows.map(row => ({
+        address: row.address,
+        totalReceived: parseFloat(row.total_received)
+      }))
+    });
+  } catch (error: any) {
+    console.error('Error fetching receiver wallets:', error);
+    res.status(500).json({ 
+      error: 'Error fetching receiver wallets. Please try again.' 
+    });
+  }
+});
+
 export default router;
 
