@@ -58,7 +58,7 @@ class LiquidityPoolMonitor {
   private streamerService: StreamerService | null = null;
   private grpcUrl: string;
   private xToken: string;
-  private lastSlot: number | null = null; // Track last processed slot for reconnection
+  private _lastSlot: number | null = null; // Track last processed slot for reconnection (currently unused but kept for future use)
   private isShuttingDown: boolean = false; // Flag to prevent error handling during shutdown
 
   constructor(solanaConnection: Connection) {
@@ -125,7 +125,7 @@ class LiquidityPoolMonitor {
           ? parseInt(tx.transaction.slot, 10) 
           : tx.transaction.slot;
         if (!isNaN(slot)) {
-          this.lastSlot = slot;
+          this._lastSlot = slot;
         }
       }
 
