@@ -59,7 +59,7 @@ class LiquidityPoolMonitor {
   private grpcUrl: string;
   private xToken: string;
   // Track last processed slot for reconnection (currently unused but kept for future use)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // @ts-ignore - TS6133: Variable is written but not read (intended for future use)
   private _lastSlot: number | null = null;
   private isShuttingDown: boolean = false; // Flag to prevent error handling during shutdown
 
