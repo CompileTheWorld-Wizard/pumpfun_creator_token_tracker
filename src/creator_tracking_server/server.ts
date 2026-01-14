@@ -86,9 +86,12 @@ const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) 
     try {
       // Build the target path with query string
       let targetPath = req.originalUrl || req.url;
+      const originalPath = targetPath;
       if (pathRewrite) {
         targetPath = pathRewrite(targetPath);
       }
+      
+      console.log(`[Proxy] ${req.method} ${originalPath} -> localhost:${targetPort}${targetPath}`);
       
       // Prepare headers for forwarding
       const forwardHeaders: Record<string, string> = {};
@@ -113,7 +116,8 @@ const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) 
         port: targetPort,
         path: targetPath,
         method: req.method,
-        headers: forwardHeaders
+        headers: forwardHeaders,
+        timeout: 30000 // 30 second timeout
       };
 
       const proxyReq = http.request(options, (proxyRes) => {
@@ -141,11 +145,24 @@ const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) 
       });
 
       proxyReq.on('error', (err: any) => {
-        console.error(`Proxy error for ${req.method} ${req.url} -> localhost:${targetPort}${targetPath}:`, err.message || err);
+        console.error(`[Proxy Error] ${req.method} ${req.url} -> localhost:${targetPort}${targetPath}:`, err.message || err);
+        console.error(`[Proxy Error] Code: ${err.code}, Syscall: ${err.syscall}`);
         if (!res.headersSent) {
           res.status(502).json({ 
             error: 'Bad Gateway - Unable to proxy request',
             details: err.message || 'Connection failed',
+            code: err.code,
+            target: `localhost:${targetPort}${targetPath}`
+          });
+        }
+      });
+
+      proxyReq.on('timeout', () => {
+        console.error(`[Proxy Timeout] ${req.method} ${req.url} -> localhost:${targetPort}${targetPath}`);
+        proxyReq.destroy();
+        if (!res.headersSent) {
+          res.status(504).json({ 
+            error: 'Gateway Timeout',
             target: `localhost:${targetPort}${targetPath}`
           });
         }
@@ -177,10 +194,18 @@ const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) 
 };
 
 // Proxy /trade-api/* to trade_tracking_server (port 5007)
-app.use('/trade-api', createProxyMiddleware(5007, (path) => path.replace(/^\/trade-api/, '/api')));
+// Rewrite /trade-api/xxx to /api/xxx
+app.use('/trade-api', createProxyMiddleware(5007, (path) => {
+  // Remove /trade-api prefix and add /api prefix
+  return path.replace(/^\/trade-api(\/|$)/, '/api$1');
+}));
 
 // Proxy /fund-api/* to fund_tracking_server (port 5006)
-app.use('/fund-api', createProxyMiddleware(5006, (path) => path.replace(/^\/fund-api/, '')));
+// Rewrite /fund-api/xxx to /xxx (remove /fund-api prefix)
+app.use('/fund-api', createProxyMiddleware(5006, (path) => {
+  // Remove /fund-api prefix
+  return path.replace(/^\/fund-api/, '');
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);
