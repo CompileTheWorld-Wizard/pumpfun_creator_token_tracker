@@ -1603,6 +1603,17 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       ? result.rows.map(row => row.address)  // All filtered wallets
       : [];  // Will be set after pagination
     
+    // Check if we need buy/sell stats (for performance optimization)
+    // Only fetch market_cap_time_series when sorting by buy/sell related fields
+    const needsBuySellStats = sortingByComplexField && 
+      (sortColumn === 'avgFirst5BuySol' || sortColumn === 'medianFirst5BuySol' || 
+       sortColumn === 'avgBuyCount' || sortColumn === 'avgBuyTotalSol' || 
+       sortColumn === 'avgSellCount' || sortColumn === 'avgSellTotalSol');
+    
+    // Performance note: When sorting by buy/sell fields with many wallets (1M+),
+    // fetching market_cap_time_series for all tokens can be slow.
+    // Consider adding database indexes or limiting the dataset for better performance.
+    
     // Fetch tokens if needed
     if (creatorAddressesForTokens.length > 0) {
       // Build WHERE clause for token query (same filter as main query)
@@ -1638,14 +1649,15 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         });
       });
       
-      // Get ALL tokens for rug rate calculations (including invalid ones)
+      // Get ALL tokens for rug rate and buy/sell calculations (including invalid ones)
+      // Only fetch market_cap_time_series when needed for buy/sell stats to improve performance
       const allTokensResult = await pool.query(
         `SELECT 
           ct.creator,
           ct.ath_market_cap_usd,
           ct.is_fetched,
           ct.created_at,
-          ct.market_cap_time_series
+          ${needsBuySellStats ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
         FROM tbl_soltrack_created_tokens ct
         ${tokenWhereClause}`,
         [creatorAddressesForTokens]
@@ -1733,7 +1745,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       
       // Only calculate token-dependent stats if we have token data
       // Otherwise, use default values (will be recalculated after pagination if needed)
+      // For buy/sell stats, we need tokens with marketCapTimeSeries
       const hasTokenData = needsTokensForAll && (tokens.length > 0 || allTokens.length > 0);
+      const hasBuySellData = needsTokensForAll && allTokens.length > 0 && 
+        allTokens.some(t => t.marketCapTimeSeries !== null && t.marketCapTimeSeries !== undefined);
       
       const multiplierPercentages = hasTokenData ? calculateMultiplierPercentages(tokens) : new Map<number, number>();
       
@@ -1754,8 +1769,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       // Extract minimum buy amount filters
       const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
       
-      // Calculate buy/sell statistics
-      const buySellStats = hasTokenData ? calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken) : {
+      // Calculate buy/sell statistics - only if we have tokens with marketCapTimeSeries
+      const buySellStats = hasBuySellData ? calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken) : {
         avgBuyCount: 0,
         avgBuyTotalSol: 0,
         avgSellCount: 0,
