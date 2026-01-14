@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import http from 'http';
 import bcrypt from 'bcrypt';
 import { pool } from './db.js';
 import authRoutes from './routes/auth.js';
@@ -77,6 +78,77 @@ app.use(session({
   ...getSessionConfig(),
   store: sessionStore,
 }));
+
+// Proxy middleware for /trade-api and /fund-api in production
+// These requests need to be forwarded to the respective servers
+const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) => string) => {
+  return async (req: express.Request, res: express.Response) => {
+    // Build the target path with query string
+    let targetPath = req.originalUrl || req.url;
+    if (pathRewrite) {
+      targetPath = pathRewrite(targetPath);
+    }
+    
+    const options = {
+      hostname: 'localhost',
+      port: targetPort,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: `localhost:${targetPort}`,
+      }
+    };
+
+    // Remove headers that shouldn't be forwarded
+    delete (options.headers as any)['host'];
+    delete (options.headers as any)['connection'];
+    delete (options.headers as any)['content-length'];
+
+    const proxyReq = http.request(options, (proxyRes) => {
+      // Copy status code
+      res.statusCode = proxyRes.statusCode || 200;
+      
+      // Copy headers
+      Object.keys(proxyRes.headers).forEach(key => {
+        const value = proxyRes.headers[key];
+        if (value && key.toLowerCase() !== 'content-encoding') {
+          res.setHeader(key, value);
+        }
+      });
+      
+      // Pipe the response
+      proxyRes.pipe(res);
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error(`Proxy error for ${req.url}:`, err);
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Bad Gateway - Unable to proxy request' });
+      }
+    });
+
+    // Send request body if present
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'DELETE') {
+      if (req.body && Object.keys(req.body).length > 0) {
+        const body = JSON.stringify(req.body);
+        proxyReq.setHeader('Content-Type', 'application/json');
+        proxyReq.setHeader('Content-Length', Buffer.byteLength(body));
+        proxyReq.write(body);
+      } else if (req.body && typeof req.body === 'string') {
+        proxyReq.write(req.body);
+      }
+    }
+    
+    proxyReq.end();
+  };
+};
+
+// Proxy /trade-api/* to trade_tracking_server (port 5007)
+app.use('/trade-api', createProxyMiddleware(5007, (path) => path.replace(/^\/trade-api/, '/api')));
+
+// Proxy /fund-api/* to fund_tracking_server (port 5006)
+app.use('/fund-api', createProxyMiddleware(5006, (path) => path.replace(/^\/fund-api/, '')));
 
 // Routes
 app.use('/api/auth', authRoutes);
