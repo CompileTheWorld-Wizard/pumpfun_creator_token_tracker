@@ -29,30 +29,33 @@ export const getSessionConfig = () => {
   const SESSION_SECRET = process.env.SESSION_SECRET || 'soltrack-shared-secret-change-in-production';
   const useHttps = process.env.USE_HTTPS === 'true';
   
-  // Extract domain from hostname (remove port if present)
-  // For IP addresses or hostnames, we want to share cookies across ports
-  // Note: Browsers don't share cookies across different ports by default
-  // We'll use sameSite: 'none' with secure for cross-origin, or rely on manual cookie forwarding
-  const cookieDomain = process.env.SESSION_COOKIE_DOMAIN; // Can be set to share cookies
+  // Cookie domain configuration
+  // When behind nginx reverse proxy, we need to set the domain correctly
+  // Leading dot (e.g., '.dillwifit.com') allows subdomains
+  // Without dot (e.g., 'dillwifit.com') is more restrictive
+  let cookieDomain = process.env.SESSION_COOKIE_DOMAIN;
   
-  // Determine sameSite value - use 'none' for HTTPS cross-origin, 'lax' for HTTP
-  const sameSiteValue: 'none' | 'lax' = useHttps ? 'none' : 'lax';
+  // If domain is set with leading dot, use it as-is
+  // If domain is set without leading dot, use it as-is (browsers handle both)
+  // If not set, don't set domain (cookie will be set for exact hostname)
+  
+  // Determine sameSite value
+  // For HTTPS with reverse proxy, use 'lax' (same-site) instead of 'none'
+  // 'none' is only needed for true cross-origin (different domains)
+  // Since nginx and backend are same origin from browser's perspective, 'lax' works
+  const sameSiteValue: 'none' | 'lax' | 'strict' = useHttps ? 'lax' : 'lax';
   
   return {
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: useHttps, // true only if using HTTPS
-      httpOnly: true,
-      // For cross-port requests: 
-      // - With HTTPS: use 'none' to allow cross-origin cookie sharing
-      // - Without HTTPS: use 'lax' (browsers won't share cookies across ports on HTTP)
-      // Note: For HTTP cross-port, frontend will need to manually forward cookies
-      sameSite: sameSiteValue,
+      secure: useHttps, // true for HTTPS, false for HTTP
+      httpOnly: true, // Prevents JavaScript access
+      sameSite: sameSiteValue, // 'lax' works for same-site requests through reverse proxy
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
       path: '/', // Available for all paths
-      ...(cookieDomain ? { domain: cookieDomain } : {}), // Only set if explicitly configured
+      ...(cookieDomain ? { domain: cookieDomain } : {}), // Set domain if configured
     },
     name: 'soltrack.sid', // Unified session cookie name for all servers
   };

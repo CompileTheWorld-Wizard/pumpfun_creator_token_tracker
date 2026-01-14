@@ -184,6 +184,40 @@ server {
    sudo tail -f /var/log/nginx/tool.dillwifit.com_access.log
    ```
 
+## CORS and Session Configuration
+
+If you're getting 500 errors on API endpoints, you need to configure CORS and session settings:
+
+### Update PM2 Configuration
+
+The `ecosystem.config.cjs` has been updated with:
+- `ALLOWED_ORIGINS`: Set to your domain
+- `USE_HTTPS`: Set to 'true' for HTTPS
+- `SESSION_COOKIE_DOMAIN`: Set to share cookies across subdomains
+
+### Restart PM2 with new configuration:
+```bash
+cd /home/scraper/pumpfun_creator_token_tracker
+pm2 delete all
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+### Verify environment variables:
+```bash
+# Check if environment variables are set
+pm2 env 0  # Check creator_tracking_server (app 0)
+pm2 env 1  # Check fund_tracking_server (app 1)
+pm2 env 2  # Check trade_tracking_server (app 2)
+```
+
+### Check server logs for errors:
+```bash
+pm2 logs creator_tracking_server --lines 50
+pm2 logs fund_tracking_server --lines 50
+pm2 logs trade_tracking_server --lines 50
+```
+
 ## Troubleshooting
 
 ### Still getting permission denied?
@@ -207,3 +241,45 @@ ls -la /home/scraper/pumpfun_creator_token_tracker/dist-frontend/index.html
 - Check firewall: `sudo ufw status`
 - Verify ports are bound to 127.0.0.1, not just localhost
 - Check server logs: `pm2 logs`
+
+### Getting 500 errors on API endpoints?
+1. **Check CORS configuration**: Ensure `ALLOWED_ORIGINS` includes your domain
+2. **Check Redis connection**: Ensure Redis is running and accessible
+   ```bash
+   redis-cli ping  # Should return PONG
+   ```
+3. **Check database connection**: Verify PostgreSQL is running
+   ```bash
+   sudo systemctl status postgresql
+   ```
+4. **Check server logs**: Look for specific error messages
+   ```bash
+   pm2 logs --lines 100
+   ```
+
+### Session/Cookie issues?
+- **Trust Proxy**: All servers now have `app.set('trust proxy', 1)` to work correctly behind nginx
+- **Cookie Domain**: Removed `SESSION_COOKIE_DOMAIN` - browser will use exact hostname (tool.dillwifit.com)
+- **SameSite**: Changed from 'none' to 'lax' for same-site requests through reverse proxy
+- **Secure Flag**: Ensure `USE_HTTPS=true` is set in PM2 config
+- **Check cookies in browser**: 
+  - Open DevTools → Application → Cookies
+  - Look for `soltrack.sid` cookie
+  - Verify it has `Secure` flag and `SameSite=Lax`
+  - Domain should be `tool.dillwifit.com` (not `.dillwifit.com`)
+
+### After fixing session issues:
+1. **Rebuild the project** (code changes require rebuild):
+   ```bash
+   cd /home/scraper/pumpfun_creator_token_tracker
+   npm run build
+   ```
+
+2. **Restart PM2**:
+   ```bash
+   pm2 delete all
+   pm2 start ecosystem.config.cjs
+   pm2 save
+   ```
+
+3. **Clear browser cookies** for tool.dillwifit.com and try logging in again

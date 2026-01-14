@@ -9,8 +9,7 @@ module.exports = {
         NODE_ENV: 'production',
         CREATOR_SERVER_PORT: 5005,
         ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
-        USE_HTTPS: 'true',
-        SESSION_COOKIE_DOMAIN: '.dillwifit.com'
+        USE_HTTPS: 'true'
       },
       error_file: './logs/creator_tracking_server-error.log',
       out_file: './logs/creator_tracking_server-out.log',
@@ -35,8 +34,7 @@ module.exports = {
         NODE_ENV: 'production',
         FUND_SERVER_PORT: 5006,
         ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
-        USE_HTTPS: 'true',
-        SESSION_COOKIE_DOMAIN: '.dillwifit.com'
+        USE_HTTPS: 'true'
       },
       error_file: './logs/fund_tracking_server-error.log',
       out_file: './logs/fund_tracking_server-out.log',
@@ -61,8 +59,7 @@ module.exports = {
         NODE_ENV: 'production',
         TRADE_SERVER_PORT: 5007,
         ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
-        USE_HTTPS: 'true',
-        SESSION_COOKIE_DOMAIN: '.dillwifit.com'
+        USE_HTTPS: 'true'
       },
       error_file: './logs/trade_tracking_server-error.log',
       out_file: './logs/trade_tracking_server-out.log',

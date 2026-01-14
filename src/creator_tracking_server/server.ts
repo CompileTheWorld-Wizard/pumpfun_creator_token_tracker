@@ -26,6 +26,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = parseInt(process.env.CREATOR_SERVER_PORT || process.env.PORT || '5005', 10);
 
+// Trust proxy - required when behind nginx reverse proxy
+// This allows Express to correctly identify the original request
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {

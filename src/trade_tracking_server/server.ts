@@ -39,6 +39,9 @@ redisService.initialize();
 const app = express();
 const PORT = parseInt(process.env.TRADE_SERVER_PORT || process.env.PORT || '5007', 10);
 
+// Trust proxy - required when behind nginx reverse proxy
+app.set('trust proxy', 1);
+
 // Session configuration - using shared Redis store
 const HARDCODED_PASSWORD = 'admin123'; // Fallback for initial setup
 

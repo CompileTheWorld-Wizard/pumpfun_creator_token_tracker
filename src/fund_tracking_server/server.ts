@@ -12,6 +12,9 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.FUND_SERVER_PORT || process.env.PORT || '5006', 10);
 
+// Trust proxy - required when behind nginx reverse proxy
+app.set('trust proxy', 1);
+
 // Disable ETag globally to prevent 304 responses for API routes in production
 // Express enables ETag by default in production, which causes 304 responses
 app.disable('etag');
