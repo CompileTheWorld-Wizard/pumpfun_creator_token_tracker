@@ -1201,11 +1201,31 @@ function calculateWhatIfPNL(
   };
 }
 
+// Helper function to extract minimum buy amount filters from avgBuySells filters
+function extractMinBuyAmountFilters(filters: any): { minBuyAmountSol?: number | null; minBuyAmountToken?: number | null } {
+  if (!filters || !filters.avgBuySells || !Array.isArray(filters.avgBuySells)) {
+    return { minBuyAmountSol: null, minBuyAmountToken: null };
+  }
+  
+  // Find the buyCount filter
+  const buyCountFilter = filters.avgBuySells.find((f: any) => f.type === 'buyCount');
+  if (!buyCountFilter) {
+    return { minBuyAmountSol: null, minBuyAmountToken: null };
+  }
+  
+  return {
+    minBuyAmountSol: buyCountFilter.minBuyAmountSol !== undefined ? buyCountFilter.minBuyAmountSol : null,
+    minBuyAmountToken: buyCountFilter.minBuyAmountToken !== undefined ? buyCountFilter.minBuyAmountToken : null
+  };
+}
+
 // Calculate average buy/sell statistics for a creator wallet
 function calculateBuySellStats(
   tokens: Array<{
     marketCapTimeSeries: any;
-  }>
+  }>,
+  minBuyAmountSol?: number | null,
+  minBuyAmountToken?: number | null
 ): {
   avgBuyCount: number;
   avgBuyTotalSol: number;
@@ -1257,12 +1277,25 @@ function calculateBuySellStats(
       const solAmount = point.solAmount !== undefined ? point.solAmount : 
                        (point.sol_amount !== undefined ? point.sol_amount : null);
       
+      // Get tokenAmount for minimum token amount filtering
+      const tokenAmount = point.tokenAmount !== undefined ? point.tokenAmount : 
+                         (point.token_amount !== undefined ? point.token_amount : null);
+      
       // Skip trades without solAmount (old data format)
       if (solAmount === null || solAmount === undefined) {
         continue;
       }
       
       if (tradeType === 'buy') {
+        // Apply minimum buy amount filters if set
+        if (minBuyAmountSol !== null && minBuyAmountSol !== undefined && solAmount < minBuyAmountSol) {
+          continue; // Skip this buy if it's below minimum SOL amount
+        }
+        if (minBuyAmountToken !== null && minBuyAmountToken !== undefined && 
+            tokenAmount !== null && tokenAmount !== undefined && tokenAmount < minBuyAmountToken) {
+          continue; // Skip this buy if it's below minimum token amount
+        }
+        
         buyCount++;
         buySol += solAmount;
       } else if (tradeType === 'sell') {
@@ -1679,8 +1712,11 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       // Calculate average rug time (only for streamed tokens)
       const avgRugTime = hasTokenData ? calculateAvgRugTime(allTokens, rugThresholdMcap) : null;
       
+      // Extract minimum buy amount filters
+      const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
+      
       // Calculate buy/sell statistics
-      const buySellStats = hasTokenData ? calculateBuySellStats(allTokens) : {
+      const buySellStats = hasTokenData ? calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken) : {
         avgBuyCount: 0,
         avgBuyTotalSol: 0,
         avgSellCount: 0,
@@ -2182,7 +2218,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
               return time !== null ? Math.round(time * 100) / 100 : null;
             })();
             
-            wallet.buySellStats = calculateBuySellStats(allTokens);
+            // Extract minimum buy amount filters
+            const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
+            
+            wallet.buySellStats = calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken);
             wallet.expectedROI = calculateExpectedROI(allTokens);
             
             if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {
@@ -2711,7 +2750,11 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
         
         const avgRugRate = calculateRugRate(allTokens, rugThresholdMcap);
         const avgRugTime = calculateAvgRugTime(allTokens, rugThresholdMcap);
-        const buySellStats = calculateBuySellStats(allTokens);
+        
+        // Extract minimum buy amount filters
+        const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
+        
+        const buySellStats = calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken);
         const expectedROI = calculateExpectedROI(allTokens);
         
         let whatIfPnl = null;

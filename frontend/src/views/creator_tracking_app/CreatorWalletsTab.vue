@@ -330,35 +330,58 @@
             <div
               v-for="(filter, index) in filters.avgBuySells"
               :key="index"
-              class="inline-flex items-center gap-2 px-3 py-2 bg-indigo-600/20 border border-indigo-500/30 rounded-lg"
+              :class="[
+                'px-3 py-2 bg-indigo-600/20 border border-indigo-500/30 rounded-lg',
+                filter.type === 'buyCount' ? 'inline-block' : 'inline-flex items-center'
+              ]"
             >
-              <span class="text-xs font-semibold text-indigo-300">
-                {{ getAvgBuySellsFilterLabel(filter.type) }}:
-              </span>
-              <input
-                v-model.number="filter.min"
-                type="number"
-                :step="filter.type === 'buySol' || filter.type === 'sellSol' ? '0.01' : '1'"
-                placeholder="Min"
-                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-20"
-              />
-              <span class="text-xs text-gray-400">to</span>
-              <input
-                v-model.number="filter.max"
-                type="number"
-                :step="filter.type === 'buySol' || filter.type === 'sellSol' ? '0.01' : '1'"
-                placeholder="Max"
-                class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-20"
-              />
-              <button
-                @click="removeAvgBuySellsFilter(index)"
-                class="ml-1 text-gray-400 hover:text-red-400 transition"
-                title="Remove filter"
-              >
-                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-indigo-300">
+                  {{ getAvgBuySellsFilterLabel(filter.type) }}:
+                </span>
+                <input
+                  v-model.number="filter.min"
+                  type="number"
+                  :step="filter.type === 'buySol' || filter.type === 'sellSol' ? '0.01' : '1'"
+                  placeholder="Min"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-20"
+                />
+                <span class="text-xs text-gray-400">to</span>
+                <input
+                  v-model.number="filter.max"
+                  type="number"
+                  :step="filter.type === 'buySol' || filter.type === 'sellSol' ? '0.01' : '1'"
+                  placeholder="Max"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-20"
+                />
+                <button
+                  @click="removeAvgBuySellsFilter(index)"
+                  class="ml-1 text-gray-400 hover:text-red-400 transition"
+                  title="Remove filter"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                  </svg>
+                </button>
+              </div>
+              <!-- Minimum buy amount filters (only for buyCount) -->
+              <div v-if="filter.type === 'buyCount'" class="flex items-center gap-2 mt-2 text-xs">
+                <span class="text-gray-400">Min Buy Amount:</span>
+                <input
+                  v-model.number="filter.minBuyAmountSol"
+                  type="number"
+                  step="0.01"
+                  placeholder="Min SOL"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24"
+                />
+                <input
+                  v-model.number="filter.minBuyAmountToken"
+                  type="number"
+                  step="0.01"
+                  placeholder="Min Tokens"
+                  class="px-2 py-1 text-xs bg-gray-900/50 border border-gray-700 rounded text-gray-200 focus:outline-none focus:ring-1 focus:ring-indigo-500 w-24"
+                />
+              </div>
             </div>
 
             <!-- Expected ROI Filter Widgets -->
@@ -1988,6 +2011,8 @@ interface Filters {
     type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'
     min?: number
     max?: number
+    minBuyAmountSol?: number // Optional: minimum buy amount in SOL (only for buyCount filter)
+    minBuyAmountToken?: number // Optional: minimum buy amount in tokens (only for buyCount filter)
   }>
   expectedROI: Array<{
     type: '1st' | '2nd' | '3rd'
@@ -2299,7 +2324,9 @@ const confirmAddFilter = () => {
       filters.value.avgBuySells.push({
         type: 'buyCount',
         min: undefined,
-        max: undefined
+        max: undefined,
+        minBuyAmountSol: undefined,
+        minBuyAmountToken: undefined
       })
       break
     case 'avgBuySol':

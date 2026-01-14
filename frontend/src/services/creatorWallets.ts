@@ -91,6 +91,8 @@ export interface FilterParams {
     type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol';
     min?: number;
     max?: number;
+    minBuyAmountSol?: number; // Optional: minimum buy amount in SOL (only for buyCount filter)
+    minBuyAmountToken?: number; // Optional: minimum buy amount in tokens (only for buyCount filter)
   }>;
   expectedROI?: Array<{
     type: '1st' | '2nd' | '3rd';
