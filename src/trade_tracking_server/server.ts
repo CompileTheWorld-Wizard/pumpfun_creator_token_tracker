@@ -81,9 +81,19 @@ app.use(session({
   store: sessionStore,
 }));
 
+// Rewrite /trade-api to /api for production compatibility
+// This allows the frontend to use /trade-api while routes are defined as /api
+app.use((req, _res, next) => {
+  if (req.path.startsWith('/trade-api/')) {
+    req.url = req.url.replace(/^\/trade-api/, '/api');
+  }
+  next();
+});
+
 // Set no-cache headers for API routes to prevent 304 responses
+// Handle both /api/ and /trade-api/ paths (trade-api is used in production)
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/trade-api/')) {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       'Pragma': 'no-cache',

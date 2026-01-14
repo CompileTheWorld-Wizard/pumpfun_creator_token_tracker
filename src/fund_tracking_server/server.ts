@@ -12,6 +12,10 @@ dotenv.config();
 const app = express();
 const PORT = parseInt(process.env.FUND_SERVER_PORT || process.env.PORT || '5006', 10);
 
+// Disable ETag globally to prevent 304 responses for API routes in production
+// Express enables ETag by default in production, which causes 304 responses
+app.disable('etag');
+
 // Initialize SOL transfer tracker
 const solTransferTracker = new SolTransferTracker();
 
@@ -66,6 +70,28 @@ app.use(session({
   ...getSessionConfig(),
   store: sessionStore,
 }));
+
+// Rewrite /fund-api to remove prefix for production compatibility
+// This allows the frontend to use /fund-api while routes are defined as /api
+app.use((req, _res, next) => {
+  if (req.path.startsWith('/fund-api/')) {
+    req.url = req.url.replace(/^\/fund-api/, '');
+  }
+  next();
+});
+
+// Set no-cache headers for API routes to prevent 304 responses
+// Handle both /api/ and /fund-api/ paths (fund-api is used in production)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/') || req.path.startsWith('/fund-api/')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+  next();
+});
 
 // Health check (public)
 app.get('/api/health', (_req, res) => {
