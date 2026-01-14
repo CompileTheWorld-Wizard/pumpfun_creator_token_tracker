@@ -1,8 +1,23 @@
 // Trade Tracking API Service
 // Connects to trade_tracking_server (port 5007)
-// Uses /trade-api proxy in development, or direct URL in production
+// Uses direct server URL in production, or /trade-api proxy in development
 
-const API_BASE = import.meta.env.VITE_TRADE_SERVER_URL || '/trade-api'
+// Get the base URL - use env var if set, otherwise construct from current location
+const getTradeApiBase = () => {
+  if (import.meta.env.VITE_TRADE_SERVER_URL) {
+    return import.meta.env.VITE_TRADE_SERVER_URL;
+  }
+  // In development, use proxy
+  if (import.meta.env.DEV) {
+    return '/trade-api';
+  }
+  // In production, use same host with port 5007
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  return `${protocol}//${hostname}:5007/api`;
+};
+
+const API_BASE = getTradeApiBase();
 
 /**
  * Fetch tracking status

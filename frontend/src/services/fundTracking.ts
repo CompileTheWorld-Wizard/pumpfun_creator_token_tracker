@@ -1,8 +1,23 @@
 // Fund Tracking API Service
 // Connects to fund_tracking_server (port 5006)
-// Uses /fund-api proxy in development, or direct URL in production
+// Uses direct server URL in production, or /fund-api proxy in development
 
-const API_BASE = import.meta.env.VITE_FUND_SERVER_URL || '/fund-api'
+// Get the base URL - use env var if set, otherwise construct from current location
+const getFundApiBase = () => {
+  if (import.meta.env.VITE_FUND_SERVER_URL) {
+    return import.meta.env.VITE_FUND_SERVER_URL;
+  }
+  // In development, use proxy
+  if (import.meta.env.DEV) {
+    return '/fund-api';
+  }
+  // In production, use same host with port 5006
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  return `${protocol}//${hostname}:5006/api`;
+};
+
+const API_BASE = getFundApiBase();
 
 export interface SolTransfer {
   id: number;
