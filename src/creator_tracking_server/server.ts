@@ -193,16 +193,26 @@ const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) 
   };
 };
 
+// Proxy middleware that matches paths starting with a prefix
+const createPathProxy = (prefix: string, targetPort: number, pathRewrite: (path: string) => string) => {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (req.path.startsWith(prefix)) {
+      return createProxyMiddleware(targetPort, pathRewrite)(req, res);
+    }
+    next();
+  };
+};
+
 // Proxy /trade-api/* to trade_tracking_server (port 5007)
 // Rewrite /trade-api/xxx to /api/xxx
-app.use('/trade-api', createProxyMiddleware(5007, (path) => {
+app.use(createPathProxy('/trade-api', 5007, (path) => {
   // Remove /trade-api prefix and add /api prefix
-  return path.replace(/^\/trade-api(\/|$)/, '/api$1');
+  return path.replace(/^\/trade-api/, '/api');
 }));
 
 // Proxy /fund-api/* to fund_tracking_server (port 5006)
 // Rewrite /fund-api/xxx to /xxx (remove /fund-api prefix)
-app.use('/fund-api', createProxyMiddleware(5006, (path) => {
+app.use(createPathProxy('/fund-api', 5006, (path) => {
   // Remove /fund-api prefix
   return path.replace(/^\/fund-api/, '');
 }));
