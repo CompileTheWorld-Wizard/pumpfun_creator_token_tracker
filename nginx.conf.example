@@ -1,0 +1,81 @@
+server {
+    listen 443 ssl http2;
+    server_name tool.dillwifit.com;
+
+    ssl_certificate /etc/letsencrypt/live/tool.dillwifit.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/tool.dillwifit.com/privkey.pem;
+    include /etc/nginx/snippets/ssl-params.conf;
+
+    # IMPORTANT: Use absolute path, not ~/home/...
+    # Replace /home/scraper/... with your actual deployment path
+    root /home/scraper/pumpfun_creator_token_tracker/dist-frontend;
+    index index.html;
+
+    access_log /var/log/nginx/tool.dillwifit.com_access.log;
+    error_log /var/log/nginx/tool.dillwifit.com_error.log;
+
+    # Serve static assets directly
+    location /assets/ {
+        try_files $uri =404;
+        access_log off;
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Creator tracking API (port 5005)
+    # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+    location /api/ {
+        proxy_pass http://127.0.0.1:5005;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Trade tracking API (port 5007)
+    location /trade-api/ {
+        proxy_pass http://127.0.0.1:5007/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # Fund tracking API (port 5006)
+    location /fund-api/ {
+        proxy_pass http://127.0.0.1:5006/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+
+    # SPA fallback - must be last
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+}
+
+# Redirect HTTP to HTTPS
+server {
+    listen 80;
+    server_name tool.dillwifit.com;
+    return 301 https://$server_name$request_uri;
+}
