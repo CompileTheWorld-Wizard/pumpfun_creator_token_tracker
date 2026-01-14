@@ -58,7 +58,9 @@ class LiquidityPoolMonitor {
   private streamerService: StreamerService | null = null;
   private grpcUrl: string;
   private xToken: string;
-  private _lastSlot: number | null = null; // Track last processed slot for reconnection (currently unused but kept for future use)
+  // Track last processed slot for reconnection (currently unused but kept for future use)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private _lastSlot: number | null = null;
   private isShuttingDown: boolean = false; // Flag to prevent error handling during shutdown
 
   constructor(solanaConnection: Connection) {
