@@ -83,64 +83,96 @@ app.use(session({
 // These requests need to be forwarded to the respective servers
 const createProxyMiddleware = (targetPort: number, pathRewrite?: (path: string) => string) => {
   return async (req: express.Request, res: express.Response) => {
-    // Build the target path with query string
-    let targetPath = req.originalUrl || req.url;
-    if (pathRewrite) {
-      targetPath = pathRewrite(targetPath);
-    }
-    
-    const options = {
-      hostname: 'localhost',
-      port: targetPort,
-      path: targetPath,
-      method: req.method,
-      headers: {
-        ...req.headers,
-        host: `localhost:${targetPort}`,
+    try {
+      // Build the target path with query string
+      let targetPath = req.originalUrl || req.url;
+      if (pathRewrite) {
+        targetPath = pathRewrite(targetPath);
       }
-    };
-
-    // Remove headers that shouldn't be forwarded
-    delete (options.headers as any)['host'];
-    delete (options.headers as any)['connection'];
-    delete (options.headers as any)['content-length'];
-
-    const proxyReq = http.request(options, (proxyRes) => {
-      // Copy status code
-      res.statusCode = proxyRes.statusCode || 200;
       
-      // Copy headers
-      Object.keys(proxyRes.headers).forEach(key => {
-        const value = proxyRes.headers[key];
-        if (value && key.toLowerCase() !== 'content-encoding') {
-          res.setHeader(key, value);
+      // Prepare headers for forwarding
+      const forwardHeaders: Record<string, string> = {};
+      Object.keys(req.headers).forEach(key => {
+        const lowerKey = key.toLowerCase();
+        // Skip headers that shouldn't be forwarded
+        if (lowerKey !== 'host' && lowerKey !== 'connection' && lowerKey !== 'content-length') {
+          const value = req.headers[key];
+          if (value && typeof value === 'string') {
+            forwardHeaders[key] = value;
+          } else if (Array.isArray(value) && value.length > 0) {
+            forwardHeaders[key] = value[0];
+          }
         }
       });
       
-      // Pipe the response
-      proxyRes.pipe(res);
-    });
+      // Set host header
+      forwardHeaders['host'] = `localhost:${targetPort}`;
+      
+      const options = {
+        hostname: 'localhost',
+        port: targetPort,
+        path: targetPath,
+        method: req.method,
+        headers: forwardHeaders
+      };
 
-    proxyReq.on('error', (err) => {
-      console.error(`Proxy error for ${req.url}:`, err);
-      if (!res.headersSent) {
-        res.status(502).json({ error: 'Bad Gateway - Unable to proxy request' });
+      const proxyReq = http.request(options, (proxyRes) => {
+        // Copy status code
+        res.statusCode = proxyRes.statusCode || 200;
+        
+        // Copy headers
+        Object.keys(proxyRes.headers).forEach(key => {
+          const value = proxyRes.headers[key];
+          if (value) {
+            const lowerKey = key.toLowerCase();
+            // Skip transfer-encoding header as it's handled by the stream
+            if (lowerKey !== 'transfer-encoding' && lowerKey !== 'content-encoding') {
+              if (Array.isArray(value)) {
+                res.setHeader(key, value[0]);
+              } else {
+                res.setHeader(key, value);
+              }
+            }
+          }
+        });
+        
+        // Pipe the response
+        proxyRes.pipe(res);
+      });
+
+      proxyReq.on('error', (err: any) => {
+        console.error(`Proxy error for ${req.method} ${req.url} -> localhost:${targetPort}${targetPath}:`, err.message || err);
+        if (!res.headersSent) {
+          res.status(502).json({ 
+            error: 'Bad Gateway - Unable to proxy request',
+            details: err.message || 'Connection failed',
+            target: `localhost:${targetPort}${targetPath}`
+          });
+        }
+      });
+
+      // Handle request body for POST, PUT, PATCH requests
+      if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+        if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+          const body = JSON.stringify(req.body);
+          proxyReq.setHeader('Content-Type', 'application/json');
+          proxyReq.setHeader('Content-Length', Buffer.byteLength(body));
+          proxyReq.write(body);
+        } else if (req.body && typeof req.body === 'string') {
+          proxyReq.write(req.body);
+        }
       }
-    });
-
-    // Send request body if present
-    if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'DELETE') {
-      if (req.body && Object.keys(req.body).length > 0) {
-        const body = JSON.stringify(req.body);
-        proxyReq.setHeader('Content-Type', 'application/json');
-        proxyReq.setHeader('Content-Length', Buffer.byteLength(body));
-        proxyReq.write(body);
-      } else if (req.body && typeof req.body === 'string') {
-        proxyReq.write(req.body);
+      
+      proxyReq.end();
+    } catch (error: any) {
+      console.error(`Proxy setup error for ${req.url}:`, error);
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'Internal Server Error',
+          details: error.message || 'Failed to setup proxy'
+        });
       }
     }
-    
-    proxyReq.end();
   };
 };
 
