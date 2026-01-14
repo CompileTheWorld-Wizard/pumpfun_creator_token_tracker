@@ -7,14 +7,9 @@ const getTradeApiBase = () => {
   if (import.meta.env.VITE_TRADE_SERVER_URL) {
     return import.meta.env.VITE_TRADE_SERVER_URL;
   }
-  // In development, use proxy
-  if (import.meta.env.DEV) {
-    return '/trade-api';
-  }
-  // In production, use same host with port 5007
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:5007/api`;
+  // In both development and production, use nginx proxy path
+  // nginx proxies /trade-api/ to http://127.0.0.1:5007/api/
+  return '/trade-api';
 };
 
 const API_BASE = getTradeApiBase();

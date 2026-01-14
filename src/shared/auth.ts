@@ -43,14 +43,20 @@ export const getSessionConfig = () => {
   // For HTTPS with reverse proxy, use 'lax' (same-site) instead of 'none'
   // 'none' is only needed for true cross-origin (different domains)
   // Since nginx and backend are same origin from browser's perspective, 'lax' works
-  const sameSiteValue: 'none' | 'lax' | 'strict' = useHttps ? 'lax' : 'lax';
+  // For HTTP (like IP access), use 'lax' as well
+  const sameSiteValue: 'none' | 'lax' | 'strict' = 'lax';
+  
+  // Secure flag: only set to true if explicitly using HTTPS
+  // When behind nginx, the request might come as HTTP internally but HTTPS externally
+  // Trust proxy should handle this, but we'll use the env var for explicit control
+  const secureCookie = useHttps;
   
   return {
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: useHttps, // true for HTTPS, false for HTTP
+      secure: secureCookie, // true for HTTPS, false for HTTP
       httpOnly: true, // Prevents JavaScript access
       sameSite: sameSiteValue, // 'lax' works for same-site requests through reverse proxy
       maxAge: 24 * 60 * 60 * 1000, // 24 hours

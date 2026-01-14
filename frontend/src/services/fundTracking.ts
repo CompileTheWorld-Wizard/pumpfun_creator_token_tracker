@@ -7,14 +7,9 @@ const getFundApiBase = () => {
   if (import.meta.env.VITE_FUND_SERVER_URL) {
     return import.meta.env.VITE_FUND_SERVER_URL;
   }
-  // In development, use proxy
-  if (import.meta.env.DEV) {
-    return '/fund-api';
-  }
-  // In production, use same host with port 5006
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  return `${protocol}//${hostname}:5006/api`;
+  // In both development and production, use nginx proxy path
+  // nginx proxies /fund-api/ to http://127.0.0.1:5006/api/
+  return '/fund-api';
 };
 
 const API_BASE = getFundApiBase();
@@ -39,7 +34,7 @@ export interface TrackingStatus {
  */
 export async function fetchTrackingStatus(): Promise<{ success: boolean; data?: TrackingStatus; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/tracking/status`, {
+    const response = await fetch(`${API_BASE}/tracking/status`, {
       credentials: 'include'
     })
     
@@ -63,7 +58,7 @@ export async function fetchTrackingStatus(): Promise<{ success: boolean; data?: 
  */
 export async function startTracking(): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/tracking/start`, {
+    const response = await fetch(`${API_BASE}/tracking/start`, {
       method: 'POST',
       credentials: 'include'
     })
@@ -85,7 +80,7 @@ export async function startTracking(): Promise<{ success: boolean; error?: strin
  */
 export async function stopTracking(): Promise<{ success: boolean; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/tracking/stop`, {
+    const response = await fetch(`${API_BASE}/tracking/stop`, {
       method: 'POST',
       credentials: 'include'
     })
@@ -107,7 +102,7 @@ export async function stopTracking(): Promise<{ success: boolean; error?: string
  */
 export async function updateMinSolAmount(amount: number): Promise<{ success: boolean; minSolAmount?: number; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/tracking/min-sol`, {
+    const response = await fetch(`${API_BASE}/tracking/min-sol`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -131,7 +126,7 @@ export async function updateMinSolAmount(amount: number): Promise<{ success: boo
  */
 export async function fetchSolTransfers(limit: number = 100, offset: number = 0): Promise<{ success: boolean; transfers?: SolTransfer[]; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/sol-transfers?limit=${limit}&offset=${offset}`, {
+    const response = await fetch(`${API_BASE}/sol-transfers?limit=${limit}&offset=${offset}`, {
       credentials: 'include'
     })
     
@@ -152,7 +147,7 @@ export async function fetchSolTransfers(limit: number = 100, offset: number = 0)
  */
 export async function fetchSolTransfersBySender(sender: string, limit: number = 100): Promise<{ success: boolean; transfers?: SolTransfer[]; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/sol-transfers/sender/${encodeURIComponent(sender)}?limit=${limit}`, {
+    const response = await fetch(`${API_BASE}/sol-transfers/sender/${encodeURIComponent(sender)}?limit=${limit}`, {
       credentials: 'include'
     })
     
@@ -173,7 +168,7 @@ export async function fetchSolTransfersBySender(sender: string, limit: number = 
  */
 export async function fetchSolTransfersByReceiver(receiver: string, limit: number = 100): Promise<{ success: boolean; transfers?: SolTransfer[]; error?: string }> {
   try {
-    const response = await fetch(`${API_BASE}/api/sol-transfers/receiver/${encodeURIComponent(receiver)}?limit=${limit}`, {
+    const response = await fetch(`${API_BASE}/sol-transfers/receiver/${encodeURIComponent(receiver)}?limit=${limit}`, {
       credentials: 'include'
     })
     
