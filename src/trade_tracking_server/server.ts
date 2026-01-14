@@ -63,6 +63,10 @@ if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production')
   app.set('trust proxy', 1);
 }
 
+// Disable ETag globally to prevent 304 responses for API routes in production
+// Express enables ETag by default in production, which causes 304 responses
+app.disable('etag');
+
 // Middleware
 app.use(cors({
   origin: true,
@@ -76,6 +80,18 @@ app.use(session({
   ...getSessionConfig(),
   store: sessionStore,
 }));
+
+// Set no-cache headers for API routes to prevent 304 responses
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+  next();
+});
 
 // HTML route handlers (must come BEFORE static middleware)
 /**

@@ -1848,7 +1848,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgBuyCount: buySellStats.avgBuyCount,
           avgBuyTotalSol: buySellStats.avgBuyTotalSol,
           avgSellCount: buySellStats.avgSellCount,
-          avgSellTotalSol: buySellStats.avgSellTotalSol
+          avgSellTotalSol: buySellStats.avgSellTotalSol,
+          avgFirst5BuySol: buySellStats.avgFirst5BuySol,
+          medianFirst5BuySol: buySellStats.medianFirst5BuySol
         },
         expectedROI: {
           avgRoi1stBuy: expectedROI.avgRoi1stBuy,
