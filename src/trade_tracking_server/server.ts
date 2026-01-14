@@ -651,7 +651,7 @@ app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res)
     });
     
     // Auto-size columns
-    worksheet.columns.forEach((column: ExcelJS.Column) => {
+    worksheet.columns.forEach((column: Partial<ExcelJS.Column>) => {
       if (column && column.eachCell) {
         let maxLength = 10;
         column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
@@ -954,7 +954,7 @@ app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) =
     }
     
     // Auto-size columns
-    worksheet.columns.forEach((column: ExcelJS.Column) => {
+    worksheet.columns.forEach((column: Partial<ExcelJS.Column>) => {
       if (column && column.eachCell) {
         let maxLength = 10;
         column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
