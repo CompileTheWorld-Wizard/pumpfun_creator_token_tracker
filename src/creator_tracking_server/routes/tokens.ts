@@ -1582,7 +1582,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     );
     
     // Check if sorting by complex fields (these require token data)
-    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
+    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgFirst5BuySol', 'medianFirst5BuySol', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
     const sortingByComplexField = sortColumn && complexSortFields.includes(sortColumn);
     
     // Determine which wallets need token data
