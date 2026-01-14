@@ -1638,7 +1638,7 @@
               <!-- Avg First 5 Buy SOL -->
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.buySellStats">
+                  <span v-if="wallet.buySellStats && wallet.buySellStats.avgFirst5BuySol !== undefined && wallet.buySellStats.avgFirst5BuySol !== null">
                     {{ wallet.buySellStats.avgFirst5BuySol.toFixed(2) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
@@ -1647,7 +1647,7 @@
               <!-- Median First 5 Buy SOL -->
               <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
                 <div class="text-xs font-semibold text-gray-200">
-                  <span v-if="wallet.buySellStats">
+                  <span v-if="wallet.buySellStats && wallet.buySellStats.medianFirst5BuySol !== undefined && wallet.buySellStats.medianFirst5BuySol !== null">
                     {{ wallet.buySellStats.medianFirst5BuySol.toFixed(2) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>

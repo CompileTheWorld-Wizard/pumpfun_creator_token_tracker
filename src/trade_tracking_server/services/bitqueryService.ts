@@ -114,7 +114,7 @@ export class BitqueryService {
       const trades = response.data.data?.Solana?.DEXTradeByTokens || [];
 
       // Transform the response to a more usable format
-      const results: ATHMarketCapResult[] = trades.map((trade) => {
+      const results: ATHMarketCapResult[] = trades.map((trade: any) => {
         const firstTrade = trade.Trade;
         return {
           mintAddress: firstTrade?.Currency?.MintAddress || '',

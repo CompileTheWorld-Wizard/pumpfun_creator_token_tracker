@@ -10,9 +10,10 @@ const redisClient = new Redis({
   port: parseInt(process.env.REDIS_PORT || '6379'),
   password: process.env.REDIS_PASSWORD || undefined,
   db: parseInt(process.env.REDIS_SESSION_DB || process.env.REDIS_DB || '1'), // Use DB 1 for sessions
-  retryDelayOnFailover: 100,
   maxRetriesPerRequest: 3,
-});
+  // @ts-ignore - retryDelayOnFailover is valid but not in types
+  retryDelayOnFailover: 100,
+} as any);
 
 // Create Redis store for sessions
 export const sessionStore = new RedisStore({

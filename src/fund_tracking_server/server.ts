@@ -116,7 +116,7 @@ app.get('/api/sol-transfers/receiver/:receiver', requireAuth, async (req, res) =
 });
 
 // API route to get tracking status (requires authentication)
-app.get('/api/tracking/status', requireAuth, async (req, res) => {
+app.get('/api/tracking/status', requireAuth, async (_req, res) => {
   try {
     res.json({
       isTracking: solTransferTracker.getIsStreaming(),
@@ -129,7 +129,7 @@ app.get('/api/tracking/status', requireAuth, async (req, res) => {
 });
 
 // API route to start tracking (requires authentication)
-app.post('/api/tracking/start', requireAuth, async (req, res) => {
+app.post('/api/tracking/start', requireAuth, async (_req, res) => {
   try {
     const grpcUrl = process.env.GRPC_URL;
     const xToken = process.env.X_TOKEN;
@@ -144,15 +144,15 @@ app.post('/api/tracking/start', requireAuth, async (req, res) => {
     }
 
     solTransferTracker.start();
-    res.json({ success: true, message: 'Tracking started' });
+    return res.json({ success: true, message: 'Tracking started' });
   } catch (error: any) {
     console.error('Error starting tracking:', error);
-    res.status(500).json({ error: error.message || 'Failed to start tracking' });
+    return res.status(500).json({ error: error.message || 'Failed to start tracking' });
   }
 });
 
 // API route to stop tracking (requires authentication)
-app.post('/api/tracking/stop', requireAuth, async (req, res) => {
+app.post('/api/tracking/stop', requireAuth, async (_req, res) => {
   try {
     solTransferTracker.stop();
     res.json({ success: true, message: 'Tracking stopped' });
@@ -177,10 +177,10 @@ app.put('/api/tracking/min-sol', requireAuth, async (req, res) => {
     }
 
     solTransferTracker.setMinSolAmount(minAmount);
-    res.json({ success: true, minSolAmount: minAmount });
+    return res.json({ success: true, minSolAmount: minAmount });
   } catch (error: any) {
     console.error('Error updating minimum SOL amount:', error);
-    res.status(500).json({ error: error.message || 'Failed to update minimum SOL amount' });
+    return res.status(500).json({ error: error.message || 'Failed to update minimum SOL amount' });
   }
 });
 

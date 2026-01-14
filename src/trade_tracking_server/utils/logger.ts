@@ -125,7 +125,7 @@ class Logger {
   /**
    * Format log message with timestamp for file
    */
-  private formatMessage(level: string, ...args: any[]): string {
+  private formatMessage(_level: string, ...args: any[]): string {
     const timestamp = new Date().toISOString();
     const message = args.map(arg => {
       if (typeof arg === 'object') {
@@ -215,7 +215,7 @@ class Logger {
   /**
    * Format console message with timestamp and module
    */
-  private formatConsoleMessage(module: string, ...args: any[]): string {
+  private formatConsoleMessage(_module: string, ...args: any[]): string {
     const timestamp = this.formatTimestamp();
     const message = args.map(arg => {
       if (typeof arg === 'object') {
@@ -353,10 +353,10 @@ function sanitizeBuffer(buffer: Buffer): string {
  * Override console methods to also write to file
  */
 export function setupFileLogging(): void {
-  // Store original console methods
-  const originalLog = console.log;
-  const originalError = console.error;
-  const originalWarn = console.warn;
+  // Store original console methods (kept for potential future use)
+  // const originalLog = console.log;
+  // const originalError = console.error;
+  // const originalWarn = console.warn;
 
   // Intercept stdout writes to sanitize output
   const originalStdoutWrite = process.stdout.write.bind(process.stdout);

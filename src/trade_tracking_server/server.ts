@@ -501,7 +501,7 @@ app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res)
     
     const headers = [...baseHeaders, ...sellHeaders];
     const headerRow = worksheet.addRow(headers);
-    headerRow.eachCell((cell) => {
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
       cell.font = { bold: true };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.fill = {
@@ -646,15 +646,15 @@ app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res)
     
     // Add row to worksheet
     const row = worksheet.addRow(rowData);
-    row.eachCell((cell) => {
+    row.eachCell((cell: ExcelJS.Cell) => {
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
     
     // Auto-size columns
-    worksheet.columns.forEach((column) => {
+    worksheet.columns.forEach((column: ExcelJS.Column) => {
       if (column && column.eachCell) {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, (cell) => {
+        column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
           const cellValue = cell.value ? String(cell.value) : '';
           if (cellValue.length > maxLength) {
             maxLength = Math.min(cellValue.length + 2, 50);
@@ -788,7 +788,7 @@ app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) =
     
     const headers = [...baseHeaders, ...sellHeaders];
     const headerRow = worksheet.addRow(headers);
-    headerRow.eachCell((cell) => {
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
       cell.font = { bold: true };
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
       cell.fill = {
@@ -948,16 +948,16 @@ app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) =
       
       // Add row to worksheet
       const row = worksheet.addRow(rowData);
-      row.eachCell((cell) => {
+      row.eachCell((cell: ExcelJS.Cell) => {
         cell.alignment = { horizontal: 'center', vertical: 'middle' };
       });
     }
     
     // Auto-size columns
-    worksheet.columns.forEach((column) => {
+    worksheet.columns.forEach((column: ExcelJS.Column) => {
       if (column && column.eachCell) {
         let maxLength = 10;
-        column.eachCell({ includeEmpty: true }, (cell) => {
+        column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
           const cellValue = cell.value ? String(cell.value) : '';
           if (cellValue.length > maxLength) {
             maxLength = Math.min(cellValue.length + 2, 50);
