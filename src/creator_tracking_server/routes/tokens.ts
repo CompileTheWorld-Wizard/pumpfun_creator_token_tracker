@@ -1231,13 +1231,17 @@ function calculateBuySellStats(
   avgBuyTotalSol: number;
   avgSellCount: number;
   avgSellTotalSol: number;
+  avgFirst5BuySol: number;
+  medianFirst5BuySol: number;
 } {
   if (tokens.length === 0) {
     return {
       avgBuyCount: 0,
       avgBuyTotalSol: 0,
       avgSellCount: 0,
-      avgSellTotalSol: 0
+      avgSellTotalSol: 0,
+      avgFirst5BuySol: 0,
+      medianFirst5BuySol: 0
     };
   }
   
@@ -1246,6 +1250,9 @@ function calculateBuySellStats(
   let totalSellCount = 0;
   let totalSellSol = 0;
   let tokensWithData = 0;
+  
+  // Collect first 5 buy SOL amounts from each token
+  const allFirst5BuySols: number[] = [];
   
   for (const token of tokens) {
     // Parse market cap time series
@@ -1269,6 +1276,9 @@ function calculateBuySellStats(
     let buySol = 0;
     let sellCount = 0;
     let sellSol = 0;
+    
+    // Collect first 5 buy SOL amounts for this token
+    const first5BuySols: number[] = [];
     
     for (const point of marketCapTimeSeries) {
       const tradeType = point.tradeType || point.trade_type;
@@ -1298,11 +1308,19 @@ function calculateBuySellStats(
         
         buyCount++;
         buySol += solAmount;
+        
+        // Collect first 5 buy SOL amounts
+        if (first5BuySols.length < 5) {
+          first5BuySols.push(solAmount);
+        }
       } else if (tradeType === 'sell') {
         sellCount++;
         sellSol += solAmount;
       }
     }
+    
+    // Add first 5 buy SOL amounts to the overall collection
+    allFirst5BuySols.push(...first5BuySols);
     
     totalBuyCount += buyCount;
     totalBuySol += buySol;
@@ -1316,11 +1334,32 @@ function calculateBuySellStats(
   const avgSellCount = tokensWithData > 0 ? totalSellCount / tokensWithData : 0;
   const avgSellTotalSol = tokensWithData > 0 ? totalSellSol / tokensWithData : 0;
   
+  // Calculate average and median of first 5 buy SOL amounts
+  let avgFirst5BuySol = 0;
+  let medianFirst5BuySol = 0;
+  
+  if (allFirst5BuySols.length > 0) {
+    // Calculate average
+    const sum = allFirst5BuySols.reduce((acc, val) => acc + val, 0);
+    avgFirst5BuySol = sum / allFirst5BuySols.length;
+    
+    // Calculate median
+    const sorted = [...allFirst5BuySols].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      medianFirst5BuySol = (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      medianFirst5BuySol = sorted[mid];
+    }
+  }
+  
   return {
     avgBuyCount: Math.round(avgBuyCount * 100) / 100,
     avgBuyTotalSol: Math.round(avgBuyTotalSol * 100) / 100,
     avgSellCount: Math.round(avgSellCount * 100) / 100,
-    avgSellTotalSol: Math.round(avgSellTotalSol * 100) / 100
+    avgSellTotalSol: Math.round(avgSellTotalSol * 100) / 100,
+    avgFirst5BuySol: Math.round(avgFirst5BuySol * 100) / 100,
+    medianFirst5BuySol: Math.round(medianFirst5BuySol * 100) / 100
   };
 }
 
@@ -1720,7 +1759,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         avgBuyCount: 0,
         avgBuyTotalSol: 0,
         avgSellCount: 0,
-        avgSellTotalSol: 0
+        avgSellTotalSol: 0,
+        avgFirst5BuySol: 0,
+        medianFirst5BuySol: 0
       };
       
       // Calculate expected ROI for 1st/2nd/3rd buy positions
@@ -1936,6 +1977,20 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
                 (filter.max == null || wallet.buySellStats.avgSellTotalSol <= filter.max)
               );
               if (!matches) return false;
+            } else if (filter.type === 'avgFirst5BuySol') {
+              const avgFirst5BuySol = (wallet.buySellStats as any).avgFirst5BuySol ?? 0;
+              const matches = (
+                (filter.min == null || avgFirst5BuySol >= filter.min) &&
+                (filter.max == null || avgFirst5BuySol <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'medianFirst5BuySol') {
+              const medianFirst5BuySol = (wallet.buySellStats as any).medianFirst5BuySol ?? 0;
+              const matches = (
+                (filter.min == null || medianFirst5BuySol >= filter.min) &&
+                (filter.max == null || medianFirst5BuySol <= filter.max)
+              );
+              if (!matches) return false;
             }
           }
         }
@@ -2074,6 +2129,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           case 'avgSellSol':
             aVal = a.buySellStats.avgSellTotalSol ?? 0;
             bVal = b.buySellStats.avgSellTotalSol ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'avgFirst5BuySol':
+            aVal = (a.buySellStats as any).avgFirst5BuySol ?? 0;
+            bVal = (b.buySellStats as any).avgFirst5BuySol ?? 0;
+            return (aVal - bVal) * direction;
+          
+          case 'medianFirst5BuySol':
+            aVal = (a.buySellStats as any).medianFirst5BuySol ?? 0;
+            bVal = (b.buySellStats as any).medianFirst5BuySol ?? 0;
             return (aVal - bVal) * direction;
           
           case 'roi1st':

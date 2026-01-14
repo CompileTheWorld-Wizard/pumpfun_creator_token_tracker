@@ -834,14 +834,14 @@
               </div>
 
               <!-- Avg Buy/Sells Group -->
-              <div v-if="shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells')" class="mb-2">
+              <div v-if="shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Avg First 5 Buy SOL', 'Avg Buy/Sells') || shouldShowFilterItem('Median First 5 Buy SOL', 'Avg Buy/Sells')" class="mb-2">
                 <div 
                   @click="expandedGroups.avgBuySells = !expandedGroups.avgBuySells"
                   class="text-xs font-semibold text-gray-400 mb-1 flex items-center gap-1 cursor-pointer hover:text-gray-300"
                 >
                   <svg 
                     class="w-3 h-3 transition-transform"
-                    :class="{ 'rotate-90': expandedGroups.avgBuySells || (filterSearchQuery && (shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells'))) }"
+                    :class="{ 'rotate-90': expandedGroups.avgBuySells || (filterSearchQuery && (shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Avg First 5 Buy SOL', 'Avg Buy/Sells') || shouldShowFilterItem('Median First 5 Buy SOL', 'Avg Buy/Sells'))) }"
                     fill="none" 
                     stroke="currentColor" 
                     viewBox="0 0 24 24"
@@ -850,7 +850,7 @@
                   </svg>
                   Avg Buy/Sells
                 </div>
-                <div v-if="expandedGroups.avgBuySells || (filterSearchQuery && (shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells')))" class="ml-4 space-y-1">
+                <div v-if="expandedGroups.avgBuySells || (filterSearchQuery && (shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Avg First 5 Buy SOL', 'Avg Buy/Sells') || shouldShowFilterItem('Median First 5 Buy SOL', 'Avg Buy/Sells')))" class="ml-4 space-y-1">
                   <div
                     v-if="shouldShowFilterItem('Buy Count', 'Avg Buy/Sells')"
                     @click="!isAvgBuySellsFilterAdded('buyCount') && selectFilterType('avgBuyCount')"
@@ -906,6 +906,34 @@
                     ]"
                   >
                     Sell SOLs
+                  </div>
+                  <div
+                    v-if="shouldShowFilterItem('Avg First 5 Buy SOL', 'Avg Buy/Sells')"
+                    @click="!isAvgBuySellsFilterAdded('avgFirst5BuySol') && selectFilterType('avgFirst5BuySol')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded transition',
+                      isAvgBuySellsFilterAdded('avgFirst5BuySol')
+                        ? 'text-gray-500 cursor-not-allowed opacity-50'
+                        : newFilterType === 'avgFirst5BuySol' 
+                          ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                          : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                    ]"
+                  >
+                    Avg First 5 Buy SOL
+                  </div>
+                  <div
+                    v-if="shouldShowFilterItem('Median First 5 Buy SOL', 'Avg Buy/Sells')"
+                    @click="!isAvgBuySellsFilterAdded('medianFirst5BuySol') && selectFilterType('medianFirst5BuySol')"
+                    :class="[
+                      'px-2 py-1.5 text-xs rounded transition',
+                      isAvgBuySellsFilterAdded('medianFirst5BuySol')
+                        ? 'text-gray-500 cursor-not-allowed opacity-50'
+                        : newFilterType === 'medianFirst5BuySol' 
+                          ? 'bg-purple-600/30 text-purple-300 border border-purple-500/50 cursor-pointer' 
+                          : 'text-gray-300 hover:bg-gray-700/50 cursor-pointer'
+                    ]"
+                  >
+                    Median First 5 Buy SOL
                   </div>
                 </div>
               </div>
@@ -1352,7 +1380,7 @@
                 </div>
               </th>
               <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">ATH MCap Percentiles</th>
-              <th colspan="4" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buys/Sells</th>
+              <th colspan="6" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Avg Buys/Sells</th>
               <th colspan="3" class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700">Expected ROI (1st/2nd/3rd Buy)</th>
               <th 
                 rowspan="2" 
@@ -1435,6 +1463,24 @@
                 </div>
               </th>
               <th 
+                @click="handleSort('avgFirst5BuySol')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Avg First 5 Buy SOL</span>
+                  <span v-if="getSortIcon('avgFirst5BuySol')" class="text-purple-400">{{ getSortIcon('avgFirst5BuySol') }}</span>
+                </div>
+              </th>
+              <th 
+                @click="handleSort('medianFirst5BuySol')"
+                class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
+              >
+                <div class="flex items-center justify-center gap-1">
+                  <span>Median First 5 Buy SOL</span>
+                  <span v-if="getSortIcon('medianFirst5BuySol')" class="text-purple-400">{{ getSortIcon('medianFirst5BuySol') }}</span>
+                </div>
+              </th>
+              <th 
                 @click="handleSort('avgSellCount')"
                 class="px-2 py-1.5 text-center text-[10px] font-semibold text-gray-400 uppercase tracking-wider border border-gray-700 cursor-pointer hover:bg-gray-700/50 transition select-none"
               >
@@ -1484,7 +1530,7 @@
           <tbody class="divide-y divide-gray-800">
             <!-- Empty State -->
             <tr v-if="!loading && wallets.length === 0">
-              <td :colspan="showWhatIfColumn ? 21 : 20" class="px-2 py-8 text-center">
+              <td :colspan="showWhatIfColumn ? 23 : 22" class="px-2 py-8 text-center">
                 <p class="text-gray-400 text-xs font-semibold mb-1">No creator wallets found</p>
                 <p class="text-gray-500 text-[10px]">Creator wallets will appear here once tokens are tracked</p>
               </td>
@@ -1585,6 +1631,24 @@
                 <div class="text-xs font-semibold text-gray-200">
                   <span v-if="wallet.buySellStats">
                     {{ wallet.buySellStats.avgBuyTotalSol.toFixed(2) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Avg First 5 Buy SOL -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ wallet.buySellStats.avgFirst5BuySol.toFixed(2) }}
+                  </span>
+                  <span v-else class="text-gray-500">N/A</span>
+                </div>
+              </td>
+              <!-- Median First 5 Buy SOL -->
+              <td class="px-2 py-1.5 whitespace-nowrap text-right border border-gray-700">
+                <div class="text-xs font-semibold text-gray-200">
+                  <span v-if="wallet.buySellStats">
+                    {{ wallet.buySellStats.medianFirst5BuySol.toFixed(2) }}
                   </span>
                   <span v-else class="text-gray-500">N/A</span>
                 </div>
@@ -2008,7 +2072,7 @@ interface Filters {
     max?: number
   }>
   avgBuySells: Array<{
-    type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'
+    type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol' | 'avgFirst5BuySol' | 'medianFirst5BuySol'
     min?: number
     max?: number
     minBuyAmountSol?: number // Optional: minimum buy amount in SOL (only for buyCount filter)
@@ -2129,6 +2193,10 @@ const isSelectedFilterAlreadyAdded = computed(() => {
       return isAvgBuySellsFilterAdded('sellCount')
     case 'avgSellSol':
       return isAvgBuySellsFilterAdded('sellSol')
+    case 'avgFirst5BuySol':
+      return isAvgBuySellsFilterAdded('avgFirst5BuySol')
+    case 'medianFirst5BuySol':
+      return isAvgBuySellsFilterAdded('medianFirst5BuySol')
     case 'expectedROI1st':
       return isExpectedROIFilterAdded('1st')
     case 'expectedROI2nd':
@@ -2170,7 +2238,7 @@ const isMedianMcapFilterAdded = (filterType: 'mcap' | 'score'): boolean => {
 }
 
 // Check if an avg buy/sells filter type is already added
-const isAvgBuySellsFilterAdded = (filterType: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'): boolean => {
+const isAvgBuySellsFilterAdded = (filterType: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol' | 'avgFirst5BuySol' | 'medianFirst5BuySol'): boolean => {
   return filters.value.avgBuySells.some(f => f.type === filterType)
 }
 
@@ -2198,7 +2266,7 @@ const shouldShowMultiplierGroup = (): boolean => {
 }
 
 // Get label for avg buy/sells filter
-const getAvgBuySellsFilterLabel = (type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol'): string => {
+const getAvgBuySellsFilterLabel = (type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol' | 'avgFirst5BuySol' | 'medianFirst5BuySol'): string => {
   switch (type) {
     case 'buyCount':
       return 'Buy Count'
@@ -2208,6 +2276,10 @@ const getAvgBuySellsFilterLabel = (type: 'buyCount' | 'buySol' | 'sellCount' | '
       return 'Sell Count'
     case 'sellSol':
       return 'Sell SOLs'
+    case 'avgFirst5BuySol':
+      return 'Avg First 5 Buy SOL'
+    case 'medianFirst5BuySol':
+      return 'Median First 5 Buy SOL'
     default:
       return ''
   }
@@ -2221,7 +2293,7 @@ const hasVisibleFilterItems = computed(() => {
   const hasWinRate = shouldShowFilterItem('Win Rate (Percentage)', 'Win Rate') || shouldShowFilterItem('Win Rate (Score)', 'Win Rate')
   const hasAvgMcap = shouldShowFilterItem('Average MCap (Amount)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Percentile)', 'Average Market Cap') || shouldShowFilterItem('Average MCap (Score)', 'Average Market Cap')
   const hasMedianMcap = shouldShowFilterItem('Median MCap (Amount)', 'Median ATH Market Cap') || shouldShowFilterItem('Median MCap (Score)', 'Median ATH Market Cap')
-  const hasAvgBuySells = shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells')
+  const hasAvgBuySells = shouldShowFilterItem('Buy Count', 'Avg Buy/Sells') || shouldShowFilterItem('Buy SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Sell Count', 'Avg Buy/Sells') || shouldShowFilterItem('Sell SOLs', 'Avg Buy/Sells') || shouldShowFilterItem('Avg First 5 Buy SOL', 'Avg Buy/Sells') || shouldShowFilterItem('Median First 5 Buy SOL', 'Avg Buy/Sells')
   const hasExpectedROI = shouldShowFilterItem('Expected ROI (1st)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (2nd)', 'Expected ROI') || shouldShowFilterItem('Expected ROI (3rd)', 'Expected ROI')
   const hasRugRate = shouldShowFilterItem('Rug Rate', 'Rug Rate')
   const hasAvgRugTime = shouldShowFilterItem('Avg Rug Time', 'Avg Rug Time')
@@ -2346,6 +2418,20 @@ const confirmAddFilter = () => {
     case 'avgSellSol':
       filters.value.avgBuySells.push({
         type: 'sellSol',
+        min: undefined,
+        max: undefined
+      })
+      break
+    case 'avgFirst5BuySol':
+      filters.value.avgBuySells.push({
+        type: 'avgFirst5BuySol',
+        min: undefined,
+        max: undefined
+      })
+      break
+    case 'medianFirst5BuySol':
+      filters.value.avgBuySells.push({
+        type: 'medianFirst5BuySol',
         min: undefined,
         max: undefined
       })

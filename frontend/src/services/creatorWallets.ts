@@ -16,6 +16,8 @@ export interface BuySellStats {
   avgBuyTotalSol: number;
   avgSellCount: number;
   avgSellTotalSol: number;
+  avgFirst5BuySol: number;
+  medianFirst5BuySol: number;
 }
 
 export interface ExpectedROI {
@@ -88,7 +90,7 @@ export interface FilterParams {
     max?: number;
   }>;
   avgBuySells?: Array<{
-    type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol';
+    type: 'buyCount' | 'buySol' | 'sellCount' | 'sellSol' | 'avgFirst5BuySol' | 'medianFirst5BuySol';
     min?: number;
     max?: number;
     minBuyAmountSol?: number; // Optional: minimum buy amount in SOL (only for buyCount filter)
