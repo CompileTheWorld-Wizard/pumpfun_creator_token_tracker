@@ -1,0 +1,56 @@
+{
+  "name": "soltrack-creator-tracker",
+  "version": "1.0.0",
+  "description": "SolTrack Creator Tracking Server",
+  "type": "module",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "tsx watch server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "solana",
+    "blockchain",
+    "tracking",
+    "creator"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@project-serum/anchor": "^0.26.0",
+    "@shyft-to/ladybug-sdk": "^0.0.2",
+    "@solana/buffer-layout": "^4.0.1",
+    "@solana/buffer-layout-utils": "^0.2.0",
+    "@solana/web3.js": "^1.95.2",
+    "@triton-one/yellowstone-grpc": "^4.0.2",
+    "axios": "^1.13.1",
+    "bs58": "^6.0.0",
+    "connect-redis": "^7.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-session": "^1.18.1",
+    "ioredis": "^5.8.2",
+    "lodash": "^4.17.21",
+    "pg": "^8.13.1",
+    "shyft-parser-v1": "npm:@shyft-to/solana-transaction-parser@1.1.17",
+    "shyft-parser-v2": "npm:@shyft-to/solana-transaction-parser@2.0.0",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/express-session": "^1.18.0",
+    "@types/ioredis": "^4.28.10",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

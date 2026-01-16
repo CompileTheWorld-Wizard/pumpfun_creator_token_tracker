@@ -26,33 +26,48 @@ if [ ! -f .env ]; then
     exit 1
 fi
 
-# Install dependencies
-echo -e "${GREEN}Installing dependencies...${NC}"
+# Install and build frontend app
+echo -e "${GREEN}Installing frontend dependencies...${NC}"
+cd frontend
 npm ci --production=false
-
-# Build ladysbug if needed
-if [ -d "ladysbug" ]; then
-    echo -e "${GREEN}Building ladysbug...${NC}"
-    cd ladysbug
-    npm install
-    npm run build
-    cd ..
-fi
-
-# Build the application
-echo -e "${GREEN}Building application...${NC}"
+echo -e "${GREEN}Building frontend...${NC}"
 npm run build
+cd ..
+
+# Install and build creator_tracker app
+echo -e "${GREEN}Installing creator_tracker dependencies...${NC}"
+cd creator_tracker
+npm ci --production=false
+echo -e "${GREEN}Building creator_tracker...${NC}"
+npm run build
+cd ..
+
+# Install and build fund_tracker app
+echo -e "${GREEN}Installing fund_tracker dependencies...${NC}"
+cd fund_tracker
+npm ci --production=false
+echo -e "${GREEN}Building fund_tracker...${NC}"
+npm run build
+cd ..
+
+# Install and build trade_tracker app
+echo -e "${GREEN}Installing trade_tracker dependencies...${NC}"
+cd trade_tracker
+npm ci --production=false
+echo -e "${GREEN}Building trade_tracker...${NC}"
+npm run build
+cd ..
 
 # Create logs directory if it doesn't exist
 mkdir -p logs
 
-# Stop existing PM2 process if running
-echo -e "${GREEN}Stopping existing PM2 process...${NC}"
-pm2 stop soltrack || true
-pm2 delete soltrack || true
+# Stop existing PM2 processes if running
+echo -e "${GREEN}Stopping existing PM2 processes...${NC}"
+pm2 stop all || true
+pm2 delete all || true
 
-# Start the application with PM2
-echo -e "${GREEN}Starting application with PM2...${NC}"
+# Start the applications with PM2
+echo -e "${GREEN}Starting applications with PM2...${NC}"
 pm2 start ecosystem.config.cjs
 
 # Save PM2 configuration
@@ -64,18 +79,9 @@ pm2 startup | grep -v PM2 || true
 
 echo -e "${GREEN}✅ Deployment completed successfully!${NC}"
 echo ""
-echo "Useful commands (using npm scripts):"
-echo "  npm run pm2:status   - Check application status"
-echo "  npm run pm2:logs     - View application logs"
-echo "  npm run pm2:restart  - Restart the application"
-echo "  npm run pm2:stop     - Stop the application"
-echo "  npm run pm2:monit    - Monitor application resources"
-echo "  npm run pm2:deploy   - Full deployment"
-echo ""
-echo "Or use PM2 directly:"
+echo "Useful commands:"
 echo "  pm2 status          - Check application status"
-echo "  pm2 logs soltrack   - View application logs"
-echo "  pm2 restart soltrack - Restart the application"
-echo "  pm2 stop soltrack   - Stop the application"
-echo "  pm2 monit           - Monitor application resources"
-
+echo "  pm2 logs             - View application logs"
+echo "  pm2 restart all      - Restart all applications"
+echo "  pm2 stop all         - Stop all applications"
+echo "  pm2 monit            - Monitor application resources"

@@ -1,0 +1,2561 @@
+import dotenv from "dotenv";
+import express from "express";
+import cors from "cors";
+import bodyParser from "body-parser";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
+import session from "express-session";
+import ExcelJS from "exceljs";
+import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import { setupFileLogging } from "./utils/logger.js";
+import { dbService } from "./database/index.js";
+import { redisService } from "./services/redisService.js";
+import { tracker } from "./tracker/index.js";
+import { tokenService } from "./services/tokenService.js";
+import { bitqueryService } from "./services/index.js";
+import { sessionStore } from "./src/shared/sessionStore.js";
+import { getSessionConfig, requireAuth as sharedRequireAuth, isAuthenticated as sharedIsAuthenticated } from "./src/shared/auth.js";
+
+dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Extend session type to include authenticated property
+declare module "express-session" {
+  interface SessionData {
+    authenticated?: boolean;
+  }
+}
+
+// Setup file logging (must be done early, before any console.log calls)
+setupFileLogging();
+
+// Initialize Redis service
+redisService.initialize();
+
+const app = express();
+const PORT = parseInt(process.env.TRADE_SERVER_PORT || process.env.PORT || '5007', 10);
+
+// Trust proxy - required when behind nginx reverse proxy
+app.set('trust proxy', 1);
+
+// Trust proxy (important if behind reverse proxy like nginx)
+// This ensures proper IP detection and cookie handling
+if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
+// Disable ETag globally to prevent 304 responses for API routes in production
+// Express enables ETag by default in production, which causes 304 responses
+app.disable('etag');
+
+// Middleware
+app.use(cors({
+  origin: true,
+  credentials: true
+}));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Session middleware - using shared Redis store
+app.use(session({
+  ...getSessionConfig(),
+  store: sessionStore,
+}));
+
+// Set no-cache headers for API routes to prevent 304 responses
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+  next();
+});
+
+// HTML route handlers (must come BEFORE static middleware)
+// Note: Static files and HTML pages are served by the frontend/auth server
+
+/**
+ * Authentication middleware - using shared middleware
+ */
+const requireAuth = sharedRequireAuth;
+
+/**
+ * Check if user is authenticated (for API routes)
+ * Using shared authentication helper
+ */
+function isAuthenticated(req: express.Request): boolean {
+  return sharedIsAuthenticated(req);
+}
+
+// Initialize database and tracker
+async function initializeApp() {
+  try {
+    await dbService.initialize();
+    await dbService.initializeDefaultSkipTokens();
+    tracker.initialize();
+    console.log("✅ Application initialized successfully");
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || '';
+    console.error("❌ Failed to initialize application:", errorMessage);
+    if (errorStack) {
+      console.error("Stack trace:", errorStack);
+    }
+    throw error;
+  }
+}
+
+// Note: Authentication is handled by the frontend/auth server
+// All API routes below require authentication via shared session
+
+// API Routes (protected)
+
+/**
+ * GET /api/status - Get tracker status
+ */
+app.get("/api/status", requireAuth, (_req, res) => {
+  res.status(200).json({
+    isRunning: tracker.isTrackerRunning(),
+    addresses: tracker.getAddresses(),
+  });
+});
+
+/**
+ * POST /api/addresses - Set addresses to track
+ */
+app.post("/api/addresses", requireAuth, (req, res) => {
+  try {
+    const { addresses } = req.body;
+        
+    if (!Array.isArray(addresses)) {
+      console.log('❌ Error: Addresses must be an array');
+      res.status(400).json({ error: "Addresses must be an array" });
+      return;
+    }
+
+    // Filter out empty addresses
+    const validAddresses = addresses.filter(addr => addr && addr.trim().length > 0);
+    
+    if (validAddresses.length === 0) {
+      console.log('❌ Error: No valid addresses provided');
+      res.status(400).json({ error: "At least one valid address is required" });
+      return;
+    }
+    
+    tracker.setAddresses(validAddresses);
+    
+    console.log('✅ Addresses successfully configured!\n');
+    
+    res.status(200).json({ 
+      success: true, 
+      message: "Addresses updated successfully",
+      addresses: validAddresses
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/start - Start tracking
+ */
+app.post("/api/start", requireAuth, async (_req, res) => {
+  try {
+    const result = await tracker.start();
+    
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/stop - Stop tracking
+ */
+app.post("/api/stop", requireAuth, async (_req, res) => {
+  try {
+    const result = await tracker.stop();
+    
+    if (result.success) {
+      res.status(200).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/transactions - Get transactions with pagination and date filtering
+ */
+app.get("/api/transactions", requireAuth, async (_req, res) => {
+  try {
+    const limit = parseInt(_req.query.limit as string) || 50;
+    const offset = parseInt(_req.query.offset as string) || 0;
+    const fromDate = _req.query.fromDate as string;
+    const toDate = _req.query.toDate as string;
+    const wallets = _req.query.wallets as string; // Comma-separated wallet addresses
+    
+    // Parse wallets if provided
+    const walletAddresses = wallets ? wallets.split(',').filter(w => w.trim().length > 0) : null;
+    
+    const [transactions, total] = await Promise.all([
+      dbService.getTransactions(limit, offset, fromDate, toDate, walletAddresses),
+      dbService.getTransactionCount(fromDate, toDate, walletAddresses)
+    ]);
+    
+    res.status(200).json({
+      transactions,
+      total,
+      limit,
+      offset,
+      fromDate: fromDate || null,
+      toDate: toDate || null
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/export-token/:wallet/:token - Get token data and transactions for export (JSON)
+ */
+app.get("/api/export-token/:wallet/:token", requireAuth, async (_req, res) => {
+  try {
+    const { wallet, token } = _req.params;
+    
+    // Get token information
+    const tokens = await dbService.getTokensByMints([token]);
+    const tokenInfo = tokens.length > 0 ? tokens[0] : null;
+    
+    // Get wallet token info
+    const walletTradesResult = await dbService.getWalletTokens(wallet);
+    const walletTrades = walletTradesResult.data;
+    const walletTokenInfo = walletTrades.find((t: any) => t.token_address === token) || null;
+    
+    // Get all transactions for this wallet+token pair
+    const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+    
+    // Count total sells
+    const totalSells = transactions.filter(tx => tx.type?.toLowerCase() === 'sell').length;
+    
+    res.status(200).json({
+      success: true,
+      data: {
+        tokenInfo,
+        walletTokenInfo,
+        transactions,
+        totalSells
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/export-token-excel/:wallet/:token - Generate Excel file with styling
+ * New format: One row per token with all information in that row
+ */
+app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res) => {
+  try {
+    const { wallet, token } = _req.params;
+    
+    // Get token information
+    const tokens = await dbService.getTokensByMints([token]);
+    const tokenInfo = tokens.length > 0 ? tokens[0] : null;
+        
+    // Get all transactions for this wallet+token pair
+    const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+    
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Token Data');
+    
+    // Helper function to format timestamp
+    const formatTimestamp = (dateString: string | null | undefined): string => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    // Helper function to format market cap with K and M (currently unused)
+    // const formatMarketCap = (marketCap: number | string | null | undefined): string => {
+    //   if (!marketCap) return '';
+    //   const num = parseFloat(String(marketCap));
+    //   if (!num || isNaN(num)) return '';
+    //   
+    //   if (num >= 1000000) {
+    //     return `${(num / 1000000).toFixed(2)}M`;
+    //   } else if (num >= 1000) {
+    //     return `${(num / 1000).toFixed(2)}K`;
+    //   }
+    //   return num.toFixed(2);
+    // };
+    
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    
+    // Count sells for this token
+    const sells = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'sell');
+    const numSells = sells.length;
+    
+    // Build header row
+    const baseHeaders = [
+      'Token Name',
+      'Token Symbol',
+      'Token Address',
+      'Creator Address',
+      'Number of Socials',
+      'Dev Buy Amount in SOL',
+      'Dev Buy Amount in Tokens',
+      'Wallet Gas & Fees Amount',
+      'Wallet Buy Position After Dev',
+      'Wallet Buy Block #',
+      'Wallet Buy Block # After Dev',
+      'Wallet Buy Timestamp',
+      'Transaction Signature',
+      'Wallet Buy Amount in SOL',
+      'Wallet Buy Amount in Tokens',
+      'Wallet Buy Market Cap'
+    ];
+    
+    // Add sell columns for each sell
+    const sellHeaders: string[] = [];
+    for (let i = 1; i <= numSells; i++) {
+      sellHeaders.push(
+        `Wallet Sell Number`,
+        `Wallet Sell Timestamp`,
+        `Transaction Signature`,
+        `Wallet Sell Amount in SOL`,
+        `Wallet Sell Amount in Tokens`,
+        `Wallet Sell Market Cap`
+      );
+    }
+    
+    const headers = [...baseHeaders, ...sellHeaders];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF006400' }
+      };
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+    });
+    
+    // Sort transactions by block timestamp ASC (fallback to created_at if block_timestamp not available)
+    transactions.sort((a: any, b: any) => {
+      const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+      const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+      return timeA - timeB;
+    });
+    
+    // Calculate social links count
+    let socialCount = 0;
+    if (tokenInfo?.twitter) socialCount++;
+    if (tokenInfo?.website) socialCount++;
+    if (tokenInfo?.discord) socialCount++;
+    if (tokenInfo?.telegram) socialCount++;
+    
+    // Dev buy amounts
+    const devBuyAmountSOL = tokenInfo?.dev_buy_amount && tokenInfo?.dev_buy_amount_decimal !== null && tokenInfo?.dev_buy_amount_decimal !== undefined
+      ? parseFloat(tokenInfo.dev_buy_amount) / Math.pow(10, tokenInfo.dev_buy_amount_decimal)
+      : null;
+    const devBuyAmountTokens = tokenInfo?.dev_buy_token_amount && tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+      ? parseFloat(tokenInfo.dev_buy_token_amount) / Math.pow(10, tokenInfo.dev_buy_token_amount_decimal)
+      : null;
+    
+    // Get dev buy timestamp and block number
+    const devBuyTimestamp = tokenInfo?.dev_buy_timestamp ? new Date(tokenInfo.dev_buy_timestamp).getTime() : null;
+    const devBuyBlockNumber = tokenInfo?.dev_buy_block_number || null;
+    
+    // Find first buy transaction for this wallet-token pair (sorted by timestamp ASC)
+    const buys = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'buy' && tx.mint_from === SOL_MINT);
+    const firstBuy = buys.length > 0 ? buys[0] : null; // First buy is already first in sorted array
+    
+    // Get token decimals
+    const tokenDecimals = tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+      ? tokenInfo.dev_buy_token_amount_decimal
+      : 9;
+    
+    // Build base row data
+    const rowData: any[] = [
+      tokenInfo?.token_name || 'Unknown',
+      tokenInfo?.symbol || '???',
+      token,
+      tokenInfo?.creator || '',
+      socialCount,
+      devBuyAmountSOL !== null ? devBuyAmountSOL : '',
+      devBuyAmountTokens !== null ? devBuyAmountTokens : '',
+      '', // Wallet Gas & Fees Amount (will fill if firstBuy exists)
+      '', // Wallet Buy Position After Dev
+      '', // Wallet Buy Block #
+      '', // Wallet Buy Block # After Dev
+      '', // Wallet Buy Timestamp
+      '', // Transaction Signature
+      '', // Wallet Buy Amount in SOL
+      '', // Wallet Buy Amount in Tokens
+      ''  // Wallet Buy Market Cap
+    ];
+    
+    // Fill first buy data if exists
+    if (firstBuy) {
+      // Gas & Fees for first buy only
+      const tipAmount = (firstBuy.tipAmount != null ? parseFloat(firstBuy.tipAmount) : 0) || 0;
+      const feeAmount = (firstBuy.feeAmount != null ? parseFloat(firstBuy.feeAmount) : 0) || 0;
+      const totalGasAndTips = feeAmount + tipAmount;
+      rowData[7] = totalGasAndTips; // Wallet Gas & Fees Amount
+      
+      // Calculate position after dev (milliseconds) - only if buy happens after dev buy
+      if (devBuyTimestamp) {
+        const buyTime = new Date(firstBuy.created_at).getTime();
+        const millisecondsDiff = buyTime - devBuyTimestamp;
+        // Only show if buy happened after dev buy (positive value)
+        rowData[8] = millisecondsDiff >= 0 ? millisecondsDiff : ''; // Wallet Buy Position After Dev
+      }
+      
+      // Block number
+      rowData[9] = firstBuy.blockNumber || ''; // Wallet Buy Block #
+      
+      // Block number after dev
+      if (devBuyBlockNumber && firstBuy.blockNumber) {
+        rowData[10] = firstBuy.blockNumber - devBuyBlockNumber; // Wallet Buy Block # After Dev
+      }
+      
+      // Timestamp
+      rowData[11] = formatTimestamp(firstBuy.created_at); // Wallet Buy Timestamp
+      
+      // Transaction signature
+      rowData[12] = firstBuy.transaction_id || ''; // Transaction Signature
+      
+      // Buy amount in SOL
+      const buySolAmount = parseFloat(firstBuy.in_amount) || 0;
+      rowData[13] = buySolAmount / 1000000000; // Wallet Buy Amount in SOL
+      
+      // Buy amount in Tokens
+      const buyTokenAmountRaw = parseFloat(firstBuy.out_amount) || 0;
+      rowData[14] = buyTokenAmountRaw / Math.pow(10, tokenDecimals); // Wallet Buy Amount in Tokens
+      
+      // Market cap (raw value, not formatted)
+      rowData[15] = firstBuy.marketCap || ''; // Wallet Buy Market Cap
+    }
+    
+    // Get all sells (sorted by block timestamp ASC, fallback to created_at)
+    const sortedSells = transactions
+      .filter((tx: any) => tx.type?.toLowerCase() === 'sell')
+      .sort((a: any, b: any) => {
+        const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+        return timeA - timeB;
+      });
+    
+    // Helper function to format ordinal numbers (1st, 2nd, 3rd, etc.)
+    const formatOrdinal = (n: number): string => {
+      const s = ['th', 'st', 'nd', 'rd'];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    };
+    
+    // Add sell data (repeated columns)
+    for (let i = 0; i < numSells; i++) {
+      const sell = sortedSells[i];
+      rowData.push(
+        formatOrdinal(i + 1), // Wallet Sell Number (1st, 2nd, 3rd, etc.)
+        formatTimestamp(sell.blockTimestamp || sell.created_at), // Wallet Sell Timestamp (use block_timestamp if available)
+        sell.transaction_id || '', // Transaction Signature
+        (parseFloat(sell.out_amount) || 0) / 1000000000, // Wallet Sell Amount in SOL
+        (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals), // Wallet Sell Amount in Tokens
+        sell.marketCap || '' // Wallet Sell Market Cap (raw value, not formatted)
+      );
+    }
+    
+    // Add row to worksheet
+    const row = worksheet.addRow(rowData);
+    row.eachCell((cell: ExcelJS.Cell) => {
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    
+    // Auto-size columns
+    worksheet.columns.forEach((column: Partial<ExcelJS.Column>) => {
+      if (column && column.eachCell) {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
+          const cellValue = cell.value ? String(cell.value) : '';
+          if (cellValue.length > maxLength) {
+            maxLength = Math.min(cellValue.length + 2, 50);
+          }
+        });
+        column.width = maxLength;
+      }
+    });
+    
+    // Set response headers
+    const tokenSymbol = tokenInfo?.symbol || 'Token';
+    const filename = `${tokenSymbol}_${wallet.substring(0, 8)}_${Date.now()}.xlsx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Write workbook to response
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error: any) {
+    console.error('Export error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/export-all-tokens-excel/:wallet - Generate Excel file with all tokens data
+ * New format: One row per token with all information in that row
+ */
+app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    
+    // Get all wallet trades
+    const walletTradesResult = await dbService.getWalletTokens(wallet);
+    const walletTrades = walletTradesResult.data;
+    
+    if (!walletTrades || walletTrades.length === 0) {
+      res.status(404).json({ success: false, error: 'No tokens found for this wallet' });
+      return;
+    }
+    
+    // Get all token mints
+    const tokenMints = walletTrades.map((trade: any) => trade.token_address);
+    
+    // Get token information for all tokens
+    const tokens = await dbService.getTokensByMints(tokenMints);
+    const tokenInfoMap = new Map();
+    tokens.forEach((token: any) => {
+      tokenInfoMap.set(token.mint_address, token);
+    });
+    
+    // Create workbook
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('All Tokens Data');
+    
+    // Helper function to format timestamp
+    const formatTimestamp = (dateString: string | null | undefined): string => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    // Helper function to format market cap with K and M (currently unused)
+    // const formatMarketCap = (marketCap: number | string | null | undefined): string => {
+    //   if (!marketCap) return '';
+    //   const num = parseFloat(String(marketCap));
+    //   if (!num || isNaN(num)) return '';
+    //   
+    //   if (num >= 1000000) {
+    //     return `${(num / 1000000).toFixed(2)}M`;
+    //   } else if (num >= 1000) {
+    //     return `${(num / 1000).toFixed(2)}K`;
+    //   }
+    //   return num.toFixed(2);
+    // };
+    
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    
+    // Find maximum number of sells across all tokens to determine column count
+    let maxSells = 0;
+    for (const trade of walletTrades) {
+      const transactions = await dbService.getTransactionsByWalletToken(wallet, trade.token_address);
+      const sells = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'sell');
+      if (sells.length > maxSells) {
+        maxSells = sells.length;
+      }
+    }
+    
+    // Build header row
+    const baseHeaders = [
+      'Token Name',
+      'Token Symbol',
+      'Token Address',
+      'Creator Address',
+      'Number of Socials',
+      'Dev Buy Amount in SOL',
+      'Dev Buy Amount in Tokens',
+      'Wallet Gas & Fees Amount',
+      'Wallet Buy Position After Dev',
+      'Wallet Buy Block #',
+      'Wallet Buy Block # After Dev',
+      'Wallet Buy Timestamp',
+      'Transaction Signature',
+      'Wallet Buy Amount in SOL',
+      'Wallet Buy Amount in Tokens',
+      'Wallet Buy Market Cap'
+    ];
+    
+    // Add sell columns for each sell (up to maxSells)
+    const sellHeaders: string[] = [];
+    for (let i = 1; i <= maxSells; i++) {
+      sellHeaders.push(
+        `Wallet Sell Number`,
+        `Wallet Sell Timestamp`,
+        `Transaction Signature`,
+        `Wallet Sell Amount in SOL`,
+        `Wallet Sell Amount in Tokens`,
+        `Wallet Sell Market Cap`
+      );
+    }
+    
+    const headers = [...baseHeaders, ...sellHeaders];
+    const headerRow = worksheet.addRow(headers);
+    headerRow.eachCell((cell: ExcelJS.Cell) => {
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF006400' }
+      };
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+    });
+    
+    // Process each token - one row per token
+    for (const trade of walletTrades) {
+      const token = trade.token_address;
+      const tokenInfo = tokenInfoMap.get(token) || null;
+      
+      // Get all transactions for this wallet+token pair (sorted by block_timestamp ASC)
+      const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+      
+      // Sort transactions by block timestamp ASC (fallback to created_at if block_timestamp not available)
+      transactions.sort((a: any, b: any) => {
+        const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+        return timeA - timeB;
+      });
+      
+      // Calculate social links count
+      let socialCount = 0;
+      if (tokenInfo?.twitter) socialCount++;
+      if (tokenInfo?.website) socialCount++;
+      if (tokenInfo?.discord) socialCount++;
+      if (tokenInfo?.telegram) socialCount++;
+      
+      // Dev buy amounts
+      const devBuyAmountSOL = tokenInfo?.dev_buy_amount && tokenInfo?.dev_buy_amount_decimal !== null
+        ? parseFloat(tokenInfo.dev_buy_amount) / Math.pow(10, tokenInfo.dev_buy_amount_decimal)
+        : null;
+      const devBuyAmountTokens = tokenInfo?.dev_buy_token_amount && tokenInfo?.dev_buy_token_amount_decimal !== null
+        ? parseFloat(tokenInfo.dev_buy_token_amount) / Math.pow(10, tokenInfo.dev_buy_token_amount_decimal)
+        : null;
+      
+      // Get dev buy timestamp and block number
+      const devBuyTimestamp = tokenInfo?.dev_buy_timestamp ? new Date(tokenInfo.dev_buy_timestamp).getTime() : null;
+      const devBuyBlockNumber = tokenInfo?.dev_buy_block_number || null;
+      
+      // Find first buy transaction for this wallet-token pair (sorted by timestamp ASC)
+      const buys = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'buy' && tx.mint_from === SOL_MINT);
+      const firstBuy = buys.length > 0 ? buys[0] : null; // First buy is already first in sorted array
+      
+      // Get token decimals
+      const tokenDecimals = tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+        ? tokenInfo.dev_buy_token_amount_decimal
+        : 9;
+      
+      // Build base row data
+      const rowData: any[] = [
+        tokenInfo?.token_name || 'Unknown',
+        tokenInfo?.symbol || '???',
+        token,
+        tokenInfo?.creator || '',
+        socialCount,
+        devBuyAmountSOL !== null ? devBuyAmountSOL : '',
+        devBuyAmountTokens !== null ? devBuyAmountTokens : '',
+        '', // Wallet Gas & Fees Amount (will fill if firstBuy exists)
+        '', // Wallet Buy Position After Dev
+        '', // Wallet Buy Block #
+        '', // Wallet Buy Block # After Dev
+        '', // Wallet Buy Timestamp
+        '', // Transaction Signature
+        '', // Wallet Buy Amount in SOL
+        '', // Wallet Buy Amount in Tokens
+        ''  // Wallet Buy Market Cap
+      ];
+      
+      // Fill first buy data if exists
+      if (firstBuy) {
+        // Gas & Fees for first buy only
+        const tipAmount = (firstBuy.tipAmount != null ? parseFloat(firstBuy.tipAmount) : 0) || 0;
+        const feeAmount = (firstBuy.feeAmount != null ? parseFloat(firstBuy.feeAmount) : 0) || 0;
+        const totalGasAndTips = feeAmount + tipAmount;
+        rowData[7] = totalGasAndTips; // Wallet Gas & Fees Amount
+        
+      // Calculate position after dev (milliseconds) - only if buy happens after dev buy
+      // Use block_timestamp if available, otherwise fallback to created_at
+      const buyTimestamp = firstBuy.blockTimestamp || firstBuy.created_at;
+      if (devBuyTimestamp && buyTimestamp) {
+        const buyTime = new Date(buyTimestamp).getTime();
+        const millisecondsDiff = buyTime - devBuyTimestamp;
+        // Only show if buy happened after dev buy (positive value)
+        rowData[8] = millisecondsDiff >= 0 ? millisecondsDiff : ''; // Wallet Buy Position After Dev
+      }
+      
+      // Block number
+      rowData[9] = firstBuy.blockNumber || ''; // Wallet Buy Block #
+      
+      // Block number after dev
+      if (devBuyBlockNumber && firstBuy.blockNumber) {
+        rowData[10] = firstBuy.blockNumber - devBuyBlockNumber; // Wallet Buy Block # After Dev
+      }
+      
+      // Timestamp (use block_timestamp if available)
+      rowData[11] = formatTimestamp(buyTimestamp); // Wallet Buy Timestamp
+        
+        // Transaction signature
+        rowData[12] = firstBuy.transaction_id || ''; // Transaction Signature
+        
+        // Buy amount in SOL
+        const buySolAmount = parseFloat(firstBuy.in_amount) || 0;
+        rowData[13] = buySolAmount / 1000000000; // Wallet Buy Amount in SOL
+        
+        // Buy amount in Tokens
+        const buyTokenAmountRaw = parseFloat(firstBuy.out_amount) || 0;
+        rowData[14] = buyTokenAmountRaw / Math.pow(10, tokenDecimals); // Wallet Buy Amount in Tokens
+        
+        // Market cap (raw value, not formatted)
+        rowData[15] = firstBuy.marketCap || ''; // Wallet Buy Market Cap
+      }
+      
+      // Get all sells (sorted by timestamp ASC)
+      const sells = transactions
+        .filter((tx: any) => tx.type?.toLowerCase() === 'sell')
+        .sort((a: any, b: any) => {
+          const timeA = new Date(a.created_at).getTime();
+          const timeB = new Date(b.created_at).getTime();
+          return timeA - timeB;
+        });
+      
+      // Helper function to format ordinal numbers (1st, 2nd, 3rd, etc.)
+      const formatOrdinal = (n: number): string => {
+        const s = ['th', 'st', 'nd', 'rd'];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      };
+      
+      // Add sell data (repeated columns)
+      for (let i = 0; i < maxSells; i++) {
+        if (i < sells.length) {
+          const sell = sells[i];
+          rowData.push(
+            formatOrdinal(i + 1), // Wallet Sell Number (1st, 2nd, 3rd, etc.)
+            formatTimestamp(sell.blockTimestamp || sell.created_at), // Wallet Sell Timestamp (use block_timestamp if available)
+            sell.transaction_id || '', // Transaction Signature
+            (parseFloat(sell.out_amount) || 0) / 1000000000, // Wallet Sell Amount in SOL
+            (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals), // Wallet Sell Amount in Tokens
+            sell.marketCap || '' // Wallet Sell Market Cap (raw value, not formatted)
+          );
+        } else {
+          // Empty cells for missing sells
+          rowData.push('', '', '', '', '', '');
+        }
+      }
+      
+      // Add row to worksheet
+      const row = worksheet.addRow(rowData);
+      row.eachCell((cell: ExcelJS.Cell) => {
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+    }
+    
+    // Auto-size columns
+    worksheet.columns.forEach((column: Partial<ExcelJS.Column>) => {
+      if (column && column.eachCell) {
+        let maxLength = 10;
+        column.eachCell({ includeEmpty: true }, (cell: ExcelJS.Cell) => {
+          const cellValue = cell.value ? String(cell.value) : '';
+          if (cellValue.length > maxLength) {
+            maxLength = Math.min(cellValue.length + 2, 50);
+          }
+        });
+        column.width = maxLength;
+      }
+    });
+    
+    // Set response headers
+    const filename = `AllTokens_${wallet.substring(0, 8)}_${Date.now()}.xlsx`;
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Write workbook to response
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error: any) {
+    console.error('Export all tokens error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/wallets - Get all unique wallet addresses from transactions table
+ */
+app.get("/api/wallets", requireAuth, async (_req, res) => {
+  try {
+    const wallets = await dbService.getAllWalletsFromTransactions();
+    res.status(200).json({ success: true, wallets });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/analyze/:wallet - Analyze wallet information (shows trading history from wallets table)
+ */
+app.get("/api/analyze/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    
+    // Get pagination parameters
+    const page = parseInt(_req.query.page as string) || 1;
+    const pageSize = parseInt(_req.query.pageSize as string) || 50;
+    const limit = pageSize;
+    const offset = (page - 1) * pageSize;
+    
+    // Get wallet trading history from wallets table with pagination
+    const walletTradesResult = await dbService.getWalletTokens(wallet, limit, offset);
+    const walletTrades = walletTradesResult.data;
+    const totalTrades = walletTradesResult.total;
+    
+    // Get unique token addresses
+    const tokenAddresses = walletTrades.map((trade: any) => trade.token_address);
+    
+    // Fetch token information from database for display
+    let tokenInfo: Record<string, any> = {};
+    if (tokenAddresses.length > 0) {
+      const tokensFromDb = await dbService.getTokensByMints(tokenAddresses);
+      // Convert array to object for easier lookup
+      tokenInfo = tokensFromDb.reduce((acc, token) => {
+        acc[token.mint_address] = token;
+        return acc;
+      }, {} as Record<string, any>);
+    }
+    
+    // Get the earliest transaction timestamp for this wallet (tracking start time)
+    // This is used when calculating holding duration for tokens bought before tracking started
+    let trackingStartTime: string | null = null;
+    try {
+      const earliestTx = await dbService.getEarliestTransactionForWallet(wallet);
+      if (earliestTx) {
+        trackingStartTime = earliestTx.created_at;
+      }
+    } catch (error) {
+      console.error('Failed to get earliest transaction for wallet:', error);
+    }
+    
+    /**
+     * Format duration in human-readable format
+     * @param durationSeconds - Duration in seconds
+     * @returns Formatted duration string
+     */
+    const formatDuration = (durationSeconds: number): string => {
+      // Format: SS sec or MM min SS sec or HH h MM min or DD days ago
+      if (durationSeconds < 60) {
+        return `${durationSeconds} sec`;
+      } else if (durationSeconds < 3600) {
+        const minutes = Math.floor(durationSeconds / 60);
+        const seconds = durationSeconds % 60;
+        return seconds > 0 ? `${minutes} min ${seconds} sec` : `${minutes} min`;
+      } else if (durationSeconds < 86400) {
+        const hours = Math.floor(durationSeconds / 3600);
+        const minutes = Math.floor((durationSeconds % 3600) / 60);
+        return minutes > 0 ? `${hours} h ${minutes} min` : `${hours} h`;
+      } else {
+        const days = Math.floor(durationSeconds / 86400);
+        return `${days} day${days > 1 ? 's' : ''} ago`;
+      }
+    };
+    
+    /**
+     * Calculate and format holding duration until first sell
+     * @param buyTimestamp - First buy timestamp
+     * @param sellTimestamp - First sell timestamp
+     * @returns Formatted duration string or null
+     */
+    const formatHoldingDuration = (buyTimestamp: string | null, sellTimestamp: string | null): string | null => {
+      // If buy date exists but sell date is missing, skip it (hasn't sold yet)
+      if (buyTimestamp && !sellTimestamp) {
+        return null;
+      }
+      
+      // If both are missing, return null
+      if (!sellTimestamp) {
+        return null;
+      }
+      
+      let startDate: Date;
+      
+      // If sell date exists but buy date is missing, use tracking start time (bought before stream)
+      if (sellTimestamp && !buyTimestamp) {
+        if (!trackingStartTime) {
+          // No tracking start time available, cannot calculate
+          return null;
+        }
+        startDate = new Date(trackingStartTime);
+      } else if (buyTimestamp && sellTimestamp) {
+        // Both exist, use buy timestamp
+        startDate = new Date(buyTimestamp);
+      } else {
+        return null;
+      }
+      
+      // Calculate duration in seconds
+      const sellDate = new Date(sellTimestamp);
+      const durationSeconds = Math.floor((sellDate.getTime() - startDate.getTime()) / 1000);
+      
+      // Ensure positive duration
+      if (durationSeconds < 0) {
+        return null;
+      }
+      
+      return formatDuration(durationSeconds);
+    };
+
+    // Format trading data for frontend (with total sells amount and buy amounts)
+    const tradingData = await Promise.all(walletTrades.map(async (trade: any) => {
+      // Get total SOL amount from sell events for this wallet-token pair
+      const totalSellsAmount = await dbService.getTotalSellsForWalletToken(wallet, trade.token_address);
+      
+      // Get total SOL amount spent in buy transactions
+      const totalBuyAmount = await dbService.getTotalBuyAmountForWalletToken(wallet, trade.token_address);
+      
+      // Get total token amount received in buy transactions
+      // Use dev_buy_token_amount_decimal from tokens table
+      const devBuyTokenDecimals = tokenInfo[trade.token_address]?.dev_buy_token_amount_decimal || null;
+      const tokenDecimalsToUse = devBuyTokenDecimals !== null && devBuyTokenDecimals !== undefined && !isNaN(devBuyTokenDecimals)
+        ? devBuyTokenDecimals
+        : 9; // Default to 9 if not found
+      const totalBuyTokens = await dbService.getTotalBuyTokensForWalletToken(wallet, trade.token_address, tokenDecimalsToUse);
+      
+      return {
+        token_address: trade.token_address,
+        first_buy_timestamp: trade.first_buy_timestamp,
+        first_buy_amount: trade.first_buy_amount,
+        first_buy_mcap: trade.first_buy_mcap,
+        first_buy_supply: trade.first_buy_supply,
+        first_buy_price: trade.first_buy_price,
+        first_sell_timestamp: trade.first_sell_timestamp,
+        first_sell_amount: trade.first_sell_amount,
+        first_sell_mcap: trade.first_sell_mcap,
+        first_sell_supply: trade.first_sell_supply,
+        first_sell_price: trade.first_sell_price,
+        total_sells: totalSellsAmount,
+        total_buy_amount: totalBuyAmount, // Total SOL spent in buy transactions
+        total_buy_tokens: totalBuyTokens, // Total token amount received in buy transactions
+        holding_duration: formatHoldingDuration(trade.first_buy_timestamp, trade.first_sell_timestamp),
+        created_at: trade.created_at,
+        // Add token metadata from tokens table
+        token_name: tokenInfo[trade.token_address]?.token_name || null,
+        symbol: tokenInfo[trade.token_address]?.symbol || null,
+        image: tokenInfo[trade.token_address]?.image || null,
+        creator: tokenInfo[trade.token_address]?.creator || null,
+        // Add dev buy information
+        dev_buy_amount: tokenInfo[trade.token_address]?.dev_buy_amount || null,
+        dev_buy_amount_decimal: tokenInfo[trade.token_address]?.dev_buy_amount_decimal || null,
+        dev_buy_token_amount: tokenInfo[trade.token_address]?.dev_buy_token_amount || null,
+        dev_buy_token_amount_decimal: tokenInfo[trade.token_address]?.dev_buy_token_amount_decimal || null,
+        dev_buy_used_token: tokenInfo[trade.token_address]?.dev_buy_used_token || null,
+        // Add social links
+        twitter: tokenInfo[trade.token_address]?.twitter || null,
+        website: tokenInfo[trade.token_address]?.website || null,
+        discord: tokenInfo[trade.token_address]?.discord || null,
+        telegram: tokenInfo[trade.token_address]?.telegram || null,
+      };
+    }));
+    
+    res.status(200).json({
+      wallet: wallet,
+      trades: tradingData,
+      totalTrades: totalTrades,
+      page: page,
+      pageSize: pageSize,
+      totalPages: Math.ceil(totalTrades / pageSize),
+      tokenInfo
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/tokens/fetch-info - Fetch and cache token mint info
+ * Request body: { mints: string[] }
+ */
+app.post("/api/tokens/fetch-info", requireAuth, async (_req, res) => {
+  try {
+    const { mints } = _req.body;
+    
+    if (!Array.isArray(mints) || mints.length === 0) {
+      res.status(400).json({ error: "Mints array is required" });
+      return;
+    }
+
+    console.log(`🔍 Fetching info for ${mints.length} tokens...`);
+
+    // Check which tokens are already cached
+    const cachedTokens = await dbService.getTokensByMints(mints);
+    const cachedMints = new Set(cachedTokens.map(t => t.mint_address));
+    
+    // Find tokens that need to be fetched
+    const uncachedMints = mints.filter(mint => !cachedMints.has(mint));
+    
+    console.log(`✅ ${cachedTokens.length} tokens already cached`);
+    console.log(`🔄 Fetching ${uncachedMints.length} new tokens sequentially...`);
+
+    // Fetch creator info for uncached tokens sequentially (one at a time)
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (let i = 0; i < uncachedMints.length; i++) {
+      const mint = uncachedMints[i];
+      console.log(`  [${i + 1}/${uncachedMints.length}] Fetching ${mint}...`);
+      
+      try {
+        const tokenInfo = await tokenService.getTokenCreatorInfo(mint);
+        if (tokenInfo) {
+          await dbService.saveToken({
+            mint_address: mint,
+            creator: tokenInfo.creator,
+            dev_buy_amount: tokenInfo.devBuyAmount,
+            dev_buy_amount_decimal: tokenInfo.devBuyAmountDecimal,
+            dev_buy_used_token: tokenInfo.devBuyUsedToken,
+            dev_buy_token_amount: tokenInfo.devBuyTokenAmount,
+            dev_buy_token_amount_decimal: tokenInfo.devBuyTokenAmountDecimal,
+            dev_buy_timestamp: tokenInfo.devBuyTimestamp,
+            dev_buy_block_number: tokenInfo.devBuyBlockNumber,
+          });
+          successCount++;
+          console.log(`  ✅ Success: ${mint}`);
+        } else {
+          failCount++;
+          console.log(`  ❌ No info found: ${mint}`);
+        }
+      } catch (error) {
+        failCount++;
+        console.error(`  ❌ Error fetching ${mint}:`, error);
+      }
+    }
+
+    // Get all token data including newly fetched ones
+    const allTokens = await dbService.getTokensByMints(mints);
+
+    res.status(200).json({
+      success: true,
+      message: `Fetched ${successCount} tokens, ${failCount} failed, ${cachedTokens.length} cached`,
+      tokens: allTokens,
+      stats: {
+        total: mints.length,
+        cached: cachedTokens.length,
+        fetched: successCount,
+        failed: failCount,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching token info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/skip-tokens - Get all skip tokens
+ */
+app.get("/api/skip-tokens", requireAuth, async (_req, res) => {
+  try {
+    const skipTokens = await dbService.getSkipTokens();
+    res.status(200).json({ 
+      success: true,
+      skipTokens 
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/skip-tokens - Add a token to skip list
+ * Request body: { mint_address: string, symbol?: string, description?: string }
+ */
+app.post("/api/skip-tokens", requireAuth, async (_req, res) => {
+  try {
+    const { mint_address, symbol, description } = _req.body;
+    
+    if (!mint_address || mint_address.trim().length === 0) {
+      res.status(400).json({ error: "mint_address is required" });
+      return
+    }
+    
+    await dbService.addSkipToken({
+      mint_address: mint_address.trim(),
+      symbol: symbol?.trim(),
+      description: description?.trim()
+    });
+    
+    // Refresh the token service cache
+    await tokenService.refreshSkipTokensCache();
+    
+    res.status(200).json({ 
+      success: true,
+      message: "Skip token added successfully"
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/skip-tokens/:mintAddress - Remove a token from skip list
+ */
+app.delete("/api/skip-tokens/:mintAddress", requireAuth, async (_req, res) => {
+  try {
+    const { mintAddress } = _req.params;
+    
+    await dbService.removeSkipToken(mintAddress);
+    
+    // Refresh the token service cache
+    await tokenService.refreshSkipTokensCache();
+    
+    res.status(200).json({ 
+      success: true,
+      message: "Skip token removed successfully"
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/wallets/:walletAddress - Remove wallet and all its transactions from database
+ */
+app.delete("/api/wallets/:walletAddress", requireAuth, async (_req, res) => {
+  try {
+    const { walletAddress } = _req.params;
+    
+    if (!walletAddress || walletAddress.trim().length === 0) {
+      res.status(400).json({ error: "Wallet address is required" });
+      return;
+    }
+    
+    const result = await dbService.deleteWalletAndTransactions(walletAddress);
+    
+    res.status(200).json({ 
+      success: true,
+      message: "Wallet and transactions removed successfully",
+      transactionsDeleted: result.transactionsDeleted,
+      walletsDeleted: result.walletsDeleted
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Get total buy and sell transaction counts for a wallet
+ * @param walletAddress - The wallet address to check
+ * @returns Object with totalBuys and totalSells counts
+ */
+async function getWalletBuySellCounts(walletAddress: string): Promise<{ totalBuys: number; totalSells: number }> {
+  try {
+    return await dbService.getWalletBuySellCounts(walletAddress);
+  } catch (error: any) {
+    console.error(`Error getting buy/sell counts for ${walletAddress}:`, error);
+    return { totalBuys: 0, totalSells: 0 };
+  }
+}
+
+/**
+ * POST /api/dashboard-statistics/:wallet - Get dashboard statistics from ALL data (not filtered/paginated)
+ * Returns wallet statistics calculated from all tokens
+ */
+app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    const SOL_DECIMALS = 9;
+    
+    // Get wallet SOL balance
+    let solBalance = 0;
+    try {
+      const shyftApiKey = process.env.X_TOKEN;
+      if (shyftApiKey) {
+        const rpcUrl = `https://dillwifit.shyft.to/${shyftApiKey}`;
+        const connection = new Connection(rpcUrl, "confirmed");
+        const publicKey = new PublicKey(wallet);
+        const nativeBalance = await connection.getBalance(publicKey);
+        solBalance = nativeBalance / LAMPORTS_PER_SOL;
+      }
+    } catch (error) {
+      console.error('Failed to fetch SOL balance:', error);
+      // Continue without SOL balance if fetch fails
+    }
+    
+    // Get total buy/sell counts (from ALL data, not paginated)
+    const { totalBuys, totalSells } = await getWalletBuySellCounts(wallet);
+    
+    // Get average open position (from ALL data, not paginated)
+    const averageOpenPosition = await dbService.getWalletAverageOpenPosition(wallet);
+    
+    // Get all wallet trades (ALL data, no pagination/filtering)
+    const walletTradesResult = await dbService.getWalletTokens(wallet);
+    const walletTrades = walletTradesResult.data;
+    
+    if (!walletTrades || walletTrades.length === 0) {
+      res.status(200).json({ 
+        success: true, 
+        statistics: {
+          solBalance,
+          totalWalletPNL: 0,
+          cumulativePNL: 0,
+          riskRewardProfit: 0,
+          netInvested: 0,
+          walletAvgBuySize: 0,
+          devAvgBuySize: 0,
+          avgPNLPerToken: 0,
+          totalBuys,
+          totalSells,
+          averageOpenPosition,
+          sellStatistics: []
+        }
+      });
+      return;
+    }
+    
+    // Get all token mints
+    const allTokenMints = walletTrades.map((trade: any) => trade.token_address);
+    const uniqueTokenMints = [...new Set(allTokenMints)];
+    
+    // Get token information for all tokens
+    const tokens = await dbService.getTokensByMints(uniqueTokenMints);
+    const tokenInfoMap = new Map();
+    tokens.forEach((token: any) => {
+      tokenInfoMap.set(token.mint_address, token);
+    });
+    
+    // Process ALL tokens to calculate statistics
+    const allTokensData = await Promise.all(walletTrades.map(async (trade: any) => {
+      const token = trade.token_address;
+      const tokenInfo = tokenInfoMap.get(token) || null;
+      
+      // Get all transactions for this wallet+token pair
+      const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+      
+      // Sort transactions by block timestamp ASC
+      transactions.sort((a: any, b: any) => {
+        const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+        return timeA - timeB;
+      });
+      
+      // Find first buy transaction
+      const buys = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'buy' && tx.mint_from === SOL_MINT);
+      const firstBuy = buys.length > 0 ? buys[0] : null;
+      
+      // Get token decimals
+      const tokenDecimals = tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+        ? tokenInfo.dev_buy_token_amount_decimal
+        : 9;
+      
+      // Calculate wallet buy amounts
+      const walletBuyAmountSOL = firstBuy ? (parseFloat(firstBuy.in_amount) || 0) / Math.pow(10, SOL_DECIMALS) : 0;
+      const walletBuyAmountTokens = firstBuy ? (parseFloat(firstBuy.out_amount) || 0) / Math.pow(10, tokenDecimals) : 0;
+      
+      // Get total gas and fees
+      let totalGasAndFees = 0;
+      transactions.forEach((tx: any) => {
+        const tipAmount = (tx.tipAmount != null ? parseFloat(tx.tipAmount) : 0) || 0;
+        const feeAmount = (tx.feeAmount != null ? parseFloat(tx.feeAmount) : 0) || 0;
+        totalGasAndFees += (tipAmount + feeAmount);
+      });
+      
+      // Get all sells
+      const sells = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'sell');
+      
+      // Calculate total sell amount in SOL
+      const totalSellAmountSOL = sells.reduce((sum: number, sell: any) => {
+        return sum + ((parseFloat(sell.out_amount) || 0) / Math.pow(10, SOL_DECIMALS));
+      }, 0);
+      
+      // Calculate total gas/fees for all sell transactions
+      let totalSellGasAndFees = 0;
+      sells.forEach((sell: any) => {
+        const sellTipAmount = (sell.tipAmount != null ? parseFloat(sell.tipAmount) : 0) || 0;
+        const sellFeeAmount = (sell.feeAmount != null ? parseFloat(sell.feeAmount) : 0) || 0;
+        totalSellGasAndFees += (sellTipAmount + sellFeeAmount);
+      });
+      
+      // Calculate non-sell gas/fees (buy transactions and any other transactions)
+      const nonSellGasAndFees = totalGasAndFees - totalSellGasAndFees;
+      
+      // Calculate PNL
+      const pnlSOL = totalSellAmountSOL - (walletBuyAmountSOL + totalGasAndFees);
+      const pnlPercent = walletBuyAmountSOL > 0 ? (pnlSOL / walletBuyAmountSOL) * 100 : 0;
+      
+      // Dev buy amounts
+      const devBuyAmountSOL = tokenInfo?.dev_buy_amount && tokenInfo?.dev_buy_amount_decimal !== null
+        ? parseFloat(tokenInfo.dev_buy_amount) / Math.pow(10, tokenInfo.dev_buy_amount_decimal)
+        : null;
+      
+      // Get buy timestamp
+      const buyTimestamp = firstBuy ? (firstBuy.blockTimestamp || firstBuy.created_at) : null;
+      
+      // Format sells for statistics
+      // First, calculate total sell tokens to normalize percentages
+      const totalSellTokens = sells.reduce((sum: number, sell: any) => {
+        return sum + ((parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals));
+      }, 0);
+      
+      // Calculate sell percentages and normalize to sum to 100%
+      // This ensures proportional costs sum correctly: sum(proportionalBuyCost) = walletBuyAmountSOL
+      // and sum(proportionalNonSellGasAndFees) = nonSellGasAndFees
+      // This guarantees: sum(sellPNL) = totalSellAmountSOL - (walletBuyAmountSOL + totalGasAndFees) = pnlSOL
+      const sellPercentages: number[] = [];
+      if (walletBuyAmountTokens > 0 && totalSellTokens > 0) {
+        // Calculate raw percentages based on buy tokens
+        const rawPercentages = sells.map((sell: any) => {
+          const sellAmountTokens = (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals);
+          return (sellAmountTokens / walletBuyAmountTokens) * 100;
+        });
+        const sumRawPercentages = rawPercentages.reduce((sum, p) => sum + p, 0);
+        if (sumRawPercentages > 0) {
+          // Always normalize to 100% to ensure proportional costs sum correctly
+          sellPercentages.push(...rawPercentages.map(p => (p / sumRawPercentages) * 100));
+        } else {
+          sellPercentages.push(...rawPercentages);
+        }
+      } else if (totalSellTokens > 0) {
+        // If no buy tokens, use sell tokens as basis (will sum to 100%)
+        sells.forEach((sell: any) => {
+          const sellAmountTokens = (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals);
+          sellPercentages.push((sellAmountTokens / totalSellTokens) * 100);
+        });
+      }
+      
+      const formattedSells = sells.map((sell: any, index: number) => {
+        const sellAmountSOL = (parseFloat(sell.out_amount) || 0) / Math.pow(10, SOL_DECIMALS);
+        const sellMarketCap = sell.marketCap ? parseFloat(sell.marketCap) : null;
+        const firstBuyMarketCap = firstBuy?.marketCap || null;
+        const firstSellPNL = firstBuyMarketCap && sellMarketCap && sellMarketCap > 0
+          ? (sellMarketCap / firstBuyMarketCap - 1) * 100
+          : null;
+        
+        // Use normalized percentage
+        const sellPercentOfBuy = sellPercentages[index] !== undefined ? sellPercentages[index] : null;
+        
+        // Calculate SOL PNL for this sell
+        // PNL = sellAmountSOL - (proportional buy cost + proportional non-sell gas/fees + actual gas/fees for this sell)
+        // This ensures: sum of all sellPNL = totalSellAmountSOL - (walletBuyAmountSOL + totalGasAndFees) = pnlSOL
+        let sellPNL = null;
+        
+        // Get actual gas/fees for this specific sell transaction
+        const sellTipAmount = (sell.tipAmount != null ? parseFloat(sell.tipAmount) : 0) || 0;
+        const sellFeeAmount = (sell.feeAmount != null ? parseFloat(sell.feeAmount) : 0) || 0;
+        const sellGasAndFees = sellTipAmount + sellFeeAmount;
+        
+        if (sellPercentOfBuy !== null && sellPercentOfBuy > 0 && walletBuyAmountSOL > 0) {
+          // Normal case: calculate proportional costs using normalized percentage
+          const proportionalBuyCost = walletBuyAmountSOL * (sellPercentOfBuy / 100);
+          // Proportional share of non-sell gas/fees (buy and other transactions)
+          const proportionalNonSellGasAndFees = nonSellGasAndFees * (sellPercentOfBuy / 100);
+          sellPNL = sellAmountSOL - (proportionalBuyCost + proportionalNonSellGasAndFees + sellGasAndFees);
+        } else if (sells.length > 0) {
+          // Edge case: no buy data or invalid percentage, allocate costs equally across all sells
+          // This ensures we still account for gas/fees even if we can't calculate proportional costs
+          const equalShareOfBuyCost = walletBuyAmountSOL / sells.length;
+          const equalShareOfNonSellGasAndFees = nonSellGasAndFees / sells.length;
+          sellPNL = sellAmountSOL - (equalShareOfBuyCost + equalShareOfNonSellGasAndFees + sellGasAndFees);
+        } else {
+          // Final fallback: if no sells or other edge case, just subtract gas/fees from sell amount
+          // This should rarely happen, but ensures sellPNL is always calculated
+          sellPNL = sellAmountSOL - sellGasAndFees;
+        }
+        
+        let holdingTimeSeconds = null;
+        if (buyTimestamp) {
+          const sellTimestamp = sell.blockTimestamp || sell.created_at;
+          if (sellTimestamp) {
+            const buyTime = new Date(buyTimestamp).getTime();
+            const sellTime = new Date(sellTimestamp).getTime();
+            holdingTimeSeconds = Math.floor((sellTime - buyTime) / 1000);
+            if (holdingTimeSeconds < 0) holdingTimeSeconds = null;
+          }
+        }
+        
+        return {
+          sellNumber: index + 1,
+          firstSellPNL,
+          sellPercentOfBuy,
+          holdingTimeSeconds,
+          sellAmountSOL,
+          sellPNL
+        };
+      });
+      
+      return {
+        pnlSOL,
+        pnlPercent,
+        walletBuyAmountSOL,
+        devBuyAmountSOL,
+        totalGasAndFees,
+        sells: formattedSells
+      };
+    }));
+    
+    // Calculate statistics from ALL data
+    const totalWalletPNL = allTokensData.reduce((sum, token) => sum + (token.pnlSOL || 0), 0);
+    const cumulativePNL = allTokensData.reduce((sum, token) => sum + (token.pnlPercent || 0), 0);
+    const netInvested = allTokensData.reduce((sum, token) => sum + (token.walletBuyAmountSOL || 0), 0);
+    const riskRewardProfit = netInvested > 0 ? (totalWalletPNL / netInvested) * 100 : 0;
+    
+    const walletBuySizes = allTokensData.map(token => token.walletBuyAmountSOL || 0).filter(size => size > 0);
+    const walletAvgBuySize = walletBuySizes.length > 0 
+      ? walletBuySizes.reduce((sum, size) => sum + size, 0) / walletBuySizes.length 
+      : 0;
+    
+    const devBuySizes = allTokensData
+      .map(token => token.devBuyAmountSOL)
+      .filter((size): size is number => size !== null && size !== undefined && size > 0);
+    const devAvgBuySize = devBuySizes.length > 0 
+      ? devBuySizes.reduce((sum, size) => sum + size, 0) / devBuySizes.length 
+      : 0;
+    
+    const pnlPercents = allTokensData.map(token => token.pnlPercent || 0);
+    const avgPNLPerToken = pnlPercents.length > 0 
+      ? pnlPercents.reduce((sum, pnl) => sum + pnl, 0) / pnlPercents.length 
+      : 0;
+    
+    // Calculate sell statistics
+    const maxSells = Math.max(...allTokensData.map(token => (token.sells || []).length), 0);
+    const sellStatistics = [];
+    
+    for (let sellPosition = 1; sellPosition <= maxSells; sellPosition++) {
+      const profitsAtSell: number[] = [];
+      const holdingTimes: number[] = [];
+      const sellPercentOfBuyValues: number[] = [];
+      const sellAmountsSOL: number[] = [];
+      const sellPNLs: number[] = [];
+      
+      allTokensData.forEach(token => {
+        if (token.sells && token.sells.length >= sellPosition) {
+          const sell = token.sells[sellPosition - 1];
+          if (sell.firstSellPNL !== null && sell.firstSellPNL !== undefined) {
+            profitsAtSell.push(sell.firstSellPNL);
+          }
+          if (sell.sellPercentOfBuy !== null && sell.sellPercentOfBuy !== undefined) {
+            sellPercentOfBuyValues.push(sell.sellPercentOfBuy);
+          }
+          if (sell.holdingTimeSeconds !== null && sell.holdingTimeSeconds !== undefined) {
+            holdingTimes.push(sell.holdingTimeSeconds);
+          }
+          // Add sell amount in SOL to the array
+          if (sell.sellAmountSOL !== null && sell.sellAmountSOL !== undefined) {
+            sellAmountsSOL.push(sell.sellAmountSOL);
+          }
+          // Add sell PNL to the array
+          if (sell.sellPNL !== null && sell.sellPNL !== undefined) {
+            sellPNLs.push(sell.sellPNL);
+          }
+        }
+      });
+      
+      const avgProfit = profitsAtSell.length > 0
+        ? profitsAtSell.reduce((sum, p) => sum + p, 0) / profitsAtSell.length
+        : null;
+      const avgSellPercentOfBuy = sellPercentOfBuyValues.length > 0
+        ? sellPercentOfBuyValues.reduce((sum, p) => sum + p, 0) / sellPercentOfBuyValues.length
+        : null;
+      const avgHoldingTime = holdingTimes.length > 0
+        ? Math.floor(holdingTimes.reduce((sum, t) => sum + t, 0) / holdingTimes.length)
+        : null;
+      const totalSol = sellAmountsSOL.length > 0
+        ? sellAmountsSOL.reduce((sum, amount) => sum + amount, 0)
+        : 0;
+      const totalSolPNL = sellPNLs.length > 0
+        ? sellPNLs.reduce((sum, pnl) => sum + pnl, 0)
+        : 0;
+      
+      // Count of tokens that have a sell at this position
+      const totalSells = sellPNLs.length;
+      
+      sellStatistics.push({
+        sellNumber: sellPosition,
+        avgProfit,
+        avgSellPercentOfBuy,
+        avgHoldingTime,
+        totalSol,
+        totalSolPNL,
+        totalSells
+      });
+    }
+    
+    // Calculate total sells PNL as the sum of all sell card PNLs
+    // This matches the sum of totalSolPNL from each sell position
+    const totalSellsPNL = sellStatistics.reduce((sum, stat) => {
+      return sum + (stat.totalSolPNL || 0);
+    }, 0);
+    
+    res.status(200).json({ 
+      success: true, 
+      statistics: {
+        solBalance,
+        totalWalletPNL,
+        totalSellsPNL, // Add total sells PNL to match totalWalletPNL
+        cumulativePNL,
+        riskRewardProfit,
+        netInvested,
+        walletAvgBuySize,
+        devAvgBuySize,
+        avgPNLPerToken,
+        totalBuys,
+        totalSells,
+        averageOpenPosition,
+        sellStatistics
+      }
+    });
+  } catch (error: any) {
+    console.error('Dashboard statistics error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/dashboard-data/:wallet - Get dashboard data for a wallet with filters
+ * Returns comprehensive token data with all calculated metrics
+ * Body: { page: number, limit: number, filters: array }
+ */
+app.post("/api/dashboard-data/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    const SOL_DECIMALS = 9;
+    
+    // Get pagination and filter parameters from request body
+    const page = _req.body.page || 1;
+    const limit = _req.body.limit || 50;
+    const filters = _req.body.filters || [];
+    const offset = (page - 1) * limit;
+    
+    // Get total buy/sell counts (from ALL data, not paginated)
+    const { totalBuys, totalSells } = await getWalletBuySellCounts(wallet);
+    
+    // Get average open position (from ALL data, not paginated)
+    const averageOpenPosition = await dbService.getWalletAverageOpenPosition(wallet);
+    
+    // Get all wallet trades (we need all for analytics, but will paginate the processing)
+    const walletTradesResult = await dbService.getWalletTokens(wallet);
+    const walletTrades = walletTradesResult.data;
+    
+    if (!walletTrades || walletTrades.length === 0) {
+      res.status(200).json({ 
+        success: true, 
+        data: [], 
+        totalBuys, 
+        totalSells, 
+        averageOpenPosition,
+        totalCount: 0,
+        page,
+        limit,
+        totalPages: 0
+      });
+      return;
+    }
+    
+    // Get all token mints (for all trades, to get token info efficiently)
+    const allTokenMints = walletTrades.map((trade: any) => trade.token_address);
+    const uniqueTokenMints = [...new Set(allTokenMints)];
+    
+    // Get token information for all tokens (fetch once for all trades)
+    const tokens = await dbService.getTokensByMints(uniqueTokenMints);
+    const tokenInfoMap = new Map();
+    tokens.forEach((token: any) => {
+      tokenInfoMap.set(token.mint_address, token);
+    });
+    
+    // Helper function to format timestamp
+    const formatTimestamp = (dateString: string | null | undefined): string => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
+      
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    };
+    
+    // Process ALL tokens first (needed for filtering)
+    const allDashboardData = await Promise.all(walletTrades.map(async (trade: any) => {
+      const token = trade.token_address;
+      const tokenInfo = tokenInfoMap.get(token) || null;
+      
+      // Get all transactions for this wallet+token pair
+      const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+      
+      // Sort transactions by block timestamp ASC
+      transactions.sort((a: any, b: any) => {
+        const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+        return timeA - timeB;
+      });
+      
+      // Calculate social links count
+      let socialCount = 0;
+      if (tokenInfo?.twitter) socialCount++;
+      if (tokenInfo?.website) socialCount++;
+      if (tokenInfo?.discord) socialCount++;
+      if (tokenInfo?.telegram) socialCount++;
+      
+      // Dev buy amounts
+      const devBuyAmountSOL = tokenInfo?.dev_buy_amount && tokenInfo?.dev_buy_amount_decimal !== null
+        ? parseFloat(tokenInfo.dev_buy_amount) / Math.pow(10, tokenInfo.dev_buy_amount_decimal)
+        : null;
+      const devBuyAmountTokens = tokenInfo?.dev_buy_token_amount && tokenInfo?.dev_buy_token_amount_decimal !== null
+        ? parseFloat(tokenInfo.dev_buy_token_amount) / Math.pow(10, tokenInfo.dev_buy_token_amount_decimal)
+        : null;
+      
+      // Get dev buy timestamp and block number
+      const devBuyTimestamp = tokenInfo?.dev_buy_timestamp ? new Date(tokenInfo.dev_buy_timestamp).getTime() : null;
+      const devBuyBlockNumber = tokenInfo?.dev_buy_block_number || null;
+      
+      // Find first buy transaction
+      const buys = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'buy' && tx.mint_from === SOL_MINT);
+      const firstBuy = buys.length > 0 ? buys[0] : null;
+      
+      // Get token decimals
+      const tokenDecimals = tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+        ? tokenInfo.dev_buy_token_amount_decimal
+        : 9;
+      
+      // Calculate wallet buy amounts (from first buy transaction)
+      const walletBuyAmountSOL = firstBuy ? (parseFloat(firstBuy.in_amount) || 0) / Math.pow(10, SOL_DECIMALS) : 0;
+      const walletBuyAmountTokens = firstBuy ? (parseFloat(firstBuy.out_amount) || 0) / Math.pow(10, tokenDecimals) : 0;
+      
+      // Get total gas and fees for all transactions
+      let totalGasAndFees = 0;
+      transactions.forEach((tx: any) => {
+        const tipAmount = (tx.tipAmount != null ? parseFloat(tx.tipAmount) : 0) || 0;
+        const feeAmount = (tx.feeAmount != null ? parseFloat(tx.feeAmount) : 0) || 0;
+        totalGasAndFees += (tipAmount + feeAmount);
+      });
+      
+      // Get all sells (sorted by timestamp ASC)
+      const sells = transactions
+        .filter((tx: any) => tx.type?.toLowerCase() === 'sell')
+        .sort((a: any, b: any) => {
+          const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+          const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+          return timeA - timeB;
+        });
+      
+      // Calculate total sell amount in SOL
+      const totalSellAmountSOL = sells.reduce((sum: number, sell: any) => {
+        return sum + ((parseFloat(sell.out_amount) || 0) / Math.pow(10, SOL_DECIMALS));
+      }, 0);
+      
+      // Calculate PNL
+      const pnlSOL = totalSellAmountSOL - (walletBuyAmountSOL + totalGasAndFees);
+      const pnlPercent = walletBuyAmountSOL > 0 ? (pnlSOL / walletBuyAmountSOL) * 100 : 0;
+      
+      // Get first buy market cap and total supply
+      const firstBuyMarketCap = firstBuy?.marketCap || null;
+      const firstBuyTotalSupply = firstBuy?.totalSupply ? parseFloat(firstBuy.totalSupply) : null;
+      
+      // Calculate percentages
+      const walletBuySOLPercentOfDev = devBuyAmountSOL && devBuyAmountSOL > 0 
+        ? (walletBuyAmountSOL / devBuyAmountSOL) * 100 
+        : null;
+      const walletBuyTokensPercentOfDev = devBuyAmountTokens && devBuyAmountTokens > 0
+        ? (walletBuyAmountTokens / devBuyAmountTokens) * 100
+        : null;
+      const devBuyTokensPercentOfTotalSupply = firstBuyTotalSupply && firstBuyTotalSupply > 0 && devBuyAmountTokens
+        ? (devBuyAmountTokens / firstBuyTotalSupply) * 100
+        : null;
+      const walletBuyPercentOfTotalSupply = firstBuyTotalSupply && firstBuyTotalSupply > 0
+        ? (walletBuyAmountTokens / firstBuyTotalSupply) * 100
+        : null;
+      const walletBuyPercentOfRemainingSupply = firstBuyTotalSupply && devBuyAmountTokens && (firstBuyTotalSupply - devBuyAmountTokens) > 0
+        ? (walletBuyAmountTokens / (firstBuyTotalSupply - devBuyAmountTokens)) * 100
+        : null;
+      
+      // Calculate position after dev (milliseconds)
+      let walletBuyPositionAfterDev = null;
+      if (devBuyTimestamp && firstBuy) {
+        const buyTimestamp = firstBuy.blockTimestamp || firstBuy.created_at;
+        if (buyTimestamp) {
+          const buyTime = new Date(buyTimestamp).getTime();
+          const millisecondsDiff = buyTime - devBuyTimestamp;
+          walletBuyPositionAfterDev = millisecondsDiff >= 0 ? millisecondsDiff : null;
+        }
+      }
+      
+      // Calculate block number after dev
+      const walletBuyBlockNumberAfterDev = devBuyBlockNumber && firstBuy?.blockNumber
+        ? firstBuy.blockNumber - devBuyBlockNumber
+        : null;
+      
+      // Get peak prices and market caps from database (pool monitoring data)
+      const tokenPeakPriceBeforeFirstSell = trade.peak_buy_to_sell_price_usd ? parseFloat(trade.peak_buy_to_sell_price_usd.toString()) : null;
+      const tokenPeakPrice10sAfterFirstSell = trade.peak_sell_to_end_price_usd ? parseFloat(trade.peak_sell_to_end_price_usd.toString()) : null;
+      const tokenPeakMarketCapBeforeFirstSell = trade.peak_buy_to_sell_mcap ? parseFloat(trade.peak_buy_to_sell_mcap.toString()) : null;
+      const tokenPeakMarketCap10sAfterFirstSell = trade.peak_sell_to_end_mcap ? parseFloat(trade.peak_sell_to_end_mcap.toString()) : null;
+      
+      // Get buy counts from database (pool monitoring data)
+      const buysBeforeFirstSell = trade.buys_before_first_sell !== null && trade.buys_before_first_sell !== undefined 
+        ? parseInt(trade.buys_before_first_sell.toString(), 10) 
+        : null;
+      const buysAfterFirstSell = trade.buys_after_first_sell !== null && trade.buys_after_first_sell !== undefined 
+        ? parseInt(trade.buys_after_first_sell.toString(), 10) 
+        : null;
+      
+      // Get first sell price from database
+      const firstSellPrice = trade.first_sell_price ? parseFloat(trade.first_sell_price.toString()) : null;
+      
+      // Get open position count at the time of buy
+      const openPositionCount = trade.open_position_count !== null && trade.open_position_count !== undefined 
+        ? parseInt(trade.open_position_count.toString(), 10) 
+        : null;
+      
+      // Get buy timestamp for holding time calculation
+      const buyTimestamp = firstBuy ? (firstBuy.blockTimestamp || firstBuy.created_at) : null;
+      
+      // Format sell transactions
+      let cumulativeSellAmountSOL = 0;
+      const formattedSells = sells.map((sell: any, index: number) => {
+        const sellAmountSOL = (parseFloat(sell.out_amount) || 0) / Math.pow(10, SOL_DECIMALS);
+        const sellAmountTokens = (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals);
+        const sellMarketCap = sell.marketCap ? parseFloat(sell.marketCap) : null;
+        // nth Sell PNL = (Wallet Buy Market Cap / nth Sell Market Cap - 1) * 100 (as percentage)
+        const firstSellPNL = firstBuyMarketCap && sellMarketCap && sellMarketCap > 0
+          ? (sellMarketCap / firstBuyMarketCap - 1) * 100
+          : null;
+        const sellPercentOfBuy = walletBuyAmountTokens > 0
+          ? (sellAmountTokens / walletBuyAmountTokens) * 100
+          : null;
+        
+        // Calculate cumulative profit at this sell point
+        cumulativeSellAmountSOL += sellAmountSOL;
+        const profitAtSell = walletBuyAmountSOL > 0
+          ? ((cumulativeSellAmountSOL - walletBuyAmountSOL) / walletBuyAmountSOL) * 100
+          : null;
+        
+        // Calculate holding time (time from buy to this sell)
+        let holdingTimeSeconds = null;
+        if (buyTimestamp) {
+          const sellTimestamp = sell.blockTimestamp || sell.created_at;
+          if (sellTimestamp) {
+            const buyTime = new Date(buyTimestamp).getTime();
+            const sellTime = new Date(sellTimestamp).getTime();
+            holdingTimeSeconds = Math.floor((sellTime - buyTime) / 1000);
+            if (holdingTimeSeconds < 0) holdingTimeSeconds = null;
+          }
+        }
+        
+        return {
+          sellNumber: index + 1,
+          marketCap: sellMarketCap,
+          firstSellPNL: firstSellPNL,
+          sellPercentOfBuy: sellPercentOfBuy,
+          sellAmountSOL: sellAmountSOL,
+          sellAmountTokens: sellAmountTokens,
+          transactionSignature: sell.transaction_id,
+          timestamp: formatTimestamp(sell.blockTimestamp || sell.created_at),
+          profitAtSell: profitAtSell,
+          holdingTimeSeconds: holdingTimeSeconds,
+          devStillHolding: sell.devStillHolding !== null && sell.devStillHolding !== undefined ? sell.devStillHolding : null
+        };
+      });
+      
+      return {
+        // Basic token info
+        tokenName: tokenInfo?.token_name || 'Unknown',
+        tokenSymbol: tokenInfo?.symbol || '???',
+        tokenAddress: token,
+        creatorAddress: tokenInfo?.creator || '',
+        creatorTokenCount: tokenInfo?.creator_token_count || null,
+        numberOfSocials: socialCount,
+        
+        // Dev buy data
+        devBuyAmountSOL: devBuyAmountSOL,
+        devBuyAmountTokens: devBuyAmountTokens,
+        
+        // Wallet buy data
+        walletBuyAmountSOL: walletBuyAmountSOL,
+        walletBuySOLPercentOfDev: walletBuySOLPercentOfDev,
+        walletBuyAmountTokens: walletBuyAmountTokens,
+        walletBuyTokensPercentOfDev: walletBuyTokensPercentOfDev,
+        
+        // Supply percentages
+        devBuyTokensPercentOfTotalSupply: devBuyTokensPercentOfTotalSupply,
+        walletBuyPercentOfTotalSupply: walletBuyPercentOfTotalSupply,
+        walletBuyPercentOfRemainingSupply: walletBuyPercentOfRemainingSupply,
+        
+        // Price data
+        tokenPeakPriceBeforeFirstSell: tokenPeakPriceBeforeFirstSell,
+        tokenPeakPrice10sAfterFirstSell: tokenPeakPrice10sAfterFirstSell,
+        tokenPeakMarketCapBeforeFirstSell: tokenPeakMarketCapBeforeFirstSell,
+        tokenPeakMarketCap10sAfterFirstSell: tokenPeakMarketCap10sAfterFirstSell,
+        firstSellPrice: firstSellPrice,
+        
+        // Buy counts
+        buysBeforeFirstSell: buysBeforeFirstSell,
+        buysAfterFirstSell: buysAfterFirstSell,
+        
+        // Position data
+        walletBuyPositionAfterDev: walletBuyPositionAfterDev,
+        walletBuyBlockNumber: firstBuy?.blockNumber || null,
+        walletBuyBlockNumberAfterDev: walletBuyBlockNumberAfterDev,
+        walletBuyTimestamp: formatTimestamp(firstBuy?.blockTimestamp || firstBuy?.created_at),
+        walletBuyMarketCap: firstBuyMarketCap,
+        openPositionCount: openPositionCount,
+        
+        // Gas & fees
+        walletGasAndFeesAmount: totalGasAndFees,
+        
+        // Transaction signature
+        transactionSignature: firstBuy?.transaction_id || '',
+        
+        // PNL
+        pnlSOL: pnlSOL,
+        pnlPercent: pnlPercent,
+        
+        // Sells
+        sells: formattedSells
+      };
+    }));
+    
+    // Apply filters if any (simplified filter logic)
+    let filteredDashboardData = allDashboardData;
+    if (filters && filters.length > 0) {
+      filteredDashboardData = allDashboardData.filter((token: any) => {
+        for (const filter of filters) {
+          let value: any = null;
+          
+          // Get value based on filter key
+          const filterKey = filter.key;
+          // Handle sell filters (including firstSellPNL which doesn't start with 'sell')
+          if (filterKey.startsWith('sell') || filterKey === 'firstSellPNL') {
+            // Handle sell filters
+            const sells = token.sells || [];
+            if (sells.length === 0) continue;
+            const sellNumber = filter.sellNumber || 1;
+            const sellIndex = sellNumber - 1;
+            if (sellIndex >= 0 && sellIndex < sells.length) {
+              const sell = sells[sellIndex];
+              if (filterKey === 'sellAmountSOL') value = sell.sellAmountSOL;
+              else if (filterKey === 'sellAmountTokens') value = sell.sellAmountTokens;
+              else if (filterKey === 'sellMarketCap') value = sell.marketCap;
+              else if (filterKey === 'sellPercentOfBuy') value = sell.sellPercentOfBuy;
+              else if (filterKey === 'firstSellPNL') value = sell.firstSellPNL;
+              else if (filterKey === 'sellTimestamp') value = sell.timestamp;
+            }
+          } else {
+            // Handle base field filters
+            value = (token as any)[filterKey];
+          }
+          
+          if (value === null || value === undefined) continue;
+          
+          // Apply min/max filters
+          if (filter.min !== null && filter.min !== undefined) {
+            if (filter.type === 'timestamp') {
+              const minDate = new Date(filter.min).getTime();
+              const valueDate = new Date(value).getTime();
+              if (isNaN(valueDate) || valueDate < minDate) return false;
+            } else {
+              if (value < filter.min) return false;
+            }
+          }
+          if (filter.max !== null && filter.max !== undefined) {
+            if (filter.type === 'timestamp') {
+              const maxDate = new Date(filter.max).getTime();
+              const valueDate = new Date(value).getTime();
+              if (isNaN(valueDate) || valueDate > maxDate) return false;
+            } else {
+              if (value > filter.max) return false;
+            }
+          }
+        }
+        return true;
+      });
+    }
+    
+    // Get total count after filtering
+    const totalCount = filteredDashboardData.length;
+    
+    // Apply pagination to filtered data
+    const dashboardData = filteredDashboardData.slice(offset, offset + limit);
+    
+    const totalPages = Math.max(1, Math.ceil(totalCount / limit));
+    
+    res.status(200).json({ 
+      success: true, 
+      data: dashboardData, 
+      totalBuys, 
+      totalSells, 
+      averageOpenPosition,
+      totalCount,
+      page,
+      limit,
+      totalPages
+    });
+  } catch (error: any) {
+    console.error('Dashboard data error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/what-if/:wallet - Calculate what-if PNL with adjusted sell times
+ * Body: { firstSellTimeAdjustment: number (seconds), setAllSellsTo: number (seconds, optional) }
+ */
+app.post("/api/what-if/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    const { firstSellTimeAdjustment, setAllSellsTo } = _req.body;
+    const SOL_MINT = 'So11111111111111111111111111111111111111112';
+    const SOL_DECIMALS = 9;
+    
+    // Validate parameters
+    if (firstSellTimeAdjustment === undefined && setAllSellsTo === undefined) {
+      res.status(400).json({ 
+        success: false, 
+        error: 'Either firstSellTimeAdjustment or setAllSellsTo must be provided' 
+      });
+      return;
+    }
+    
+    // Get all wallet trades
+    const walletTradesResult = await dbService.getWalletTokens(wallet);
+    const walletTrades = walletTradesResult.data;
+    
+    if (!walletTrades || walletTrades.length === 0) {
+      res.status(200).json({ 
+        success: true, 
+        data: [],
+        whatIfData: []
+      });
+      return;
+    }
+    
+    // Get all token mints
+    const allTokenMints = walletTrades.map((trade: any) => trade.token_address);
+    const uniqueTokenMints = [...new Set(allTokenMints)];
+    
+    // Get token information
+    const tokens = await dbService.getTokensByMints(uniqueTokenMints);
+    const tokenInfoMap = new Map();
+    tokens.forEach((token: any) => {
+      tokenInfoMap.set(token.mint_address, token);
+    });
+    
+    // Process each trade with what-if calculations
+    const whatIfData = await Promise.all(walletTrades.map(async (trade: any) => {
+      const token = trade.token_address;
+      const tokenInfo = tokenInfoMap.get(token) || null;
+      
+      // Get all transactions for this wallet+token pair
+      const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+      
+      // Sort transactions by block timestamp ASC
+      transactions.sort((a: any, b: any) => {
+        const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+        const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+        return timeA - timeB;
+      });
+      
+      // Find first buy transaction
+      const buys = transactions.filter((tx: any) => tx.type?.toLowerCase() === 'buy' && tx.mint_from === SOL_MINT);
+      const firstBuy = buys.length > 0 ? buys[0] : null;
+      
+      if (!firstBuy) {
+        return null;
+      }
+      
+      // Get token decimals
+      const tokenDecimals = tokenInfo?.dev_buy_token_amount_decimal !== null && tokenInfo?.dev_buy_token_amount_decimal !== undefined
+        ? tokenInfo.dev_buy_token_amount_decimal
+        : 9;
+      
+      // Calculate wallet buy amounts
+      const walletBuyAmountSOL = (parseFloat(firstBuy.in_amount) || 0) / Math.pow(10, SOL_DECIMALS);
+      const walletBuyAmountTokens = (parseFloat(firstBuy.out_amount) || 0) / Math.pow(10, tokenDecimals);
+      
+      // Get total gas and fees
+      let totalGasAndFees = 0;
+      transactions.forEach((tx: any) => {
+        const tipAmount = (tx.tipAmount != null ? parseFloat(tx.tipAmount) : 0) || 0;
+        const feeAmount = (tx.feeAmount != null ? parseFloat(tx.feeAmount) : 0) || 0;
+        totalGasAndFees += (tipAmount + feeAmount);
+      });
+      
+      // Get all sells (sorted by timestamp ASC)
+      const sells = transactions
+        .filter((tx: any) => tx.type?.toLowerCase() === 'sell')
+        .sort((a: any, b: any) => {
+          const timeA = a.blockTimestamp ? new Date(a.blockTimestamp).getTime() : new Date(a.created_at).getTime();
+          const timeB = b.blockTimestamp ? new Date(b.blockTimestamp).getTime() : new Date(b.created_at).getTime();
+          return timeA - timeB;
+        });
+      
+      if (sells.length === 0) {
+        return null;
+      }
+      
+      // Calculate total gas/fees for all sell transactions
+      let totalSellGasAndFees = 0;
+      sells.forEach((sell: any) => {
+        const sellTipAmount = (sell.tipAmount != null ? parseFloat(sell.tipAmount) : 0) || 0;
+        const sellFeeAmount = (sell.feeAmount != null ? parseFloat(sell.feeAmount) : 0) || 0;
+        totalSellGasAndFees += (sellTipAmount + sellFeeAmount);
+      });
+      
+      // Calculate non-sell gas/fees (buy transactions and any other transactions)
+      const nonSellGasAndFees = totalGasAndFees - totalSellGasAndFees;
+      
+      // Get buy timestamp
+      const buyTimestamp = firstBuy.blockTimestamp || firstBuy.created_at;
+      const buyTime = new Date(buyTimestamp).getTime();
+      
+      // Get first buy market cap
+      const firstBuyMarketCap = firstBuy?.marketCap ? parseFloat(firstBuy.marketCap) : null;
+      
+      // Calculate what-if PNL for each sell
+      let totalSellAmountSOL = 0;
+      let totalWhatIfSellAmountSOL = 0; // Total sell amount using adjusted market caps
+      const whatIfSells = await Promise.all(sells.map(async (sell: any, index: number) => {
+        const sellTimestamp = sell.blockTimestamp || sell.created_at;
+        const sellTime = new Date(sellTimestamp).getTime();
+        
+        // Calculate adjusted sell time
+        let adjustedSellTime: number;
+        if (setAllSellsTo !== undefined) {
+          // Set all sells to N seconds after buy
+          adjustedSellTime = buyTime + (setAllSellsTo * 1000);
+        } else if (index === 0 && firstSellTimeAdjustment !== undefined) {
+          // Adjust first sell by ±N seconds
+          adjustedSellTime = sellTime + (firstSellTimeAdjustment * 1000);
+        } else {
+          // Keep original time for other sells
+          adjustedSellTime = sellTime;
+        }
+        
+        // Get market cap at adjusted time from timeseries
+        const adjustedMarketCap = await dbService.getMarketCapAtTimestamp(
+          wallet,
+          token,
+          adjustedSellTime
+        );
+        
+        // Calculate original sell amounts
+        const sellAmountSOL = (parseFloat(sell.out_amount) || 0) / Math.pow(10, SOL_DECIMALS);
+        const sellAmountTokens = (parseFloat(sell.in_amount) || 0) / Math.pow(10, tokenDecimals);
+        const originalMarketCap = sell.marketCap ? parseFloat(sell.marketCap) : null;
+        
+        // Calculate adjusted sell amount based on market cap ratio
+        // The issue: avg profit compares adjustedMarketCap to firstBuyMarketCap, but adjusted sell amount
+        // was comparing adjustedMarketCap to originalMarketCap. This causes huge discrepancies when
+        // original sell happened at a very different market cap than the buy.
+        //
+        // To match avg profit calculation, we should calculate adjusted sell amount based on buy market cap:
+        // - Avg profit shows: price change from buy to adjusted sell time = (adjustedMarketCap / firstBuyMarketCap)
+        // - So adjusted sell amount should be: originalSellAmount * (adjustedMarketCap / firstBuyMarketCap) / (originalMarketCap / firstBuyMarketCap)
+        // - But this still uses originalMarketCap as a reference
+        //
+        // Better approach: Calculate what the sell amount would have been at buy price, then apply the avg profit ratio
+        // Since: originalSellAmount = sellAmountTokens * priceAtOriginalSellTime
+        // and: priceAtOriginalSellTime = priceAtBuyTime * (originalMarketCap / firstBuyMarketCap)
+        // So: originalSellAmount = sellAmountTokens * priceAtBuyTime * (originalMarketCap / firstBuyMarketCap)
+        // Therefore: sellAmountAtBuyPrice = sellAmountTokens * priceAtBuyTime = originalSellAmount / (originalMarketCap / firstBuyMarketCap)
+        // And: adjustedSellAmount = sellAmountAtBuyPrice * (adjustedMarketCap / firstBuyMarketCap)
+        //                        = originalSellAmount * (adjustedMarketCap / firstBuyMarketCap) / (originalMarketCap / firstBuyMarketCap)
+        //                        = originalSellAmount * (adjustedMarketCap / originalMarketCap)
+        //
+        // This still gives the same result. The real fix is to use buy market cap as the normalization point:
+        let adjustedSellAmountSOL = sellAmountSOL;
+        if (firstBuyMarketCap && adjustedMarketCap && originalMarketCap && 
+            firstBuyMarketCap > 0 && adjustedMarketCap > 0 && originalMarketCap > 0) {
+          // Calculate adjusted sell amount to match avg profit: use buy market cap as the base
+          // This ensures that if avg profit is +5.32%, the sell amount increases proportionally
+          // Formula: adjustedSellAmount = originalSellAmount * (adjustedMarketCap / firstBuyMarketCap) / (originalMarketCap / firstBuyMarketCap)
+          // This is mathematically equivalent to: originalSellAmount * (adjustedMarketCap / originalMarketCap)
+          // But the key insight: we're normalizing by the buy market cap to match avg profit calculation
+          // The ratio (adjustedMarketCap / firstBuyMarketCap) matches the avg profit calculation
+          adjustedSellAmountSOL = sellAmountSOL * (adjustedMarketCap / firstBuyMarketCap) / (originalMarketCap / firstBuyMarketCap);
+        } else if (originalMarketCap && adjustedMarketCap && originalMarketCap > 0 && adjustedMarketCap > 0) {
+          // Fallback: use original sell market cap if buy market cap not available
+          adjustedSellAmountSOL = sellAmountSOL * (adjustedMarketCap / originalMarketCap);
+        }
+        
+        // Calculate PNL using adjusted market cap
+        let firstSellPNL = null;
+        if (firstBuyMarketCap && adjustedMarketCap && adjustedMarketCap > 0) {
+          firstSellPNL = (adjustedMarketCap / firstBuyMarketCap - 1) * 100;
+        }
+        
+        // Get actual gas/fees for this specific sell transaction
+        const sellTipAmount = (sell.tipAmount != null ? parseFloat(sell.tipAmount) : 0) || 0;
+        const sellFeeAmount = (sell.feeAmount != null ? parseFloat(sell.feeAmount) : 0) || 0;
+        const sellGasAndFees = sellTipAmount + sellFeeAmount;
+        
+        totalSellAmountSOL += sellAmountSOL;
+        totalWhatIfSellAmountSOL += adjustedSellAmountSOL;
+        
+        return {
+          sellNumber: index + 1,
+          originalMarketCap: originalMarketCap,
+          adjustedMarketCap: adjustedMarketCap,
+          firstSellPNL: firstSellPNL,
+          sellAmountSOL: sellAmountSOL,
+          adjustedSellAmountSOL: adjustedSellAmountSOL,
+          sellAmountTokens: sellAmountTokens,
+          sellGasAndFees: sellGasAndFees,
+          originalTimestamp: sellTimestamp,
+          adjustedTimestamp: new Date(adjustedSellTime).toISOString()
+        };
+      }));
+      
+      // Calculate what-if PNL using adjusted sell amounts (based on adjusted market caps)
+      const whatIfPnlSOL = totalWhatIfSellAmountSOL - (walletBuyAmountSOL + totalGasAndFees);
+      const whatIfPnlPercent = walletBuyAmountSOL > 0 ? (whatIfPnlSOL / walletBuyAmountSOL) * 100 : 0;
+      
+      return {
+        tokenAddress: token,
+        walletBuyAmountSOL: walletBuyAmountSOL,
+        walletBuyAmountTokens: walletBuyAmountTokens,
+        firstBuyMarketCap: firstBuyMarketCap,
+        totalGasAndFees: totalGasAndFees,
+        nonSellGasAndFees: nonSellGasAndFees,
+        whatIfPnlSOL: whatIfPnlSOL,
+        whatIfPnlPercent: whatIfPnlPercent,
+        sells: whatIfSells
+      };
+    }));
+    
+    // Filter out null results
+    const validWhatIfData = whatIfData.filter((item: any) => item !== null);
+    
+    res.status(200).json({
+      success: true,
+      whatIfData: validWhatIfData
+    });
+  } catch (error: any) {
+    console.error('What-if calculation error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/creator-tokens/:wallet - Get count of tokens created by a wallet
+ */
+app.get("/api/creator-tokens/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    const solscanApiKey = process.env.SOLSCAN_API_KEY;
+    
+    if (!solscanApiKey) {
+      res.status(500).json({ 
+        success: false, 
+        error: 'SOLSCAN_API_KEY not configured' 
+      });
+      return;
+    }
+    
+    let allTokens: any[] = [];
+    let page = 1;
+    const pageSize = 100;
+    let hasMore = true;
+    
+    // Fetch all pages until we get fewer items than page_size
+    while (hasMore) {
+      const url = `https://pro-api.solscan.io/v2.0/account/defi/activities?address=${wallet}&activity_type[]=ACTIVITY_SPL_INIT_MINT&page=${page}&page_size=${pageSize}&sort_by=block_time&sort_order=desc`;
+      
+      const requestOptions: RequestInit = {
+        method: 'GET',
+        headers: {
+          'token': solscanApiKey
+        }
+      };
+      
+      const response = await fetch(url, requestOptions);
+      
+      if (!response.ok) {
+        throw new Error(`Solscan API error: ${response.statusText}`);
+      }
+      
+      const data = await response.json() as {
+        success: boolean;
+        data?: Array<{
+          routers?: { token1?: string };
+          trans_id?: string;
+          block_time?: number;
+          time?: string;
+        }>;
+        metadata?: {
+          tokens?: Record<string, any>;
+        };
+      };
+      
+      if (!data.success || !data.data) {
+        throw new Error('Invalid response from Solscan API');
+      }
+      
+      // Extract token addresses from the data
+      // Token addresses are in routers.token1 field
+      const pageTokens = data.data
+        .filter((activity) => activity.routers && activity.routers.token1)
+        .map((activity) => ({
+          tokenAddress: activity.routers!.token1!,
+          transactionId: activity.trans_id,
+          blockTime: activity.block_time,
+          timestamp: activity.time,
+          tokenInfo: data.metadata?.tokens?.[activity.routers!.token1!] || null
+        }));
+      
+      allTokens = allTokens.concat(pageTokens);
+      
+      // Check if we should continue fetching
+      if (data.data.length < pageSize) {
+        hasMore = false;
+      } else {
+        page++;
+      }
+    }
+    
+    // Remove duplicates by token address (keep first occurrence)
+    const uniqueTokens = new Map<string, any>();
+    allTokens.forEach(token => {
+      if (!uniqueTokens.has(token.tokenAddress)) {
+        uniqueTokens.set(token.tokenAddress, token);
+      }
+    });
+    
+    const tokenCount = uniqueTokens.size;
+    const tokens = Array.from(uniqueTokens.values());
+    
+    res.status(200).json({
+      success: true,
+      walletAddress: wallet,
+      tokenCount: tokenCount,
+      tokens: tokens
+    });
+  } catch (error: any) {
+    console.error('Error fetching creator tokens:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to fetch creator tokens' 
+    });
+  }
+});
+
+/**
+ * POST /api/tokens/ath-mcap - Get ATH market cap for a list of tokens
+ * Request body: { tokens: string[], sinceDate?: string }
+ */
+app.post("/api/tokens/ath-mcap", requireAuth, async (_req, res) => {
+  try {
+    const { tokens, sinceDate } = _req.body;
+    
+    if (!Array.isArray(tokens) || tokens.length === 0) {
+      res.status(400).json({ 
+        success: false,
+        error: "Tokens array is required and must not be empty" 
+      });
+      return;
+    }
+
+    // Limit to prevent abuse
+    if (tokens.length > 50) {
+      res.status(400).json({ 
+        success: false,
+        error: "Maximum 50 tokens allowed per request" 
+      });
+      return;
+    }
+
+    console.log(`🔍 Fetching ATH market cap for ${tokens.length} tokens...`);
+
+    const results = await bitqueryService.getATHMarketCap(tokens, sinceDate);
+
+    // Create an object for easy lookup (Map is not JSON serializable)
+    const mcapObject: { [key: string]: any } = {};
+    results.forEach(result => {
+      mcapObject[result.mintAddress] = {
+        athPriceUSD: result.athPriceUSD,
+        athMarketCap: result.athMarketCap,
+        name: result.name,
+        symbol: result.symbol
+      };
+    });
+
+    res.status(200).json({
+      success: true,
+      results: mcapObject,
+      count: results.length
+    });
+  } catch (error: any) {
+    console.error('Error fetching ATH market cap:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to fetch ATH market cap' 
+    });
+  }
+});
+
+/**
+ * GET /api/wallet-activity/:wallet - Get trading activity aggregated by time interval
+ * Query params: interval (hour, quarter_day, day, week, month)
+ */
+app.get("/api/wallet-activity/:wallet", requireAuth, async (_req, res) => {
+  try {
+    const { wallet } = _req.params;
+    const interval = (_req.query.interval as string) || 'day';
+    
+    // Validate interval
+    const validIntervals = ['hour', 'quarter_day', 'day', 'week', 'month'];
+    if (!validIntervals.includes(interval)) {
+      res.status(400).json({ 
+        success: false, 
+        error: `Invalid interval. Must be one of: ${validIntervals.join(', ')}` 
+      });
+      return;
+    }
+    
+    const activity = await dbService.getWalletTradingActivity(
+      wallet, 
+      interval as 'hour' | 'quarter_day' | 'day' | 'week' | 'month'
+    );
+    
+    res.status(200).json({ success: true, data: activity, interval });
+  } catch (error: any) {
+    console.error('Wallet activity error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard-filter-presets - Get all dashboard filter presets
+ */
+app.get("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
+  try {
+    const presets = await dbService.getDashboardFilterPresets();
+    res.status(200).json({ success: true, presets });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/dashboard-filter-presets/:name - Get dashboard filter preset by name
+ */
+app.get("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res) => {
+  try {
+    const { name } = _req.params;
+    const preset = await dbService.getDashboardFilterPreset(name);
+    if (!preset) {
+      res.status(404).json({ success: false, error: 'Preset not found' });
+      return;
+    }
+    res.status(200).json({ success: true, preset });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/dashboard-filter-presets - Save dashboard filter preset
+ */
+app.post("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
+  try {
+    const { name, filters } = _req.body;
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      res.status(400).json({ success: false, error: 'Preset name is required' });
+      return;
+    }
+    
+    await dbService.saveDashboardFilterPreset(name.trim(), filters || {});
+    res.status(200).json({ success: true, message: 'Filter preset saved successfully' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/dashboard-filter-presets/:name - Delete dashboard filter preset
+ */
+app.delete("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res) => {
+  try {
+    const { name } = _req.params;
+    await dbService.deleteDashboardFilterPreset(name);
+    res.status(200).json({ success: true, message: 'Filter preset deleted successfully' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/sol-price - Get current SOL price
+ */
+app.get("/api/sol-price", requireAuth, async (_req, res) => {
+  try {
+    const price = await redisService.getLatestSolPrice();
+    if (price === null) {
+      res.status(404).json({ success: false, error: 'SOL price not available' });
+      return;
+    }
+    res.status(200).json({ success: true, price });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Error handling middleware
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error("Server error:", err);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+// Handle uncaught exceptions to prevent crashes
+process.on('uncaughtException', (error: Error) => {
+  // Log the error (to file, not console to avoid EPIPE)
+  try {
+    const logDir = path.join(process.cwd(), 'logs');
+    const today = new Date().toISOString().split('T')[0];
+    const logFile = path.join(logDir, `app-${today}.log`);
+    const timestamp = new Date().toISOString();
+    const errorMessage = `[${timestamp}] [FATAL] Uncaught Exception: ${error.message}\n${error.stack}\n`;
+    fs.appendFileSync(logFile, errorMessage, 'utf8');
+  } catch {
+    // If logging fails, silently ignore
+  }
+  
+  // Try to log to console (but don't crash if it fails)
+  try {
+    console.error('Fatal: Uncaught exception:', error);
+  } catch {
+    // Ignore EPIPE and other console errors
+  }
+  
+  // Give some time for cleanup, then exit
+  setTimeout(() => {
+    process.exit(1);
+  }, 1000);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason: any, _promise: Promise<any>) => {
+  // Log the error (to file, not console to avoid EPIPE)
+  try {
+    const logDir = path.join(process.cwd(), 'logs');
+    const today = new Date().toISOString().split('T')[0];
+    const logFile = path.join(logDir, `app-${today}.log`);
+    const timestamp = new Date().toISOString();
+    const errorMessage = `[${timestamp}] [FATAL] Unhandled Rejection: ${reason}\n${reason?.stack || ''}\n`;
+    fs.appendFileSync(logFile, errorMessage, 'utf8');
+  } catch {
+    // If logging fails, silently ignore
+  }
+  
+  // Try to log to console (but don't crash if it fails)
+  try {
+    console.error('Fatal: Unhandled rejection:', reason);
+  } catch {
+    // Ignore EPIPE and other console errors
+  }
+});
+
+// Handle graceful shutdown
+process.on('SIGINT', async () => {
+  try {
+    console.log('\n⏸️  Shutting down gracefully...');
+  } catch {
+    // Ignore EPIPE errors during shutdown
+  }
+  await tracker.stop();
+  await dbService.close();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  try {
+    console.log('\n⏸️  Shutting down gracefully...');
+  } catch {
+    // Ignore EPIPE errors during shutdown
+  }
+  await tracker.stop();
+  await dbService.close();
+  process.exit(0);
+});
+
+// Start server
+async function main() {
+  try {
+    await initializeApp();
+    
+    const HOST = process.env.HOST || '0.0.0.0';
+    app.listen(PORT, HOST, () => {
+      console.log(`Trade tracking server running on http://${HOST}:${PORT}`);
+    });
+  } catch (error: any) {
+    const errorMessage = error?.message || String(error);
+    const errorStack = error?.stack || '';
+    console.error("Failed to start server:", errorMessage);
+    if (errorStack) {
+      console.error("Stack trace:", errorStack);
+    }
+    process.exit(1);
+  }
+}
+
+main();
+
