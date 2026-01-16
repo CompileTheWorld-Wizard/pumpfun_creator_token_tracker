@@ -1201,6 +1201,17 @@ function calculateWhatIfPNL(
   };
 }
 
+// Helper function to check if filtering by avgFirst5BuySol or medianFirst5BuySol
+function needsFirst5BuySolFiltering(filters: any): boolean {
+  if (!filters || !filters.avgBuySells || !Array.isArray(filters.avgBuySells)) {
+    return false;
+  }
+  
+  return filters.avgBuySells.some((f: any) => 
+    f.type === 'avgFirst5BuySol' || f.type === 'medianFirst5BuySol'
+  );
+}
+
 // Helper function to extract minimum buy amount filters from avgBuySells filters
 function extractMinBuyAmountFilters(filters: any): { minBuyAmountSol?: number | null; minBuyAmountToken?: number | null } {
   if (!filters || !filters.avgBuySells || !Array.isArray(filters.avgBuySells)) {
@@ -1217,6 +1228,71 @@ function extractMinBuyAmountFilters(filters: any): { minBuyAmountSol?: number | 
     minBuyAmountSol: buyCountFilter.minBuyAmountSol !== undefined ? buyCountFilter.minBuyAmountSol : null,
     minBuyAmountToken: buyCountFilter.minBuyAmountToken !== undefined ? buyCountFilter.minBuyAmountToken : null
   };
+}
+
+// Efficient median calculation using quickselect (O(n) average case, O(n^2) worst case)
+// For arrays < 100 elements, regular sort is faster due to overhead
+function quickSelectMedian(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  if (arr.length === 1) return arr[0];
+  
+  // For small arrays, use sort (overhead of quickselect not worth it)
+  if (arr.length < 100) {
+    const sorted = [...arr].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+      return (sorted[mid - 1] + sorted[mid]) / 2;
+    } else {
+      return sorted[mid];
+    }
+  }
+  
+  // For larger arrays, use quickselect
+  const arrCopy = [...arr];
+  const mid = Math.floor(arrCopy.length / 2);
+  
+  if (arrCopy.length % 2 === 0) {
+    // Need two elements for even-length median
+    const left = quickSelect(arrCopy, mid - 1, 0, arrCopy.length - 1);
+    const right = quickSelect(arrCopy, mid, 0, arrCopy.length - 1);
+    return (left + right) / 2;
+  } else {
+    return quickSelect(arrCopy, mid, 0, arrCopy.length - 1);
+  }
+}
+
+// Quickselect algorithm to find kth smallest element
+function quickSelect(arr: number[], k: number, left: number, right: number): number {
+  if (left === right) {
+    return arr[left];
+  }
+  
+  const pivotIndex = partition(arr, left, right, Math.floor((left + right) / 2));
+  
+  if (k === pivotIndex) {
+    return arr[k];
+  } else if (k < pivotIndex) {
+    return quickSelect(arr, k, left, pivotIndex - 1);
+  } else {
+    return quickSelect(arr, k, pivotIndex + 1, right);
+  }
+}
+
+// Partition function for quickselect
+function partition(arr: number[], left: number, right: number, pivotIndex: number): number {
+  const pivotValue = arr[pivotIndex];
+  [arr[pivotIndex], arr[right]] = [arr[right], arr[pivotIndex]];
+  
+  let storeIndex = left;
+  for (let i = left; i < right; i++) {
+    if (arr[i] < pivotValue) {
+      [arr[storeIndex], arr[i]] = [arr[i], arr[storeIndex]];
+      storeIndex++;
+    }
+  }
+  
+  [arr[right], arr[storeIndex]] = [arr[storeIndex], arr[right]];
+  return storeIndex;
 }
 
 // Calculate average buy/sell statistics for a creator wallet
@@ -1255,8 +1331,12 @@ function calculateBuySellStats(
   const allFirst5BuySols: number[] = [];
   
   for (const token of tokens) {
-    // Parse market cap time series
+    // Parse market cap time series (only if string, skip if already parsed)
     let marketCapTimeSeries = token.marketCapTimeSeries;
+    if (marketCapTimeSeries === null || marketCapTimeSeries === undefined) {
+      continue; // Skip if no time series data
+    }
+    
     if (typeof marketCapTimeSeries === 'string') {
       try {
         marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
@@ -1280,6 +1360,8 @@ function calculateBuySellStats(
     // Collect first 5 buy SOL amounts for this token
     const first5BuySols: number[] = [];
     
+    // Early exit optimization: if we've collected 5 buys and don't need other stats,
+    // we could exit early, but we still need to count all buys/sells for averages
     for (const point of marketCapTimeSeries) {
       const tradeType = point.tradeType || point.trade_type;
       // Use solAmount (actual SOL amount for the trade) - this is required for accurate calculations
@@ -1309,7 +1391,7 @@ function calculateBuySellStats(
         buyCount++;
         buySol += solAmount;
         
-        // Collect first 5 buy SOL amounts
+        // Collect first 5 buy SOL amounts (early exit when we have 5)
         if (first5BuySols.length < 5) {
           first5BuySols.push(solAmount);
         }
@@ -1319,8 +1401,10 @@ function calculateBuySellStats(
       }
     }
     
-    // Add first 5 buy SOL amounts to the overall collection
-    allFirst5BuySols.push(...first5BuySols);
+    // Add first 5 buy SOL amounts to the overall collection (only if we have any)
+    if (first5BuySols.length > 0) {
+      allFirst5BuySols.push(...first5BuySols);
+    }
     
     totalBuyCount += buyCount;
     totalBuySol += buySol;
@@ -1339,18 +1423,15 @@ function calculateBuySellStats(
   let medianFirst5BuySol = 0;
   
   if (allFirst5BuySols.length > 0) {
-    // Calculate average
-    const sum = allFirst5BuySols.reduce((acc, val) => acc + val, 0);
+    // Calculate average (single pass - optimized)
+    let sum = 0;
+    for (let i = 0; i < allFirst5BuySols.length; i++) {
+      sum += allFirst5BuySols[i];
+    }
     avgFirst5BuySol = sum / allFirst5BuySols.length;
     
-    // Calculate median
-    const sorted = [...allFirst5BuySols].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) {
-      medianFirst5BuySol = (sorted[mid - 1] + sorted[mid]) / 2;
-    } else {
-      medianFirst5BuySol = sorted[mid];
-    }
+    // Calculate median using optimized quickselect (O(n) average case)
+    medianFirst5BuySol = quickSelectMedian(allFirst5BuySols);
   }
   
   return {
@@ -1605,10 +1686,13 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // Check if we need buy/sell stats (for performance optimization)
     // Only fetch market_cap_time_series when sorting by buy/sell related fields
-    const needsBuySellStats = sortingByComplexField && 
+    // OR when filtering by avgFirst5BuySol or medianFirst5BuySol
+    const needsBuySellStatsForSorting = sortingByComplexField && 
       (sortColumn === 'avgFirst5BuySol' || sortColumn === 'medianFirst5BuySol' || 
        sortColumn === 'avgBuyCount' || sortColumn === 'avgBuyTotalSol' || 
        sortColumn === 'avgSellCount' || sortColumn === 'avgSellTotalSol');
+    const needsBuySellStatsForFiltering = needsFirst5BuySolFiltering(filters);
+    const needsBuySellStats = needsBuySellStatsForSorting || needsBuySellStatsForFiltering;
     
     // Performance note: When sorting by buy/sell fields with many wallets (1M+),
     // fetching market_cap_time_series for all tokens can be slow.
