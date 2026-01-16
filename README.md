@@ -1,39 +1,61 @@
 # SolTrack - Independent Projects Structure
 
-This repository contains 4 completely independent Node.js projects:
+This repository contains 4 completely independent Node.js projects. Each project has its own:
+- `package.json` and dependencies
+- `node_modules/` folder
+- `ecosystem.config.cjs` for PM2
+- `deploy.sh` script
+- Build output (`dist/`)
+- Logs directory
+
+Only the root `package.json` and git repository are shared.
 
 ## Project Structure
 
 ```
 soltrack/
-├── frontend/              # Main frontend app with Vue + Vite + Auth Server
+├── frontend/              # Independent Frontend + Auth Server
 │   ├── src/              # Vue frontend source code
 │   ├── server.ts         # Express auth server
 │   ├── package.json      # Frontend dependencies
-│   ├── tsconfig.json     # Frontend TypeScript config
-│   └── vite.config.ts    # Vite configuration
+│   ├── ecosystem.config.cjs  # PM2 config for frontend
+│   ├── deploy.sh         # Deployment script for frontend
+│   ├── node_modules/     # Frontend dependencies
+│   ├── dist/             # Frontend build output
+│   └── logs/            # Frontend logs
 │
 ├── creator_tracker/      # Independent Creator Tracking Server
 │   ├── src/              # Server source code
 │   ├── server.ts         # Main server file
 │   ├── package.json      # Creator tracker dependencies
-│   └── tsconfig.json     # Creator tracker TypeScript config
+│   ├── ecosystem.config.cjs  # PM2 config for creator tracker
+│   ├── deploy.sh         # Deployment script for creator tracker
+│   ├── node_modules/     # Creator tracker dependencies
+│   ├── dist/             # Creator tracker build output
+│   └── logs/             # Creator tracker logs
 │
 ├── fund_tracker/         # Independent Fund Tracking Server
 │   ├── src/              # Server source code
 │   ├── server.ts         # Main server file
 │   ├── package.json      # Fund tracker dependencies
-│   └── tsconfig.json     # Fund tracker TypeScript config
+│   ├── ecosystem.config.cjs  # PM2 config for fund tracker
+│   ├── deploy.sh         # Deployment script for fund tracker
+│   ├── node_modules/     # Fund tracker dependencies
+│   ├── dist/             # Fund tracker build output
+│   └── logs/             # Fund tracker logs
 │
 ├── trade_tracker/        # Independent Trade Tracking Server
 │   ├── src/              # Server source code
 │   ├── server.ts         # Main server file
 │   ├── package.json      # Trade tracker dependencies
-│   └── tsconfig.json     # Trade tracker TypeScript config
+│   ├── ecosystem.config.cjs  # PM2 config for trade tracker
+│   ├── deploy.sh         # Deployment script for trade tracker
+│   ├── node_modules/     # Trade tracker dependencies
+│   ├── dist/             # Trade tracker build output
+│   └── logs/             # Trade tracker logs
 │
-├── ecosystem.config.cjs  # PM2 configuration for all apps
-├── deploy.sh            # Deployment script
-└── package.json          # Root package.json (orchestration only)
+├── package.json          # Root package.json (orchestration only)
+└── README.md             # This file
 ```
 
 ## Port Configuration
@@ -47,8 +69,10 @@ soltrack/
 
 ### Install Dependencies
 
+Each project manages its own dependencies independently:
+
 ```bash
-# Install all dependencies for all projects
+# Install all dependencies (orchestration script)
 npm run install:all
 
 # Or install individually:
@@ -61,45 +85,78 @@ cd trade_tracker && npm install
 ### Run Development Servers
 
 ```bash
-# Run all apps in development mode
+# Run all apps in development mode (orchestration)
 npm run dev
 
-# Or run individually:
-npm run dev:frontend    # Frontend + Auth server
-npm run dev:creator     # Creator tracker
-npm run dev:fund        # Fund tracker
-npm run dev:trade       # Trade tracker
+# Or run individually from each project directory:
+cd frontend && npm run dev
+cd creator_tracker && npm run dev
+cd fund_tracker && npm run dev
+cd trade_tracker && npm run dev
 ```
 
 ### Build
 
 ```bash
-# Build all projects
+# Build all projects (orchestration)
 npm run build
 
-# Or build individually:
-npm run build:frontend
-npm run build:creator
-npm run build:fund
-npm run build:trade
+# Or build individually from each project directory:
+cd frontend && npm run build
+cd creator_tracker && npm run build
+cd fund_tracker && npm run build
+cd trade_tracker && npm run build
 ```
 
 ## Deployment
 
-### Using PM2
+Each project can be deployed independently:
+
+### Frontend Deployment
 
 ```bash
-# Deploy all apps
+cd frontend
 npm run pm2:deploy
 # or
 ./deploy.sh
+```
 
-# PM2 commands:
-npm run pm2:start      # Start all apps
-npm run pm2:stop       # Stop all apps
-npm run pm2:restart    # Restart all apps
-npm run pm2:status     # Check status
+### Creator Tracker Deployment
+
+```bash
+cd creator_tracker
+npm run pm2:deploy
+# or
+./deploy.sh
+```
+
+### Fund Tracker Deployment
+
+```bash
+cd fund_tracker
+npm run pm2:deploy
+# or
+./deploy.sh
+```
+
+### Trade Tracker Deployment
+
+```bash
+cd trade_tracker
+npm run pm2:deploy
+# or
+./deploy.sh
+```
+
+### PM2 Commands (from within each project)
+
+```bash
+npm run pm2:start      # Start the app
+npm run pm2:stop       # Stop the app
+npm run pm2:restart    # Restart the app
 npm run pm2:logs       # View logs
+npm run pm2:status    # Check status
+npm run pm2:monit      # Monitor resources
 ```
 
 ## Authentication
@@ -111,7 +168,7 @@ npm run pm2:logs       # View logs
 
 ## Environment Variables
 
-Each project can have its own `.env` file, but they should share:
+Each project should have its own `.env` file in its directory. They should share:
 - `REDIS_HOST` - Redis server host
 - `REDIS_PORT` - Redis server port
 - `REDIS_PASSWORD` - Redis password (if required)
@@ -121,17 +178,19 @@ Each project can have its own `.env` file, but they should share:
 - `USE_HTTPS` - Set to 'true' for HTTPS
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` - PostgreSQL config
 
-## Independent Projects
+## Complete Independence
 
-Each tracker is completely independent:
-- Own `package.json` and dependencies
-- Own `tsconfig.json` configuration
-- Own source code and build output
-- Can be deployed separately
-- No shared code between trackers
+Each project is completely independent:
+- ✅ Own `package.json` and dependencies
+- ✅ Own `node_modules/` folder
+- ✅ Own `ecosystem.config.cjs` for PM2
+- ✅ Own `deploy.sh` script
+- ✅ Own build output (`dist/`)
+- ✅ Own logs directory
+- ✅ Can be deployed separately
+- ✅ Can be developed separately
+- ✅ No shared code between projects
 
-The frontend is also completely self-contained with:
-- Vue.js frontend
-- Vite build system
-- Express auth server
-- All frontend assets and configuration
+Only shared:
+- Root `package.json` (for orchestration convenience)
+- Git repository

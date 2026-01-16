@@ -14,17 +14,7 @@
     "build:creator": "cd creator_tracker && npm ci && npm run build",
     "build:fund": "cd fund_tracker && npm ci && npm run build",
     "build:trade": "cd trade_tracker && npm ci && npm run build",
-    "install:all": "cd frontend && npm install && cd ../creator_tracker && npm install && cd ../fund_tracker && npm install && cd ../trade_tracker && npm install",
-    "pm2:start": "pm2 start ecosystem.config.cjs",
-    "pm2:stop": "pm2 stop all",
-    "pm2:restart": "pm2 restart all",
-    "pm2:delete": "pm2 delete all",
-    "pm2:logs": "pm2 logs",
-    "pm2:status": "pm2 status",
-    "pm2:monit": "pm2 monit",
-    "pm2:save": "pm2 save",
-    "pm2:startup": "pm2 startup",
-    "pm2:deploy": "./deploy.sh"
+    "install:all": "cd frontend && npm install && cd ../creator_tracker && npm install && cd ../fund_tracker && npm install && cd ../trade_tracker && npm install"
   },
   "keywords": [
     "solana",

@@ -8,7 +8,16 @@
     "dev": "tsx watch server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:stop": "pm2 stop soltrack-fund-tracker",
+    "pm2:restart": "pm2 restart soltrack-fund-tracker",
+    "pm2:delete": "pm2 delete soltrack-fund-tracker",
+    "pm2:logs": "pm2 logs soltrack-fund-tracker",
+    "pm2:status": "pm2 status soltrack-fund-tracker",
+    "pm2:monit": "pm2 monit",
+    "pm2:save": "pm2 save",
+    "pm2:deploy": "./deploy.sh"
   },
   "keywords": [
     "solana",
