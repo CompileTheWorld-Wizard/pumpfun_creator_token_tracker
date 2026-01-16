@@ -4,7 +4,6 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from "url";
 import session from "express-session";
 import ExcelJS from "exceljs";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
@@ -15,12 +14,9 @@ import { tracker } from "./tracker/index.js";
 import { tokenService } from "./services/tokenService.js";
 import { bitqueryService } from "./services/index.js";
 import { sessionStore } from "./src/shared/sessionStore.js";
-import { getSessionConfig, requireAuth as sharedRequireAuth, isAuthenticated as sharedIsAuthenticated } from "./src/shared/auth.js";
+import { getSessionConfig, requireAuth as sharedRequireAuth } from "./src/shared/auth.js";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Extend session type to include authenticated property
 declare module "express-session" {
@@ -84,14 +80,6 @@ app.use((req, res, next) => {
  * Authentication middleware - using shared middleware
  */
 const requireAuth = sharedRequireAuth;
-
-/**
- * Check if user is authenticated (for API routes)
- * Using shared authentication helper
- */
-function isAuthenticated(req: express.Request): boolean {
-  return sharedIsAuthenticated(req);
-}
 
 // Initialize database and tracker
 async function initializeApp() {

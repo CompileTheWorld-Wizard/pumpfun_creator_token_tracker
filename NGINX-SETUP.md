@@ -106,6 +106,19 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
+    # Auth API (port 5004) - MUST come before /api/ to match first
+    location /api/auth {
+        proxy_pass http://127.0.0.1:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+    }
+
     # Creator tracking API (port 5005)
     location /api/ {
         proxy_pass http://127.0.0.1:5005;
