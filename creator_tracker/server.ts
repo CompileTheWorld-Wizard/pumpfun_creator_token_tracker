@@ -2,8 +2,6 @@ import express from 'express';
 import session from 'express-session';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { pool } from './db.js';
 import walletRoutes from './routes/wallets.js';
 import streamRoutes from './routes/stream.js';
@@ -17,9 +15,6 @@ dotenv.config();
 
 // Initialize console sanitizer early to prevent binary data corruption in terminal output
 initializeConsoleSanitizer();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = parseInt(process.env.CREATOR_SERVER_PORT || process.env.PORT || '5005', 10);
