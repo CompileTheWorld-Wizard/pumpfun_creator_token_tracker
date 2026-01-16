@@ -3,7 +3,7 @@ import session from 'express-session';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { sessionStore } from './src/shared/sessionStore.js';
-import { getSessionConfig, requireAuth } from './src/shared/auth.js';
+import { getSessionConfig } from './src/shared/auth.js';
 import { dbService } from './database.js';
 import { SolTransferTracker } from './services/solTransferTracker.js';
 
@@ -22,48 +22,12 @@ app.disable('etag');
 // Initialize SOL transfer tracker
 const solTransferTracker = new SolTransferTracker();
 
-// Middleware
+// Middleware - Simplified CORS since only accessed via localhost proxy
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // In development mode, allow all origins
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    if (isDevelopment) {
-      return callback(null, true);
-    }
-    
-    // Allow localhost on any port (both http and https)
-    if (origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow 127.0.0.1 on any port
-    if (origin.match(/^https?:\/\/127\.0\.0\.1(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow IP addresses (for server access via IP)
-    if (origin.match(/^https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow specific origins from environment variable (comma-separated)
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(o => o) || [];
-    if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    // In production, reject unknown origins
-    console.warn(`CORS: Blocked origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins (only accessible via localhost proxy)
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -95,8 +59,8 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// API route to get SOL transfers (requires authentication)
-app.get('/api/sol-transfers', requireAuth, async (req, res) => {
+// API route to get SOL transfers (authentication handled by frontend proxy)
+app.get('/api/sol-transfers', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
     const offset = parseInt(req.query.offset as string) || 0;
@@ -108,8 +72,8 @@ app.get('/api/sol-transfers', requireAuth, async (req, res) => {
   }
 });
 
-// API route to get SOL transfers by sender (requires authentication)
-app.get('/api/sol-transfers/sender/:sender', requireAuth, async (req, res) => {
+// API route to get SOL transfers by sender (authentication handled by frontend proxy)
+app.get('/api/sol-transfers/sender/:sender', async (req, res) => {
   try {
     const { sender } = req.params;
     const limit = parseInt(req.query.limit as string) || 100;
@@ -121,8 +85,8 @@ app.get('/api/sol-transfers/sender/:sender', requireAuth, async (req, res) => {
   }
 });
 
-// API route to get SOL transfers by receiver (requires authentication)
-app.get('/api/sol-transfers/receiver/:receiver', requireAuth, async (req, res) => {
+// API route to get SOL transfers by receiver (authentication handled by frontend proxy)
+app.get('/api/sol-transfers/receiver/:receiver', async (req, res) => {
   try {
     const { receiver } = req.params;
     const limit = parseInt(req.query.limit as string) || 100;
@@ -134,8 +98,8 @@ app.get('/api/sol-transfers/receiver/:receiver', requireAuth, async (req, res) =
   }
 });
 
-// API route to get tracking status (requires authentication)
-app.get('/api/tracking/status', requireAuth, async (_req, res) => {
+// API route to get tracking status (authentication handled by frontend proxy)
+app.get('/api/tracking/status', async (_req, res) => {
   try {
     res.json({
       isTracking: solTransferTracker.getIsStreaming(),
@@ -147,8 +111,8 @@ app.get('/api/tracking/status', requireAuth, async (_req, res) => {
   }
 });
 
-// API route to start tracking (requires authentication)
-app.post('/api/tracking/start', requireAuth, async (_req, res) => {
+// API route to start tracking (authentication handled by frontend proxy)
+app.post('/api/tracking/start', async (_req, res) => {
   try {
     const grpcUrl = process.env.GRPC_URL;
     const xToken = process.env.X_TOKEN;
@@ -170,8 +134,8 @@ app.post('/api/tracking/start', requireAuth, async (_req, res) => {
   }
 });
 
-// API route to stop tracking (requires authentication)
-app.post('/api/tracking/stop', requireAuth, async (_req, res) => {
+// API route to stop tracking (authentication handled by frontend proxy)
+app.post('/api/tracking/stop', async (_req, res) => {
   try {
     solTransferTracker.stop();
     res.json({ success: true, message: 'Tracking stopped' });
@@ -181,8 +145,8 @@ app.post('/api/tracking/stop', requireAuth, async (_req, res) => {
   }
 });
 
-// API route to update minimum SOL amount (requires authentication)
-app.put('/api/tracking/min-sol', requireAuth, async (req, res) => {
+// API route to update minimum SOL amount (authentication handled by frontend proxy)
+app.put('/api/tracking/min-sol', async (req, res) => {
   try {
     const { amount } = req.body;
     
@@ -220,8 +184,8 @@ async function startServer() {
       console.log('✅ SOL transfer tracker ready (will start when user clicks start button)');
     }
 
-    // Start server
-    const HOST = process.env.HOST || '0.0.0.0';
+    // Start server - Bind to localhost only (accessed via frontend server proxy)
+    const HOST = process.env.HOST || '127.0.0.1';
     app.listen(PORT, HOST, () => {
       console.log(`✅ Fund tracking server running on http://${HOST}:${PORT}`);
     });

@@ -22,9 +22,10 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # Auth API (port 5004) - MUST come before /api/ to match first
+    # All API routes and static files are handled by the frontend server
+    # Frontend server acts as a proxy/router to backend services (creator, trade, fund trackers)
     # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
-    location /api/auth {
+    location / {
         proxy_pass http://127.0.0.1:5004;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -34,46 +35,9 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_cache_bypass $http_upgrade;
-    }
-
-    # Creator tracking API (port 5005)
-    # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
-    location /api/ {
-        proxy_pass http://127.0.0.1:5005;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Trade tracking API (port 5007)
-    location /trade-api/ {
-        proxy_pass http://127.0.0.1:5007/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Fund tracking API (port 5006)
-    location /fund-api/ {
-        proxy_pass http://127.0.0.1:5006/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_cache_bypass $http_upgrade;
+        
+        # Forward cookies for session management
+        proxy_set_header Cookie $http_cookie;
     }
 
     # SPA fallback - must be last

@@ -8,7 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         FUND_SERVER_PORT: 5006,
-        ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
+        HOST: '127.0.0.1',
         USE_HTTPS: 'true'
       },
       error_file: './logs/fund_tracker-error.log',

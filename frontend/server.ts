@@ -8,6 +8,7 @@ import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import RedisStore from 'connect-redis';
 import Redis from 'ioredis';
+import { createProxyMiddleware } from 'http-proxy-middleware';
 
 dotenv.config();
 
@@ -81,6 +82,10 @@ const PORT = parseInt(process.env.AUTH_SERVER_PORT || process.env.PORT || '5004'
 // Trust proxy - required when behind nginx reverse proxy
 app.set('trust proxy', 1);
 
+// Disable ETag globally to prevent 304 responses for API routes in production
+// Express enables ETag by default in production, which causes 304 responses
+app.disable('etag');
+
 // Middleware
 app.use(cors({
   origin: (origin, callback) => {
@@ -125,6 +130,18 @@ app.use(session({
   ...getSessionConfig(),
   store: sessionStore,
 }));
+
+// Set no-cache headers for API routes to prevent 304 responses
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+  }
+  next();
+});
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
@@ -297,7 +314,155 @@ app.post('/api/auth/clear-database', async (req, res) => {
 
 // Health check
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', server: 'auth-server' });
+  res.json({ status: 'ok', server: 'frontend-server' });
+});
+
+// Backend server ports (running on localhost via PM2)
+const CREATOR_TRACKER_PORT = parseInt(process.env.CREATOR_SERVER_PORT || '5005', 10);
+const TRADE_TRACKER_PORT = parseInt(process.env.TRADE_SERVER_PORT || '5007', 10);
+const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
+
+// Proxy configuration for backend services
+const proxyOptions = {
+  changeOrigin: true,
+  ws: false,
+  logLevel: 'debug' as const,
+  onProxyReq: (proxyReq: any, req: express.Request) => {
+    // Forward session cookie
+    if (req.headers.cookie) {
+      proxyReq.setHeader('Cookie', req.headers.cookie);
+    }
+    // Forward other headers
+    if (req.headers['x-forwarded-for']) {
+      proxyReq.setHeader('X-Forwarded-For', req.headers['x-forwarded-for']);
+    }
+    if (req.headers['x-real-ip']) {
+      proxyReq.setHeader('X-Real-IP', req.headers['x-real-ip']);
+    }
+  },
+  onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
+    // Forward set-cookie headers to maintain session
+    if (proxyRes.headers['set-cookie']) {
+      res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
+    }
+  },
+  onError: (err: Error, req: express.Request, res: express.Response) => {
+    console.error(`[Proxy Error] ${req.path}:`, err.message);
+    if (!res.headersSent) {
+      res.status(502).json({ 
+        error: 'Backend service unavailable',
+        message: err.message 
+      });
+    }
+  }
+};
+
+// Helper function to determine which backend service handles a route
+const getBackendTarget = (req: express.Request): string | null => {
+  const path = req.path;
+  const method = req.method.toUpperCase();
+  
+  // Fund Tracker routes (must come first to avoid conflicts)
+  if (path.startsWith('/api/sol-transfers') || path.startsWith('/api/tracking')) {
+    return `http://127.0.0.1:${FUND_TRACKER_PORT}`;
+  }
+  
+  // Creator Tracker specific routes
+  if (path.startsWith('/api/stream') || path.startsWith('/api/settings')) {
+    return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+  }
+  
+  // Trade Tracker specific token routes (must come before generic /api/tokens)
+  if (path.startsWith('/api/tokens/fetch-info') || 
+      path.startsWith('/api/tokens/ath-mcap')) {
+    return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+  }
+  
+  // Creator Tracker token routes (generic /api/tokens)
+  if (path.startsWith('/api/tokens')) {
+    return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+  }
+  
+  // Trade Tracker specific routes
+  const tradeTrackerRoutes = [
+    '/api/status',
+    '/api/addresses',
+    '/api/start',
+    '/api/stop',
+    '/api/transactions',
+    '/api/export-token',
+    '/api/export-token-excel',
+    '/api/export-all-tokens-excel',
+    '/api/analyze',
+    '/api/skip-tokens',
+    '/api/dashboard-statistics',
+    '/api/dashboard-data',
+    '/api/what-if',
+    '/api/creator-tokens',
+    '/api/wallet-activity',
+    '/api/dashboard-filter-presets',
+    '/api/sol-price'
+  ];
+  
+  if (tradeTrackerRoutes.some(route => path.startsWith(route))) {
+    return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+  }
+  
+  // Handle /api/wallets conflict: 
+  // - GET /api/wallets -> Trade Tracker (list tracked wallets)
+  // - DELETE /api/wallets/:address -> Trade Tracker (remove tracked wallet)
+  // - POST/PUT /api/wallets -> Creator Tracker (manage creator wallets)
+  if (path.startsWith('/api/wallets')) {
+    if (method === 'GET' || (method === 'DELETE' && path.match(/^\/api\/wallets\/[^/]+$/))) {
+      return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+    }
+    // POST, PUT, etc. go to Creator Tracker
+    return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+  }
+  
+  // Default: route to trade tracker for any other /api routes
+  if (path.startsWith('/api/')) {
+    return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+  }
+  
+  return null;
+};
+
+// Authentication check middleware for proxied routes
+const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const isAuthenticated = (req.session as any)?.authenticated === true;
+  
+  if (!isAuthenticated) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  next();
+};
+
+// Proxy middleware for all API routes (except auth which is handled above)
+app.use('/api', (req, res, next) => {
+  // Skip auth routes and health check (handled directly above)
+  if (req.path.startsWith('/api/auth') || req.path === '/api/health') {
+    return next();
+  }
+  
+  // Check authentication before proxying to backend services
+  requireAuth(req, res, () => {
+    const target = getBackendTarget(req);
+    
+    if (!target) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+    
+    // Create proxy for this specific request
+    const proxy = createProxyMiddleware({
+      ...proxyOptions,
+      target,
+      logLevel: 'silent' as const, // Reduce noise in production
+    });
+    
+    proxy(req, res, next);
+  });
 });
 
 // Serve static files in production

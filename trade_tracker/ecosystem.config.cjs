@@ -8,7 +8,7 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         TRADE_SERVER_PORT: 5007,
-        ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
+        HOST: '127.0.0.1',
         USE_HTTPS: 'true'
       },
       error_file: './logs/trade_tracker-error.log',

@@ -9,7 +9,7 @@ import tokenRoutes from './routes/tokens.js';
 import settingsRoutes from './routes/settings.js';
 import { initializeConsoleSanitizer } from './utils/consoleSanitizer.js';
 import { sessionStore } from './src/shared/sessionStore.js';
-import { getSessionConfig, requireAuth } from './src/shared/auth.js';
+import { getSessionConfig } from './src/shared/auth.js';
 
 dotenv.config();
 
@@ -23,48 +23,12 @@ const PORT = parseInt(process.env.CREATOR_SERVER_PORT || process.env.PORT || '50
 // This allows Express to correctly identify the original request
 app.set('trust proxy', 1);
 
-// Middleware
+// Middleware - Simplified CORS since only accessed via localhost proxy
 app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) {
-      return callback(null, true);
-    }
-    
-    // In development mode, allow all origins
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-    if (isDevelopment) {
-      return callback(null, true);
-    }
-    
-    // Allow localhost on any port (both http and https)
-    if (origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow 127.0.0.1 on any port
-    if (origin.match(/^https?:\/\/127\.0\.0\.1(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow IP addresses (for server access via IP)
-    if (origin.match(/^https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/)) {
-      return callback(null, true);
-    }
-    
-    // Allow specific origins from environment variable (comma-separated)
-    const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()).filter(o => o) || [];
-    if (allowedOrigins.length > 0 && allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    // In production, reject unknown origins
-    console.warn(`CORS: Blocked origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: true, // Allow all origins (only accessible via localhost proxy)
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -75,11 +39,11 @@ app.use(session({
   store: sessionStore,
 }));
 
-// Routes (all require authentication via shared session)
-app.use('/api/wallets', requireAuth, walletRoutes);
-app.use('/api/stream', requireAuth, streamRoutes);
-app.use('/api/tokens', requireAuth, tokenRoutes);
-app.use('/api/settings', requireAuth, settingsRoutes);
+// Routes (authentication is handled by frontend proxy)
+app.use('/api/wallets', walletRoutes);
+app.use('/api/stream', streamRoutes);
+app.use('/api/tokens', tokenRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -367,8 +331,8 @@ async function startServer() {
     
     client.release();
 
-    // Bind to 0.0.0.0 to allow external connections (required for remote server access)
-    const HOST = process.env.HOST || '0.0.0.0';
+    // Bind to localhost only (accessed via frontend server proxy)
+    const HOST = process.env.HOST || '127.0.0.1';
     app.listen(PORT, HOST, () => {
       console.log(`✅ Creator tracking server running on http://${HOST}:${PORT}`);
     });

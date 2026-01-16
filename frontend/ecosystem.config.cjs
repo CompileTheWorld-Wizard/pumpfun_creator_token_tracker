@@ -8,6 +8,9 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         AUTH_SERVER_PORT: 5004,
+        CREATOR_SERVER_PORT: 5005,
+        TRADE_SERVER_PORT: 5007,
+        FUND_SERVER_PORT: 5006,
         ALLOWED_ORIGINS: 'https://tool.dillwifit.com',
         USE_HTTPS: 'true'
       },

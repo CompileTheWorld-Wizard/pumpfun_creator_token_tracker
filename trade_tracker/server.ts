@@ -14,7 +14,7 @@ import { tracker } from "./tracker/index.js";
 import { tokenService } from "./services/tokenService.js";
 import { bitqueryService } from "./services/index.js";
 import { sessionStore } from "./src/shared/sessionStore.js";
-import { getSessionConfig, requireAuth as sharedRequireAuth } from "./src/shared/auth.js";
+import { getSessionConfig } from "./src/shared/auth.js";
 
 dotenv.config();
 
@@ -48,9 +48,12 @@ if (process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production')
 app.disable('etag');
 
 // Middleware
+// Middleware - Simplified CORS since only accessed via localhost proxy
 app.use(cors({
-  origin: true,
-  credentials: true
+  origin: true, // Allow all origins (only accessible via localhost proxy)
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cookie']
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -75,11 +78,7 @@ app.use((req, res, next) => {
 
 // HTML route handlers (must come BEFORE static middleware)
 // Note: Static files and HTML pages are served by the frontend/auth server
-
-/**
- * Authentication middleware - using shared middleware
- */
-const requireAuth = sharedRequireAuth;
+// Authentication is handled by the frontend proxy, so no requireAuth needed here
 
 // Initialize database and tracker
 async function initializeApp() {
@@ -105,9 +104,9 @@ async function initializeApp() {
 // API Routes (protected)
 
 /**
- * GET /api/status - Get tracker status
+ * GET /api/status - Get tracker status (authentication handled by frontend proxy)
  */
-app.get("/api/status", requireAuth, (_req, res) => {
+app.get("/api/status", (_req, res) => {
   res.status(200).json({
     isRunning: tracker.isTrackerRunning(),
     addresses: tracker.getAddresses(),
@@ -115,9 +114,9 @@ app.get("/api/status", requireAuth, (_req, res) => {
 });
 
 /**
- * POST /api/addresses - Set addresses to track
+ * POST /api/addresses - Set addresses to track (authentication handled by frontend proxy)
  */
-app.post("/api/addresses", requireAuth, (req, res) => {
+app.post("/api/addresses", (req, res) => {
   try {
     const { addresses } = req.body;
         
@@ -151,9 +150,9 @@ app.post("/api/addresses", requireAuth, (req, res) => {
 });
 
 /**
- * POST /api/start - Start tracking
+ * POST /api/start - Start tracking (authentication handled by frontend proxy)
  */
-app.post("/api/start", requireAuth, async (_req, res) => {
+app.post("/api/start", async (_req, res) => {
   try {
     const result = await tracker.start();
     
@@ -168,9 +167,9 @@ app.post("/api/start", requireAuth, async (_req, res) => {
 });
 
 /**
- * POST /api/stop - Stop tracking
+ * POST /api/stop - Stop tracking (authentication handled by frontend proxy)
  */
-app.post("/api/stop", requireAuth, async (_req, res) => {
+app.post("/api/stop", async (_req, res) => {
   try {
     const result = await tracker.stop();
     
@@ -185,9 +184,9 @@ app.post("/api/stop", requireAuth, async (_req, res) => {
 });
 
 /**
- * GET /api/transactions - Get transactions with pagination and date filtering
+ * GET /api/transactions - Get transactions with pagination and date filtering (authentication handled by frontend proxy)
  */
-app.get("/api/transactions", requireAuth, async (_req, res) => {
+app.get("/api/transactions", async (_req, res) => {
   try {
     const limit = parseInt(_req.query.limit as string) || 50;
     const offset = parseInt(_req.query.offset as string) || 0;
@@ -219,7 +218,7 @@ app.get("/api/transactions", requireAuth, async (_req, res) => {
 /**
  * GET /api/export-token/:wallet/:token - Get token data and transactions for export (JSON)
  */
-app.get("/api/export-token/:wallet/:token", requireAuth, async (_req, res) => {
+app.get("/api/export-token/:wallet/:token", async (_req, res) => {
   try {
     const { wallet, token } = _req.params;
     
@@ -256,7 +255,7 @@ app.get("/api/export-token/:wallet/:token", requireAuth, async (_req, res) => {
  * GET /api/export-token-excel/:wallet/:token - Generate Excel file with styling
  * New format: One row per token with all information in that row
  */
-app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res) => {
+app.get("/api/export-token-excel/:wallet/:token", async (_req, res) => {
   try {
     const { wallet, token } = _req.params;
     
@@ -525,7 +524,7 @@ app.get("/api/export-token-excel/:wallet/:token", requireAuth, async (_req, res)
  * GET /api/export-all-tokens-excel/:wallet - Generate Excel file with all tokens data
  * New format: One row per token with all information in that row
  */
-app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) => {
+app.get("/api/export-all-tokens-excel/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     
@@ -826,7 +825,7 @@ app.get("/api/export-all-tokens-excel/:wallet", requireAuth, async (_req, res) =
 /**
  * GET /api/wallets - Get all unique wallet addresses from transactions table
  */
-app.get("/api/wallets", requireAuth, async (_req, res) => {
+app.get("/api/wallets", async (_req, res) => {
   try {
     const wallets = await dbService.getAllWalletsFromTransactions();
     res.status(200).json({ success: true, wallets });
@@ -838,7 +837,7 @@ app.get("/api/wallets", requireAuth, async (_req, res) => {
 /**
  * GET /api/analyze/:wallet - Analyze wallet information (shows trading history from wallets table)
  */
-app.get("/api/analyze/:wallet", requireAuth, async (_req, res) => {
+app.get("/api/analyze/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     
@@ -1017,7 +1016,7 @@ app.get("/api/analyze/:wallet", requireAuth, async (_req, res) => {
  * POST /api/tokens/fetch-info - Fetch and cache token mint info
  * Request body: { mints: string[] }
  */
-app.post("/api/tokens/fetch-info", requireAuth, async (_req, res) => {
+app.post("/api/tokens/fetch-info", async (_req, res) => {
   try {
     const { mints } = _req.body;
     
@@ -1095,7 +1094,7 @@ app.post("/api/tokens/fetch-info", requireAuth, async (_req, res) => {
 /**
  * GET /api/skip-tokens - Get all skip tokens
  */
-app.get("/api/skip-tokens", requireAuth, async (_req, res) => {
+app.get("/api/skip-tokens", async (_req, res) => {
   try {
     const skipTokens = await dbService.getSkipTokens();
     res.status(200).json({ 
@@ -1111,7 +1110,7 @@ app.get("/api/skip-tokens", requireAuth, async (_req, res) => {
  * POST /api/skip-tokens - Add a token to skip list
  * Request body: { mint_address: string, symbol?: string, description?: string }
  */
-app.post("/api/skip-tokens", requireAuth, async (_req, res) => {
+app.post("/api/skip-tokens", async (_req, res) => {
   try {
     const { mint_address, symbol, description } = _req.body;
     
@@ -1141,7 +1140,7 @@ app.post("/api/skip-tokens", requireAuth, async (_req, res) => {
 /**
  * DELETE /api/skip-tokens/:mintAddress - Remove a token from skip list
  */
-app.delete("/api/skip-tokens/:mintAddress", requireAuth, async (_req, res) => {
+app.delete("/api/skip-tokens/:mintAddress", async (_req, res) => {
   try {
     const { mintAddress } = _req.params;
     
@@ -1162,7 +1161,7 @@ app.delete("/api/skip-tokens/:mintAddress", requireAuth, async (_req, res) => {
 /**
  * DELETE /api/wallets/:walletAddress - Remove wallet and all its transactions from database
  */
-app.delete("/api/wallets/:walletAddress", requireAuth, async (_req, res) => {
+app.delete("/api/wallets/:walletAddress", async (_req, res) => {
   try {
     const { walletAddress } = _req.params;
     
@@ -1202,7 +1201,7 @@ async function getWalletBuySellCounts(walletAddress: string): Promise<{ totalBuy
  * POST /api/dashboard-statistics/:wallet - Get dashboard statistics from ALL data (not filtered/paginated)
  * Returns wallet statistics calculated from all tokens
  */
-app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => {
+app.post("/api/dashboard-statistics/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -1557,7 +1556,7 @@ app.post("/api/dashboard-statistics/:wallet", requireAuth, async (_req, res) => 
  * Returns comprehensive token data with all calculated metrics
  * Body: { page: number, limit: number, filters: array }
  */
-app.post("/api/dashboard-data/:wallet", requireAuth, async (_req, res) => {
+app.post("/api/dashboard-data/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     const SOL_MINT = 'So11111111111111111111111111111111111111112';
@@ -1946,7 +1945,7 @@ app.post("/api/dashboard-data/:wallet", requireAuth, async (_req, res) => {
  * POST /api/what-if/:wallet - Calculate what-if PNL with adjusted sell times
  * Body: { firstSellTimeAdjustment: number (seconds), setAllSellsTo: number (seconds, optional) }
  */
-app.post("/api/what-if/:wallet", requireAuth, async (_req, res) => {
+app.post("/api/what-if/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     const { firstSellTimeAdjustment, setAllSellsTo } = _req.body;
@@ -2185,7 +2184,7 @@ app.post("/api/what-if/:wallet", requireAuth, async (_req, res) => {
 /**
  * GET /api/creator-tokens/:wallet - Get count of tokens created by a wallet
  */
-app.get("/api/creator-tokens/:wallet", requireAuth, async (_req, res) => {
+app.get("/api/creator-tokens/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     const solscanApiKey = process.env.SOLSCAN_API_KEY;
@@ -2289,7 +2288,7 @@ app.get("/api/creator-tokens/:wallet", requireAuth, async (_req, res) => {
  * POST /api/tokens/ath-mcap - Get ATH market cap for a list of tokens
  * Request body: { tokens: string[], sinceDate?: string }
  */
-app.post("/api/tokens/ath-mcap", requireAuth, async (_req, res) => {
+app.post("/api/tokens/ath-mcap", async (_req, res) => {
   try {
     const { tokens, sinceDate } = _req.body;
     
@@ -2343,7 +2342,7 @@ app.post("/api/tokens/ath-mcap", requireAuth, async (_req, res) => {
  * GET /api/wallet-activity/:wallet - Get trading activity aggregated by time interval
  * Query params: interval (hour, quarter_day, day, week, month)
  */
-app.get("/api/wallet-activity/:wallet", requireAuth, async (_req, res) => {
+app.get("/api/wallet-activity/:wallet", async (_req, res) => {
   try {
     const { wallet } = _req.params;
     const interval = (_req.query.interval as string) || 'day';
@@ -2373,7 +2372,7 @@ app.get("/api/wallet-activity/:wallet", requireAuth, async (_req, res) => {
 /**
  * GET /api/dashboard-filter-presets - Get all dashboard filter presets
  */
-app.get("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
+app.get("/api/dashboard-filter-presets", async (_req, res) => {
   try {
     const presets = await dbService.getDashboardFilterPresets();
     res.status(200).json({ success: true, presets });
@@ -2385,7 +2384,7 @@ app.get("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
 /**
  * GET /api/dashboard-filter-presets/:name - Get dashboard filter preset by name
  */
-app.get("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res) => {
+app.get("/api/dashboard-filter-presets/:name", async (_req, res) => {
   try {
     const { name } = _req.params;
     const preset = await dbService.getDashboardFilterPreset(name);
@@ -2402,7 +2401,7 @@ app.get("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res) =>
 /**
  * POST /api/dashboard-filter-presets - Save dashboard filter preset
  */
-app.post("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
+app.post("/api/dashboard-filter-presets", async (_req, res) => {
   try {
     const { name, filters } = _req.body;
     
@@ -2421,7 +2420,7 @@ app.post("/api/dashboard-filter-presets", requireAuth, async (_req, res) => {
 /**
  * DELETE /api/dashboard-filter-presets/:name - Delete dashboard filter preset
  */
-app.delete("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res) => {
+app.delete("/api/dashboard-filter-presets/:name", async (_req, res) => {
   try {
     const { name } = _req.params;
     await dbService.deleteDashboardFilterPreset(name);
@@ -2434,7 +2433,7 @@ app.delete("/api/dashboard-filter-presets/:name", requireAuth, async (_req, res)
 /**
  * GET /api/sol-price - Get current SOL price
  */
-app.get("/api/sol-price", requireAuth, async (_req, res) => {
+app.get("/api/sol-price", async (_req, res) => {
   try {
     const price = await redisService.getLatestSolPrice();
     if (price === null) {
@@ -2530,7 +2529,8 @@ async function main() {
   try {
     await initializeApp();
     
-    const HOST = process.env.HOST || '0.0.0.0';
+    // Bind to localhost only (accessed via frontend server proxy)
+    const HOST = process.env.HOST || '127.0.0.1';
     app.listen(PORT, HOST, () => {
       console.log(`Trade tracking server running on http://${HOST}:${PORT}`);
     });
