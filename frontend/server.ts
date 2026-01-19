@@ -470,13 +470,39 @@ if (process.env.NODE_ENV === 'production') {
   // __dirname is 'dist' when running from compiled server.js
   // dist-frontend is at the frontend root, so go up one level
   const distPath = path.join(__dirname, '..', 'dist-frontend');
-  app.use(express.static(distPath));
+  
+  // Serve static files (CSS, JS, images, etc.)
+  // This middleware will serve files if they exist, or call next() if they don't
+  app.use(express.static(distPath, {
+    maxAge: '1y',
+    etag: false,
+    index: false // Don't serve index.html for directories
+  }));
   
   // Serve index.html for all non-API routes (SPA routing)
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(distPath, 'index.html'));
+  // This should only fire if the static file doesn't exist and it's not an asset
+  app.get('*', (req, res, next) => {
+    // Skip API routes
+    if (req.path.startsWith('/api')) {
+      return next();
     }
+    
+    // If it's a static asset request that wasn't found, return 404
+    if (req.path.startsWith('/assets/') || 
+        req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
+      return res.status(404).send('File not found');
+    }
+    
+    // For all other routes, serve index.html (SPA routing)
+    const indexPath = path.join(distPath, 'index.html');
+    res.sendFile(indexPath, (err) => {
+      if (err) {
+        console.error(`[Static] Error serving index.html for ${req.path}:`, err);
+        if (!res.headersSent) {
+          res.status(500).send('Internal Server Error');
+        }
+      }
+    });
   });
 }
 
