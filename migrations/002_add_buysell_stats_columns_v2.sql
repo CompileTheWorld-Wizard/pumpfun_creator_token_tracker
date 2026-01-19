@@ -53,47 +53,49 @@ BEGIN
       SELECT 
         id,
         market_cap_time_series,
-        -- Calculate buy_count
+        -- Calculate buy_count (solAmount is stored as number in JSONB)
         COALESCE((
           SELECT COUNT(*)::INTEGER
           FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE (point->>'tradeType' = 'buy' OR point->>'trade_type' = 'buy')
-            AND (point->>'solAmount') IS NOT NULL
+          WHERE point->>'tradeType' = 'buy'
+            AND (point->'solAmount') IS NOT NULL
+            AND (point->'solAmount')::DECIMAL > 0
         ), 0) AS calc_buy_count,
         
         -- Calculate sell_count
         COALESCE((
           SELECT COUNT(*)::INTEGER
           FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE (point->>'tradeType' = 'sell' OR point->>'trade_type' = 'sell')
-            AND (point->>'solAmount') IS NOT NULL
+          WHERE point->>'tradeType' = 'sell'
+            AND (point->'solAmount') IS NOT NULL
+            AND (point->'solAmount')::DECIMAL > 0
         ), 0) AS calc_sell_count,
         
-        -- Calculate buy_sol_amount
+        -- Calculate buy_sol_amount (solAmount is a number, use -> to get JSONB then cast to DECIMAL)
         COALESCE((
-          SELECT COALESCE(SUM((point->>'solAmount')::DECIMAL), 0)
+          SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
           FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE (point->>'tradeType' = 'buy' OR point->>'trade_type' = 'buy')
-            AND (point->>'solAmount') IS NOT NULL
+          WHERE point->>'tradeType' = 'buy'
+            AND (point->'solAmount') IS NOT NULL
         ), 0) AS calc_buy_sol_amount,
         
         -- Calculate sell_sol_amount
         COALESCE((
-          SELECT COALESCE(SUM((point->>'solAmount')::DECIMAL), 0)
+          SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
           FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE (point->>'tradeType' = 'sell' OR point->>'trade_type' = 'sell')
-            AND (point->>'solAmount') IS NOT NULL
+          WHERE point->>'tradeType' = 'sell'
+            AND (point->'solAmount') IS NOT NULL
         ), 0) AS calc_sell_sol_amount,
         
         -- Calculate first_5_buy_sol
         COALESCE((
-          SELECT COALESCE(SUM((buy_point->>'solAmount')::DECIMAL), 0)
+          SELECT COALESCE(SUM((buy_point->'solAmount')::DECIMAL), 0)
           FROM (
             SELECT buy_point
             FROM jsonb_array_elements(market_cap_time_series) AS buy_point
-            WHERE (buy_point->>'tradeType' = 'buy' OR buy_point->>'trade_type' = 'buy')
-              AND (buy_point->>'solAmount') IS NOT NULL
-            ORDER BY (buy_point->>'timestamp')::BIGINT ASC NULLS LAST
+            WHERE buy_point->>'tradeType' = 'buy'
+              AND (buy_point->'solAmount') IS NOT NULL
+            ORDER BY (buy_point->'timestamp')::BIGINT ASC
             LIMIT 5
           ) AS first_5_buys
         ), 0) AS calc_first_5_buy_sol,
@@ -106,7 +108,22 @@ BEGIN
       FROM tbl_soltrack_created_tokens
       WHERE market_cap_time_series IS NOT NULL
         AND jsonb_typeof(market_cap_time_series) = 'array'
-        AND (buy_count = 0 AND sell_count = 0) -- Only process tokens that haven't been updated yet
+        -- Recalculate tokens that either:
+        -- 1. Have zero stats (fresh or incorrect data)
+        -- 2. Have time series data but all stats are zero (likely incorrect)
+        AND (
+          (buy_count = 0 AND sell_count = 0 AND buy_sol_amount = 0 AND sell_sol_amount = 0)
+          OR (
+            -- Check if time series has trades but all stats are zero (incorrect data)
+            EXISTS (
+              SELECT 1 
+              FROM jsonb_array_elements(market_cap_time_series) AS point
+              WHERE (point->>'tradeType' = 'buy' OR point->>'tradeType' = 'sell')
+                AND (point->'solAmount') IS NOT NULL
+            )
+            AND buy_count = 0 AND sell_count = 0
+          )
+        )
       LIMIT batch_size
     )
     UPDATE tbl_soltrack_created_tokens AS ct
