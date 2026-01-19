@@ -502,7 +502,7 @@ if (process.env.NODE_ENV === 'production') {
   }
   
   // Add logging middleware BEFORE static to see all asset requests
-  app.use((req, res, next) => {
+  app.use((req, _res, next) => {
     if (req.path.startsWith('/assets/')) {
       const filePath = path.join(distPath, req.path);
       const exists = fs.existsSync(filePath);
