@@ -326,7 +326,6 @@ const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
 const proxyOptions = {
   changeOrigin: true,
   ws: false,
-  logLevel: 'debug' as const,
   onProxyReq: (proxyReq: any, req: express.Request) => {
     // Forward session cookie
     if (req.headers.cookie) {
@@ -458,7 +457,6 @@ app.use('/api', (req, res, next) => {
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
-      logLevel: 'silent' as const, // Reduce noise in production
     });
     
     proxy(req, res, next);
@@ -467,7 +465,9 @@ app.use('/api', (req, res, next) => {
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-  const distPath = path.join(__dirname, 'dist-frontend');
+  // __dirname is 'dist' when running from compiled server.js
+  // dist-frontend is at the frontend root, so go up one level
+  const distPath = path.join(__dirname, '..', 'dist-frontend');
   app.use(express.static(distPath));
   
   // Serve index.html for all non-API routes (SPA routing)
