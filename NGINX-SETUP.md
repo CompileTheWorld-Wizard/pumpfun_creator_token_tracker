@@ -98,10 +98,15 @@ server {
     access_log /var/log/nginx/tool.dillwifit.com_access.log;
     error_log /var/log/nginx/tool.dillwifit.com_error.log;
 
-    # Serve static assets directly
+    # Proxy static assets to Node.js server (port 5004)
+    # The Node.js server handles static file serving from dist-frontend
     location /assets/ {
-        try_files $uri =404;
-        access_log off;
+        proxy_pass http://127.0.0.1:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         expires 1y;
         add_header Cache-Control "public, immutable";
     }
