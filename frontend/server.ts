@@ -4,6 +4,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import RedisStore from 'connect-redis';
@@ -469,7 +470,24 @@ app.use('/api', (req, res, next) => {
 if (process.env.NODE_ENV === 'production') {
   // __dirname is 'dist' when running from compiled server.js
   // dist-frontend is at the frontend root, so go up one level
-  const distPath = path.join(__dirname, '..', 'dist-frontend');
+  const distPath = path.resolve(__dirname, '..', 'dist-frontend');
+  
+  // Log the path for debugging
+  console.log(`[Static] Serving static files from: ${distPath}`);
+  console.log(`[Static] __dirname is: ${__dirname}`);
+  
+  // Check if directory exists
+  if (!fs.existsSync(distPath)) {
+    console.error(`[Static] ERROR: dist-frontend directory not found at: ${distPath}`);
+    console.error(`[Static] Please ensure the frontend has been built with 'npm run build:frontend'`);
+  } else {
+    const indexPath = path.join(distPath, 'index.html');
+    if (!fs.existsSync(indexPath)) {
+      console.error(`[Static] ERROR: index.html not found at: ${indexPath}`);
+    } else {
+      console.log(`[Static] Static files directory found and index.html exists`);
+    }
+  }
   
   // Serve static files (CSS, JS, images, etc.)
   // This middleware will serve files if they exist, or call next() if they don't
