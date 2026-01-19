@@ -229,9 +229,18 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
       return;
     }
 
+    // Ensure address is a string (not an array)
+    const walletAddress = Array.isArray(address) ? address[0] : address;
+    if (!walletAddress) {
+      res.status(400).json({ 
+        error: 'Invalid wallet address' 
+      });
+      return;
+    }
+
     const result = await pool.query(
       'DELETE FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1',
-      [address]
+      [walletAddress]
     );
 
     if (result.rowCount === 0) {
@@ -265,10 +274,19 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
       return;
     }
 
+    // Ensure address is a string (not an array)
+    const walletAddress = Array.isArray(address) ? address[0] : address;
+    if (!walletAddress) {
+      res.status(400).json({ 
+        error: 'Invalid wallet address' 
+      });
+      return;
+    }
+
     // Check if wallet has any tokens in tbl_soltrack_created_tokens
     const tokenCheck = await pool.query(
       'SELECT COUNT(*) as count FROM tbl_soltrack_created_tokens WHERE creator = $1',
-      [address]
+      [walletAddress]
     );
 
     const tokenCount = parseInt(tokenCheck.rows[0].count) || 0;
@@ -282,7 +300,7 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
     // Check if wallet is in blacklist (for updating stats)
     const walletCheck = await pool.query(
       'SELECT wallet_address FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1',
-      [address]
+      [walletAddress]
     );
 
     const isBlacklisted = walletCheck.rows.length > 0;
@@ -292,15 +310,15 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
     if (isBlacklisted) {
       try {
         await Promise.all([
-          updateBondingStatusForCreator(address).catch(err => {
+          updateBondingStatusForCreator(walletAddress).catch(err => {
             console.error(`[Wallets] Error updating bonding status:`, err);
           }),
-          updateAthMcapForCreator(address).catch(err => {
+          updateAthMcapForCreator(walletAddress).catch(err => {
             console.error(`[Wallets] Error updating ATH mcap:`, err);
           })
         ]);
       } catch (error) {
-        console.error(`[Wallets] Error updating stats for creator ${address}:`, error);
+        console.error(`[Wallets] Error updating stats for creator ${walletAddress}:`, error);
         // Continue to return stats even if update fails
       }
     }
@@ -313,7 +331,7 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
         AVG(ath_market_cap_usd) FILTER (WHERE ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
       FROM tbl_soltrack_created_tokens
       WHERE creator = $1`,
-      [address]
+      [walletAddress]
     );
 
     const stats = statsResult.rows[0];
@@ -350,6 +368,15 @@ router.get('/:address/receivers', requireAuth, async (req: Request, res: Respons
       return;
     }
 
+    // Ensure address is a string (not an array)
+    const walletAddress = Array.isArray(address) ? address[0] : address;
+    if (!walletAddress) {
+      res.status(400).json({ 
+        error: 'Invalid wallet address' 
+      });
+      return;
+    }
+
     // Query the fund tracking database for wallets that received SOL from this creator wallet
     // Note: This assumes both databases are in the same PostgreSQL instance
     const query = `
@@ -364,7 +391,7 @@ router.get('/:address/receivers', requireAuth, async (req: Request, res: Respons
       LIMIT $3
     `;
 
-    const result = await pool.query(query, [address, minAmount, limit]);
+    const result = await pool.query(query, [walletAddress, minAmount, limit]);
     
     res.json({ 
       wallets: result.rows.map(row => ({
