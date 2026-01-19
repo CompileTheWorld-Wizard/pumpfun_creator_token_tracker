@@ -41,111 +41,120 @@ END $$;
 
 -- Step 3: Calculate and populate buy/sell stats from existing market_cap_time_series data
 -- Process in batches to avoid memory issues with large datasets
--- Using direct UPDATE with subqueries (proven to work in test)
+-- Using individual UPDATE per token (same approach as working single-ID test)
 DO $$
 DECLARE
-  updated_count INTEGER;
+  token_rec RECORD;
   batch_size INTEGER := 1000;
   processed_count INTEGER := 0;
-  token_ids INTEGER[];
+  calc_buy_count INTEGER;
+  calc_sell_count INTEGER;
+  calc_buy_sol_amount DECIMAL(20, 9);
+  calc_sell_sol_amount DECIMAL(20, 9);
+  calc_first_5_buy_sol DECIMAL(20, 9);
+  calc_trade_count INTEGER;
+  batch_counter INTEGER := 0;
 BEGIN
-  -- Process tokens in batches
-  LOOP
-    -- Get batch of token IDs that need updating
-    SELECT ARRAY_AGG(id)
-    INTO token_ids
-    FROM (
-      SELECT id
-      FROM tbl_soltrack_created_tokens
-      WHERE market_cap_time_series IS NOT NULL
-        AND jsonb_typeof(market_cap_time_series) = 'array'
-        -- Recalculate tokens that either:
-        -- 1. Have zero stats (fresh or incorrect data)
-        -- 2. Have time series data but all stats are zero (likely incorrect)
-        AND (
-          (buy_count = 0 AND sell_count = 0 AND buy_sol_amount = 0 AND sell_sol_amount = 0)
-          OR (
-            -- Check if time series has trades but all stats are zero (incorrect data)
-            EXISTS (
-              SELECT 1 
-              FROM jsonb_array_elements(market_cap_time_series) AS point
-              WHERE (point->>'tradeType' = 'buy' OR point->>'tradeType' = 'sell')
-                AND (point->'solAmount') IS NOT NULL
-            )
-            AND buy_count = 0 AND sell_count = 0
+  -- Process tokens one by one using cursor (same approach as single-ID test)
+  FOR token_rec IN 
+    SELECT id, trade_count
+    FROM tbl_soltrack_created_tokens
+    WHERE market_cap_time_series IS NOT NULL
+      AND jsonb_typeof(market_cap_time_series) = 'array'
+      -- Recalculate tokens that either:
+      -- 1. Have zero stats (fresh or incorrect data)
+      -- 2. Have time series data but all stats are zero (likely incorrect)
+      AND (
+        (buy_count = 0 AND sell_count = 0 AND buy_sol_amount = 0 AND sell_sol_amount = 0)
+        OR (
+          -- Check if time series has trades but all stats are zero (incorrect data)
+          EXISTS (
+            SELECT 1 
+            FROM jsonb_array_elements(market_cap_time_series) AS point
+            WHERE (point->>'tradeType' = 'buy' OR point->>'tradeType' = 'sell')
+              AND (point->'solAmount') IS NOT NULL
           )
+          AND buy_count = 0 AND sell_count = 0
         )
-      LIMIT batch_size
-    ) AS batch;
-    
-    -- Exit if no more tokens to process
-    IF token_ids IS NULL OR array_length(token_ids, 1) IS NULL THEN
-      EXIT;
-    END IF;
-    
-    -- Update tokens in this batch using direct subqueries (same approach as working test)
-    UPDATE tbl_soltrack_created_tokens AS ct
-    SET 
-      buy_count = COALESCE((
+      )
+  LOOP
+    -- Calculate stats for this token (same logic as single-ID test)
+    SELECT 
+      COALESCE((
         SELECT COUNT(*)::INTEGER
-        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        FROM jsonb_array_elements(market_cap_time_series) AS point
         WHERE point->>'tradeType' = 'buy'
           AND (point->'solAmount') IS NOT NULL
           AND (point->'solAmount')::DECIMAL > 0
       ), 0),
-      
-      sell_count = COALESCE((
+      COALESCE((
         SELECT COUNT(*)::INTEGER
-        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        FROM jsonb_array_elements(market_cap_time_series) AS point
         WHERE point->>'tradeType' = 'sell'
           AND (point->'solAmount') IS NOT NULL
           AND (point->'solAmount')::DECIMAL > 0
       ), 0),
-      
-      buy_sol_amount = COALESCE((
+      COALESCE((
         SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
-        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        FROM jsonb_array_elements(market_cap_time_series) AS point
         WHERE point->>'tradeType' = 'buy'
           AND (point->'solAmount') IS NOT NULL
       ), 0),
-      
-      sell_sol_amount = COALESCE((
+      COALESCE((
         SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
-        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        FROM jsonb_array_elements(market_cap_time_series) AS point
         WHERE point->>'tradeType' = 'sell'
           AND (point->'solAmount') IS NOT NULL
       ), 0),
-      
-      first_5_buy_sol = COALESCE((
+      COALESCE((
         SELECT COALESCE(SUM((buy_point->'solAmount')::DECIMAL), 0)
         FROM (
           SELECT buy_point
-          FROM jsonb_array_elements(ct.market_cap_time_series) AS buy_point
+          FROM jsonb_array_elements(market_cap_time_series) AS buy_point
           WHERE buy_point->>'tradeType' = 'buy'
             AND (buy_point->'solAmount') IS NOT NULL
           ORDER BY (buy_point->'timestamp')::BIGINT ASC
           LIMIT 5
         ) AS first_5_buys
       ), 0),
-      
+      COALESCE((
+        SELECT COUNT(*)::INTEGER
+        FROM jsonb_array_elements(market_cap_time_series) AS point
+      ), 0)
+    INTO 
+      calc_buy_count,
+      calc_sell_count,
+      calc_buy_sol_amount,
+      calc_sell_sol_amount,
+      calc_first_5_buy_sol,
+      calc_trade_count
+    FROM tbl_soltrack_created_tokens
+    WHERE id = token_rec.id
+      AND market_cap_time_series IS NOT NULL
+      AND jsonb_typeof(market_cap_time_series) = 'array';
+    
+    -- Update this token
+    UPDATE tbl_soltrack_created_tokens
+    SET 
+      buy_count = calc_buy_count,
+      sell_count = calc_sell_count,
+      buy_sol_amount = calc_buy_sol_amount,
+      sell_sol_amount = calc_sell_sol_amount,
+      first_5_buy_sol = calc_first_5_buy_sol,
       trade_count = CASE 
-        WHEN ct.trade_count = 0 OR ct.trade_count IS NULL THEN
-          COALESCE((
-            SELECT COUNT(*)::INTEGER
-            FROM jsonb_array_elements(ct.market_cap_time_series) AS point
-          ), 0)
-        ELSE ct.trade_count
+        WHEN trade_count = 0 OR trade_count IS NULL THEN calc_trade_count
+        ELSE trade_count
       END
-    WHERE ct.id = ANY(token_ids)
-      AND ct.market_cap_time_series IS NOT NULL
-      AND jsonb_typeof(ct.market_cap_time_series) = 'array';
+    WHERE id = token_rec.id;
     
-    GET DIAGNOSTICS updated_count = ROW_COUNT;
-    processed_count := processed_count + updated_count;
+    processed_count := processed_count + 1;
+    batch_counter := batch_counter + 1;
     
-    EXIT WHEN updated_count = 0;
-    
-    RAISE NOTICE 'Processed % tokens (total: %)', updated_count, processed_count;
+    -- Log progress every batch_size tokens
+    IF batch_counter >= batch_size THEN
+      RAISE NOTICE 'Processed % tokens (total: %)', batch_counter, processed_count;
+      batch_counter := 0;
+    END IF;
   END LOOP;
   
   RAISE NOTICE 'Completed updating % total tokens with buy/sell statistics', processed_count;

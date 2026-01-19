@@ -1636,17 +1636,17 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       // Use materialized columns for fast sorting - much faster than JSONB calculation
       const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
       const sortFieldMap: Record<string, string> = {
-        'avgBuyCount': 'AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0)',
-        'avgBuyTotalSol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)',
-        'avgBuySol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)', // Alias for frontend compatibility
-        'avgSellCount': 'AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0)',
-        'avgSellTotalSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)',
-        'avgSellSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)', // Alias for frontend compatibility
-        'avgFirst5BuySol': 'AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)',
-        'medianFirst5BuySol': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)'
+        'avgBuyCount': 'NULLIF(AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0), 0)',
+        'avgBuyTotalSol': 'NULLIF(AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0), 0)',
+        'avgBuySol': 'NULLIF(AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0), 0)', // Alias for frontend compatibility
+        'avgSellCount': 'NULLIF(AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0), 0)',
+        'avgSellTotalSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)',
+        'avgSellSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)', // Alias for frontend compatibility
+        'avgFirst5BuySol': 'NULLIF(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
+        'medianFirst5BuySol': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)'
       };
-      const nullsLast = (sortColumn === 'avgFirst5BuySol' || sortColumn === 'medianFirst5BuySol') ? ' NULLS LAST' : '';
-      orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction}${nullsLast}`;
+      // Always put NULLs (including 0s converted to NULL) at the end for all buy/sell fields
+      orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction} NULLS LAST`;
     }
     
     // Always include buy/sell stats in SELECT for use in display and filtering
