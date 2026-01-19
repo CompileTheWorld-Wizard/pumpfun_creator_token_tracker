@@ -487,14 +487,37 @@ if (process.env.NODE_ENV === 'production') {
     } else {
       console.log(`[Static] Static files directory found and index.html exists`);
     }
+    
+    // Check if assets directory exists
+    const assetsPath = path.join(distPath, 'assets');
+    if (fs.existsSync(assetsPath)) {
+      const assetsFiles = fs.readdirSync(assetsPath);
+      console.log(`[Static] Assets directory found with ${assetsFiles.length} files`);
+      if (assetsFiles.length > 0) {
+        console.log(`[Static] Sample assets: ${assetsFiles.slice(0, 3).join(', ')}`);
+      }
+    } else {
+      console.warn(`[Static] WARNING: assets directory not found at: ${assetsPath}`);
+    }
   }
+  
+  // Add logging middleware BEFORE static to see all asset requests
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/assets/')) {
+      const filePath = path.join(distPath, req.path);
+      const exists = fs.existsSync(filePath);
+      console.log(`[Static] Asset request: ${req.path} -> ${exists ? 'EXISTS' : 'NOT FOUND'} (${filePath})`);
+    }
+    next();
+  });
   
   // Serve static files (CSS, JS, images, etc.)
   // This middleware will serve files if they exist, or call next() if they don't
   app.use(express.static(distPath, {
     maxAge: '1y',
     etag: false,
-    index: false // Don't serve index.html for directories
+    index: false, // Don't serve index.html for directories
+    fallthrough: true // Continue to next middleware if file not found
   }));
   
   // Serve index.html for all non-API routes (SPA routing)
