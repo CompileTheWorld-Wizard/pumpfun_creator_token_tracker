@@ -339,7 +339,7 @@ const proxyOptions = {
       proxyReq.setHeader('X-Real-IP', req.headers['x-real-ip']);
     }
   },
-  onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
+  onProxyRes: (proxyRes: any, _req: express.Request, res: express.Response) => {
     // Forward set-cookie headers to maintain session
     if (proxyRes.headers['set-cookie']) {
       res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
@@ -428,11 +428,12 @@ const getBackendTarget = (req: express.Request): string | null => {
 };
 
 // Authentication check middleware for proxied routes
-const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
   const isAuthenticated = (req.session as any)?.authenticated === true;
   
   if (!isAuthenticated) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
   }
   
   next();
@@ -446,11 +447,12 @@ app.use('/api', (req, res, next) => {
   }
   
   // Check authentication before proxying to backend services
-  requireAuth(req, res, () => {
+  requireAuth(req, res, (): void => {
     const target = getBackendTarget(req);
     
     if (!target) {
-      return res.status(404).json({ error: 'Route not found' });
+      res.status(404).json({ error: 'Route not found' });
+      return;
     }
     
     // Create proxy for this specific request
