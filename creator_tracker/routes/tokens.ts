@@ -1633,7 +1633,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     let orderByClause = 'ORDER BY win_rate DESC, total_tokens DESC'; // Default
     if (sortColumn && sqlSortableFields[sortColumn]) {
       const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-      orderByClause = `ORDER BY ${sqlSortableFields[sortColumn]} ${direction}`;
+      // For medianAthMcap, always put NULL values (N/A) at the end
+      const nullsLast = sortColumn === 'medianAthMcap' ? ' NULLS LAST' : '';
+      orderByClause = `ORDER BY ${sqlSortableFields[sortColumn]} ${direction}${nullsLast}`;
     }
     
     // Get filtered creator wallets with basic statistics (SQL-level filtering applied)
