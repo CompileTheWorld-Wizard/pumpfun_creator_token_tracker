@@ -1620,167 +1620,55 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       'medianAthMcap': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0)'
     };
     
-    // Check if sorting by buy/sell fields - these can be calculated in SQL for better performance
+    // Check if sorting by buy/sell fields - use materialized columns for fast sorting
     const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol'];
     const sortingByBuySellField = sortColumn && buySellSortFields.includes(sortColumn);
     
-    // Extract minimum buy amount filters for SQL calculation
-    const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
-    const minBuyAmountSolValue = minBuyAmountSol ?? 0;
-    const minBuyAmountTokenValue = minBuyAmountToken ?? 0;
-    
-    // Build ORDER BY clause for SQL if sorting by a simple field
+    // Build ORDER BY clause for SQL if sorting by a simple field or buy/sell field
     let orderByClause = 'ORDER BY win_rate DESC, total_tokens DESC'; // Default
     if (sortColumn && sqlSortableFields[sortColumn]) {
       const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
       // For medianAthMcap, always put NULL values (N/A) at the end
       const nullsLast = sortColumn === 'medianAthMcap' ? ' NULLS LAST' : '';
       orderByClause = `ORDER BY ${sqlSortableFields[sortColumn]} ${direction}${nullsLast}`;
+    } else if (sortingByBuySellField) {
+      // Use materialized columns for fast sorting - much faster than JSONB calculation
+      const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+      const sortFieldMap: Record<string, string> = {
+        'avgBuyCount': 'AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0)',
+        'avgBuyTotalSol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)',
+        'avgSellCount': 'AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0)',
+        'avgSellTotalSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)'
+      };
+      orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction}`;
     }
     
     // Get filtered creator wallets with basic statistics (SQL-level filtering applied)
-    // This significantly reduces the dataset before fetching tokens
-    let result;
-    
-    if (sortingByBuySellField) {
-      // When sorting by buy/sell fields, use a more efficient query with CTE
-      // This calculates stats in SQL using JSONB functions for better performance
-      const direction = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
-      const sortFieldMap: Record<string, string> = {
-        'avgBuyCount': 'avg_buy_count',
-        'avgBuyTotalSol': 'avg_buy_total_sol',
-        'avgSellCount': 'avg_sell_count',
-        'avgSellTotalSol': 'avg_sell_total_sol'
-      };
-      const sortField = sortFieldMap[sortColumn];
-      
-      // Use CTE to calculate buy/sell stats per token, then aggregate by creator
-      // This is more efficient than processing all JSONB data in JavaScript
-      const buySellParams = [...sqlFilterParams, minBuyAmountSolValue, minBuyAmountTokenValue];
-      // SQL parameters are 1-indexed: minBuyAmountSolValue is at position sqlFilterParams.length + 1
-      // minBuyAmountTokenValue is at position sqlFilterParams.length + 2
-      const minBuySolParam = sqlFilterParams.length + 1;
-      const minBuyTokenParam = sqlFilterParams.length + 2;
-      
-      result = await pool.query(
-        `WITH token_stats AS (
-          SELECT 
-            ct.creator,
-            ct.id,
-            -- Calculate buy stats per token
-            CASE 
-              WHEN ct.market_cap_time_series IS NOT NULL THEN
-                COALESCE(
-                  (SELECT COUNT(*)::DECIMAL
-                   FROM jsonb_array_elements(ct.market_cap_time_series) AS point
-                   WHERE (point->>'tradeType' = 'buy' OR point->>'trade_type' = 'buy')
-                     AND (point->>'solAmount') IS NOT NULL
-                     AND (point->>'solAmount')::DECIMAL >= $${minBuySolParam}
-                     AND ($${minBuyTokenParam} = 0 OR (point->>'tokenAmount') IS NULL OR (point->>'tokenAmount')::DECIMAL >= $${minBuyTokenParam})
-                  ),
-                  0
-                )
-              ELSE 0
-            END as buy_count,
-            CASE 
-              WHEN ct.market_cap_time_series IS NOT NULL THEN
-                COALESCE(
-                  (SELECT COALESCE(SUM((point->>'solAmount')::DECIMAL), 0)
-                   FROM jsonb_array_elements(ct.market_cap_time_series) AS point
-                   WHERE (point->>'tradeType' = 'buy' OR point->>'trade_type' = 'buy')
-                     AND (point->>'solAmount') IS NOT NULL
-                     AND (point->>'solAmount')::DECIMAL >= $${minBuySolParam}
-                     AND ($${minBuyTokenParam} = 0 OR (point->>'tokenAmount') IS NULL OR (point->>'tokenAmount')::DECIMAL >= $${minBuyTokenParam})
-                  ),
-                  0
-                )
-              ELSE 0
-            END as buy_total_sol,
-            -- Calculate sell stats per token
-            CASE 
-              WHEN ct.market_cap_time_series IS NOT NULL THEN
-                COALESCE(
-                  (SELECT COUNT(*)::DECIMAL
-                   FROM jsonb_array_elements(ct.market_cap_time_series) AS point
-                   WHERE (point->>'tradeType' = 'sell' OR point->>'trade_type' = 'sell')
-                     AND (point->>'solAmount') IS NOT NULL
-                  ),
-                  0
-                )
-              ELSE 0
-            END as sell_count,
-            CASE 
-              WHEN ct.market_cap_time_series IS NOT NULL THEN
-                COALESCE(
-                  (SELECT COALESCE(SUM((point->>'solAmount')::DECIMAL), 0)
-                   FROM jsonb_array_elements(ct.market_cap_time_series) AS point
-                   WHERE (point->>'tradeType' = 'sell' OR point->>'trade_type' = 'sell')
-                     AND (point->>'solAmount') IS NOT NULL
-                  ),
-                  0
-                )
-              ELSE 0
-            END as sell_total_sol
-          FROM tbl_soltrack_created_tokens ct
-          ${baseWhereClause}
-        ),
-        creator_buysell_stats AS (
-          SELECT 
-            creator,
-            -- Average buy/sell stats per creator (only count tokens with time series data)
-            AVG(buy_count) FILTER (WHERE buy_count > 0 OR sell_count > 0) as avg_buy_count,
-            AVG(buy_total_sol) FILTER (WHERE buy_total_sol > 0 OR sell_total_sol > 0) as avg_buy_total_sol,
-            AVG(sell_count) FILTER (WHERE sell_count > 0 OR buy_count > 0) as avg_sell_count,
-            AVG(sell_total_sol) FILTER (WHERE sell_total_sol > 0 OR buy_total_sol > 0) as avg_sell_total_sol
-          FROM token_stats
-          GROUP BY creator
-        )
-        SELECT 
-          ct.creator as address,
-          COUNT(*) as total_tokens,
-          COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
-          CASE 
-            WHEN COUNT(*) > 0 THEN 
-              ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
-            ELSE 0
-          END as win_rate,
-          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap,
-          -- Get buy/sell stats from aggregated CTE
-          COALESCE(cbs.avg_buy_count, 0) as avg_buy_count,
-          COALESCE(cbs.avg_buy_total_sol, 0) as avg_buy_total_sol,
-          COALESCE(cbs.avg_sell_count, 0) as avg_sell_count,
-          COALESCE(cbs.avg_sell_total_sol, 0) as avg_sell_total_sol
-        FROM tbl_soltrack_created_tokens ct
-        LEFT JOIN creator_buysell_stats cbs ON ct.creator = cbs.creator
-        ${baseWhereClause}
-        GROUP BY ct.creator, cbs.avg_buy_count, cbs.avg_buy_total_sol, cbs.avg_sell_count, cbs.avg_sell_total_sol
-        ${havingClause}
-        ORDER BY ${sortField} ${direction}`,
-        buySellParams
-      );
-    } else {
-      // Standard query without buy/sell stats calculation
-      result = await pool.query(
-        `SELECT 
-          ct.creator as address,
-          COUNT(*) as total_tokens,
-          COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
-          CASE 
-            WHEN COUNT(*) > 0 THEN 
-              ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
-            ELSE 0
-          END as win_rate,
-          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-        FROM tbl_soltrack_created_tokens ct
-        ${baseWhereClause}
-        GROUP BY ct.creator
-        ${havingClause}
-        ${orderByClause}`,
-        sqlFilterParams
-      );
-    }
+    // When sorting by buy/sell fields, include avg stats in SELECT for use in sorting
+    const result = await pool.query(
+      `SELECT 
+        ct.creator as address,
+        COUNT(*) as total_tokens,
+        COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+        CASE 
+          WHEN COUNT(*) > 0 THEN 
+            ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+          ELSE 0
+        END as win_rate,
+        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
+        ${sortingByBuySellField ? `,
+        COALESCE(AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0), 0) as avg_buy_count,
+        COALESCE(AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0), 0) as avg_buy_total_sol,
+        COALESCE(AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0), 0) as avg_sell_count,
+        COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol` : ''}
+      FROM tbl_soltrack_created_tokens ct
+      ${baseWhereClause}
+      GROUP BY ct.creator
+      ${havingClause}
+      ${orderByClause}`,
+      sqlFilterParams
+    );
     
     // Check if complex filters are active (these require token data)
     // Complex filters: rugRate, avgRugTime, avgBuySells, expectedROI, finalScore

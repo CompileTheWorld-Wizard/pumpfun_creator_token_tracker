@@ -61,6 +61,11 @@ export interface TokenTrackingResult {
   peakMarketCapUsd: number | null;
   finalMarketCapUsd: number | null;
   tradeCount: number;
+  buyCount?: number;
+  sellCount?: number;
+  buySolAmount?: number;
+  sellSolAmount?: number;
+  first5BuySol?: number;
 }
 
 /**
@@ -628,6 +633,39 @@ async function collectAndSaveTokenData(
     ? marketCapTimeSeries[marketCapTimeSeries.length - 1].marketCapUsd
     : null;
   
+  // Calculate buy/sell statistics from time series
+  let buyCount = 0;
+  let sellCount = 0;
+  let buySolAmount = 0;
+  let sellSolAmount = 0;
+  let first5BuySol = 0;
+  
+  const buyTrades: number[] = [];
+  
+  for (const point of marketCapTimeSeries) {
+    const tradeType = point.tradeType;
+    const solAmount = point.solAmount;
+    
+    if (solAmount === null || solAmount === undefined) {
+      continue; // Skip trades without solAmount
+    }
+    
+    if (tradeType === 'buy') {
+      buyCount++;
+      buySolAmount += solAmount;
+      // Collect first 5 buy amounts
+      if (buyTrades.length < 5) {
+        buyTrades.push(solAmount);
+      }
+    } else if (tradeType === 'sell') {
+      sellCount++;
+      sellSolAmount += solAmount;
+    }
+  }
+  
+  // Calculate sum of first 5 buy SOL amounts
+  first5BuySol = buyTrades.reduce((sum, amount) => sum + amount, 0);
+  
   const result: TokenTrackingResult = {
     mint,
     name: createEventData.name,
@@ -640,6 +678,11 @@ async function collectAndSaveTokenData(
     peakMarketCapUsd,
     finalMarketCapUsd,
     tradeCount: marketCapTimeSeries.length,
+    buyCount,
+    sellCount,
+    buySolAmount,
+    sellSolAmount,
+    first5BuySol,
   };
   
   // Save to database
@@ -667,16 +710,26 @@ async function saveTokenTrackingResult(
         initial_market_cap_usd,
         peak_market_cap_usd,
         final_market_cap_usd,
-        trade_count_15s,
+        trade_count,
+        buy_count,
+        sell_count,
+        buy_sol_amount,
+        sell_sol_amount,
+        first_5_buy_sol,
         is_fetched,
         bonded
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       ON CONFLICT (mint) DO UPDATE SET
         market_cap_time_series = EXCLUDED.market_cap_time_series,
         initial_market_cap_usd = EXCLUDED.initial_market_cap_usd,
         peak_market_cap_usd = EXCLUDED.peak_market_cap_usd,
         final_market_cap_usd = EXCLUDED.final_market_cap_usd,
-        trade_count_15s = EXCLUDED.trade_count_15s,
+        trade_count = EXCLUDED.trade_count,
+        buy_count = EXCLUDED.buy_count,
+        sell_count = EXCLUDED.sell_count,
+        buy_sol_amount = EXCLUDED.buy_sol_amount,
+        sell_sol_amount = EXCLUDED.sell_sol_amount,
+        first_5_buy_sol = EXCLUDED.first_5_buy_sol,
         is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
         -- Don't update bonded field - it should only be set by migrate events or bonding tracker
         -- This preserves bonding status set by handleMigrateEvent or bonding tracker
@@ -700,6 +753,11 @@ async function saveTokenTrackingResult(
         result.peakMarketCapUsd,
         result.finalMarketCapUsd,
         result.tradeCount,
+        result.buyCount || 0,
+        result.sellCount || 0,
+        result.buySolAmount || 0,
+        result.sellSolAmount || 0,
+        result.first5BuySol || 0,
         false, // is_fetched = false (from streaming)
         false, // bonded = false (newly created tokens are not bonded)
       ]

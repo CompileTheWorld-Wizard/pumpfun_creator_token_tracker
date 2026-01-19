@@ -34,7 +34,14 @@ CREATE TABLE IF NOT EXISTS tbl_soltrack_created_tokens (
   initial_market_cap_usd DECIMAL(20, 2),
   peak_market_cap_usd DECIMAL(20, 2),
   final_market_cap_usd DECIMAL(20, 2),
-  trade_count_15s INTEGER DEFAULT 0,
+  trade_count INTEGER DEFAULT 0,
+  
+  -- Buy/sell statistics (calculated from market_cap_time_series)
+  buy_count INTEGER DEFAULT 0,
+  sell_count INTEGER DEFAULT 0,
+  buy_sol_amount DECIMAL(20, 9) DEFAULT 0,
+  sell_sol_amount DECIMAL(20, 9) DEFAULT 0,
+  first_5_buy_sol DECIMAL(20, 9) DEFAULT 0,
   
   -- Source tracking: false = from streaming, true = from Solscan API
   is_fetched BOOLEAN DEFAULT FALSE,
