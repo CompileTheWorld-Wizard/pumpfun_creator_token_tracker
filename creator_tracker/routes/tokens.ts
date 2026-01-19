@@ -1621,7 +1621,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     };
     
     // Check if sorting by buy/sell fields - use materialized columns for fast sorting
-    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol'];
+    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgFirst5BuySol', 'medianFirst5BuySol'];
     const sortingByBuySellField = sortColumn && buySellSortFields.includes(sortColumn);
     
     // Build ORDER BY clause for SQL if sorting by a simple field or buy/sell field
@@ -1638,13 +1638,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         'avgBuyCount': 'AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0)',
         'avgBuyTotalSol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)',
         'avgSellCount': 'AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0)',
-        'avgSellTotalSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)'
+        'avgSellTotalSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)',
+        'avgFirst5BuySol': 'AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)',
+        'medianFirst5BuySol': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)'
       };
-      orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction}`;
+      const nullsLast = (sortColumn === 'avgFirst5BuySol' || sortColumn === 'medianFirst5BuySol') ? ' NULLS LAST' : '';
+      orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction}${nullsLast}`;
     }
     
-    // Get filtered creator wallets with basic statistics (SQL-level filtering applied)
-    // When sorting by buy/sell fields, include avg stats in SELECT for use in sorting
+    // Always include buy/sell stats in SELECT for use in display and filtering
+    // This uses materialized columns for fast performance
     const result = await pool.query(
       `SELECT 
         ct.creator as address,
@@ -1656,12 +1659,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ELSE 0
         END as win_rate,
         AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-        ${sortingByBuySellField ? `,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap,
+        -- Always include buy/sell stats using materialized columns (fast!)
         COALESCE(AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0), 0) as avg_buy_count,
         COALESCE(AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0), 0) as avg_buy_total_sol,
         COALESCE(AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0), 0) as avg_sell_count,
-        COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol` : ''}
+        COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol,
+        COALESCE(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as avg_first_5_buy_sol,
+        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol
       FROM tbl_soltrack_created_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
@@ -1684,7 +1689,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     );
     
     // Check if sorting by complex fields (these require token data)
-    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgFirst5BuySol', 'medianFirst5BuySol', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
+    // Note: avgBuyCount, avgBuyTotalSol, avgSellCount, avgSellTotalSol, avgFirst5BuySol, medianFirst5BuySol
+    // are now handled by materialized columns and don't need token data
+    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
     const sortingByComplexField = sortColumn && complexSortFields.includes(sortColumn);
     
     // Determine which wallets need token data
@@ -1705,15 +1712,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       ? result.rows.map(row => row.address)  // All filtered wallets
       : [];  // Will be set after pagination
     
-    // Check if we need buy/sell stats (for performance optimization)
-    // Only fetch market_cap_time_series when sorting by buy/sell related fields
-    // OR when filtering by avgFirst5BuySol or medianFirst5BuySol
-    const needsBuySellStatsForSorting = sortingByComplexField && 
-      (sortColumn === 'avgFirst5BuySol' || sortColumn === 'medianFirst5BuySol' || 
-       sortColumn === 'avgBuyCount' || sortColumn === 'avgBuyTotalSol' || 
-       sortColumn === 'avgSellCount' || sortColumn === 'avgSellTotalSol');
+    // Check if we need buy/sell stats from JSONB (for performance optimization)
+    // Since we now have materialized columns, we only need market_cap_time_series for:
+    // - avgFirst5BuySol/medianFirst5BuySol filtering (if filters require it)
+    // - Other complex calculations (ROI, rug rate, etc.)
+    // Note: Sorting by buy/sell fields now uses materialized columns, so no JSONB needed!
     const needsBuySellStatsForFiltering = needsFirst5BuySolFiltering(filters);
-    const needsBuySellStats = needsBuySellStatsForSorting || needsBuySellStatsForFiltering;
+    // Only fetch market_cap_time_series if we need it for filtering or other complex calculations
+    const needsBuySellStats = needsBuySellStatsForFiltering;
     
     // Performance note: When sorting by buy/sell fields with many wallets (1M+),
     // fetching market_cap_time_series for all tokens can be slow.
@@ -1886,18 +1892,19 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         medianFirst5BuySol: number;
       };
       
-      if (sortingByBuySellField && row.avg_buy_count !== undefined) {
-        // Use SQL-calculated values when sorting by buy/sell fields
+      // Always use SQL-calculated values from materialized columns (fast!)
+      // These are always included in the SELECT query now
+      if (row.avg_buy_count !== undefined) {
         buySellStats = {
           avgBuyCount: parseFloat(row.avg_buy_count) || 0,
           avgBuyTotalSol: parseFloat(row.avg_buy_total_sol) || 0,
           avgSellCount: parseFloat(row.avg_sell_count) || 0,
           avgSellTotalSol: parseFloat(row.avg_sell_total_sol) || 0,
-          avgFirst5BuySol: 0, // Not calculated in SQL, will be 0 or can be calculated separately if needed
-          medianFirst5BuySol: 0 // Not calculated in SQL, will be 0 or can be calculated separately if needed
+          avgFirst5BuySol: parseFloat(row.avg_first_5_buy_sol) || 0,
+          medianFirst5BuySol: parseFloat(row.median_first_5_buy_sol) || 0
         };
       } else if (hasBuySellData) {
-        // Calculate from token data (for non-sorting cases or when SQL values not available)
+        // Fallback: Calculate from token data if SQL values not available (shouldn't happen with new columns)
         buySellStats = calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken);
       } else {
         buySellStats = {
