@@ -1621,7 +1621,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     };
     
     // Check if sorting by buy/sell fields - use materialized columns for fast sorting
-    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgSellCount', 'avgSellTotalSol', 'avgFirst5BuySol', 'medianFirst5BuySol'];
+    // Support both 'avgBuySol'/'avgSellSol' (frontend) and 'avgBuyTotalSol'/'avgSellTotalSol' (internal) names
+    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgBuySol', 'avgSellCount', 'avgSellTotalSol', 'avgSellSol', 'avgFirst5BuySol', 'medianFirst5BuySol'];
     const sortingByBuySellField = sortColumn && buySellSortFields.includes(sortColumn);
     
     // Build ORDER BY clause for SQL if sorting by a simple field or buy/sell field
@@ -1637,8 +1638,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       const sortFieldMap: Record<string, string> = {
         'avgBuyCount': 'AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0)',
         'avgBuyTotalSol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)',
+        'avgBuySol': 'AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0)', // Alias for frontend compatibility
         'avgSellCount': 'AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0)',
         'avgSellTotalSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)',
+        'avgSellSol': 'AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0)', // Alias for frontend compatibility
         'avgFirst5BuySol': 'AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)',
         'medianFirst5BuySol': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0)'
       };
@@ -2383,13 +2386,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         });
         
         // Get ALL tokens for rug rate calculations (including invalid ones)
+        // Only fetch market_cap_time_series if we need it for complex calculations (ROI, rug rate, etc.)
+        // Buy/sell stats are already calculated from materialized columns, so we don't need time series for that
+        const needsTimeSeriesForPaginated = hasComplexFilters || sortingByComplexField || needsBuySellStatsForFiltering;
         const allTokensResult = await pool.query(
           `SELECT 
             ct.creator,
             ct.ath_market_cap_usd,
             ct.is_fetched,
             ct.created_at,
-            ct.market_cap_time_series
+            ${needsTimeSeriesForPaginated ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
           FROM tbl_soltrack_created_tokens ct
           ${tokenWhereClause}`,
           [paginatedCreatorAddresses]
@@ -2438,10 +2444,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
               return time !== null ? Math.round(time * 100) / 100 : null;
             })();
             
-            // Extract minimum buy amount filters
+            // Buy/sell stats are already calculated from materialized columns in the SQL query
+            // Only recalculate if we need to apply filters (minBuyAmountSol/minBuyAmountToken)
+            // Otherwise, use the SQL-calculated values that are already in wallet.buySellStats
             const { minBuyAmountSol, minBuyAmountToken } = extractMinBuyAmountFilters(filters);
-            
-            wallet.buySellStats = calculateBuySellStats(allTokens, minBuyAmountSol, minBuyAmountToken);
+            if ((minBuyAmountSol !== null && minBuyAmountSol !== undefined && minBuyAmountSol > 0) || 
+                (minBuyAmountToken !== null && minBuyAmountToken !== undefined && minBuyAmountToken > 0)) {
+              // Only recalculate if filters require it (filters by minimum buy amount)
+              wallet.buySellStats = calculateBuySellStats(allTokens, minBuyAmountSol || 0, minBuyAmountToken || 0);
+            }
+            // Otherwise, wallet.buySellStats already has the correct values from SQL (materialized columns)
             wallet.expectedROI = calculateExpectedROI(allTokens);
             
             if (whatIfSettings && whatIfSettings.buyPosition && whatIfSettings.sellStrategy) {

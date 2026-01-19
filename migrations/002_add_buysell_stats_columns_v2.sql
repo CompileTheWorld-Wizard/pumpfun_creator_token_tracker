@@ -41,70 +41,21 @@ END $$;
 
 -- Step 3: Calculate and populate buy/sell stats from existing market_cap_time_series data
 -- Process in batches to avoid memory issues with large datasets
+-- Using direct UPDATE with subqueries (proven to work in test)
 DO $$
 DECLARE
   updated_count INTEGER;
   batch_size INTEGER := 1000;
   processed_count INTEGER := 0;
+  token_ids INTEGER[];
 BEGIN
   -- Process tokens in batches
   LOOP
-    WITH token_calculations AS (
-      SELECT 
-        id,
-        market_cap_time_series,
-        -- Calculate buy_count (solAmount is stored as number in JSONB)
-        COALESCE((
-          SELECT COUNT(*)::INTEGER
-          FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE point->>'tradeType' = 'buy'
-            AND (point->'solAmount') IS NOT NULL
-            AND (point->'solAmount')::DECIMAL > 0
-        ), 0) AS calc_buy_count,
-        
-        -- Calculate sell_count
-        COALESCE((
-          SELECT COUNT(*)::INTEGER
-          FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE point->>'tradeType' = 'sell'
-            AND (point->'solAmount') IS NOT NULL
-            AND (point->'solAmount')::DECIMAL > 0
-        ), 0) AS calc_sell_count,
-        
-        -- Calculate buy_sol_amount (solAmount is a number, use -> to get JSONB then cast to DECIMAL)
-        COALESCE((
-          SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
-          FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE point->>'tradeType' = 'buy'
-            AND (point->'solAmount') IS NOT NULL
-        ), 0) AS calc_buy_sol_amount,
-        
-        -- Calculate sell_sol_amount
-        COALESCE((
-          SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
-          FROM jsonb_array_elements(market_cap_time_series) AS point
-          WHERE point->>'tradeType' = 'sell'
-            AND (point->'solAmount') IS NOT NULL
-        ), 0) AS calc_sell_sol_amount,
-        
-        -- Calculate first_5_buy_sol
-        COALESCE((
-          SELECT COALESCE(SUM((buy_point->'solAmount')::DECIMAL), 0)
-          FROM (
-            SELECT buy_point
-            FROM jsonb_array_elements(market_cap_time_series) AS buy_point
-            WHERE buy_point->>'tradeType' = 'buy'
-              AND (buy_point->'solAmount') IS NOT NULL
-            ORDER BY (buy_point->'timestamp')::BIGINT ASC
-            LIMIT 5
-          ) AS first_5_buys
-        ), 0) AS calc_first_5_buy_sol,
-        
-        -- Calculate trade_count
-        COALESCE((
-          SELECT COUNT(*)::INTEGER
-          FROM jsonb_array_elements(market_cap_time_series) AS point
-        ), 0) AS calc_trade_count
+    -- Get batch of token IDs that need updating
+    SELECT ARRAY_AGG(id)
+    INTO token_ids
+    FROM (
+      SELECT id
       FROM tbl_soltrack_created_tokens
       WHERE market_cap_time_series IS NOT NULL
         AND jsonb_typeof(market_cap_time_series) = 'array'
@@ -125,20 +76,69 @@ BEGIN
           )
         )
       LIMIT batch_size
-    )
+    ) AS batch;
+    
+    -- Exit if no more tokens to process
+    IF token_ids IS NULL OR array_length(token_ids, 1) IS NULL THEN
+      EXIT;
+    END IF;
+    
+    -- Update tokens in this batch using direct subqueries (same approach as working test)
     UPDATE tbl_soltrack_created_tokens AS ct
     SET 
-      buy_count = tc.calc_buy_count,
-      sell_count = tc.calc_sell_count,
-      buy_sol_amount = tc.calc_buy_sol_amount,
-      sell_sol_amount = tc.calc_sell_sol_amount,
-      first_5_buy_sol = tc.calc_first_5_buy_sol,
+      buy_count = COALESCE((
+        SELECT COUNT(*)::INTEGER
+        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        WHERE point->>'tradeType' = 'buy'
+          AND (point->'solAmount') IS NOT NULL
+          AND (point->'solAmount')::DECIMAL > 0
+      ), 0),
+      
+      sell_count = COALESCE((
+        SELECT COUNT(*)::INTEGER
+        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        WHERE point->>'tradeType' = 'sell'
+          AND (point->'solAmount') IS NOT NULL
+          AND (point->'solAmount')::DECIMAL > 0
+      ), 0),
+      
+      buy_sol_amount = COALESCE((
+        SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
+        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        WHERE point->>'tradeType' = 'buy'
+          AND (point->'solAmount') IS NOT NULL
+      ), 0),
+      
+      sell_sol_amount = COALESCE((
+        SELECT COALESCE(SUM((point->'solAmount')::DECIMAL), 0)
+        FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+        WHERE point->>'tradeType' = 'sell'
+          AND (point->'solAmount') IS NOT NULL
+      ), 0),
+      
+      first_5_buy_sol = COALESCE((
+        SELECT COALESCE(SUM((buy_point->'solAmount')::DECIMAL), 0)
+        FROM (
+          SELECT buy_point
+          FROM jsonb_array_elements(ct.market_cap_time_series) AS buy_point
+          WHERE buy_point->>'tradeType' = 'buy'
+            AND (buy_point->'solAmount') IS NOT NULL
+          ORDER BY (buy_point->'timestamp')::BIGINT ASC
+          LIMIT 5
+        ) AS first_5_buys
+      ), 0),
+      
       trade_count = CASE 
-        WHEN ct.trade_count = 0 OR ct.trade_count IS NULL THEN tc.calc_trade_count
+        WHEN ct.trade_count = 0 OR ct.trade_count IS NULL THEN
+          COALESCE((
+            SELECT COUNT(*)::INTEGER
+            FROM jsonb_array_elements(ct.market_cap_time_series) AS point
+          ), 0)
         ELSE ct.trade_count
       END
-    FROM token_calculations tc
-    WHERE ct.id = tc.id;
+    WHERE ct.id = ANY(token_ids)
+      AND ct.market_cap_time_series IS NOT NULL
+      AND jsonb_typeof(ct.market_cap_time_series) = 'array';
     
     GET DIAGNOSTICS updated_count = ROW_COUNT;
     processed_count := processed_count + updated_count;
