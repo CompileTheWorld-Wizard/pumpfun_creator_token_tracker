@@ -563,7 +563,7 @@ app.use('/api', (req, res, next) => {
 });
 
 // Handle /trade-api routes - forward directly to trade tracker
-app.use('/trade-api', (req, res, next) => {
+app.use('/trade-api', (req, res, _next) => {
   console.error(`[Trade-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
   requireAuth(req, res, async () => {
     // req.path is stripped of /trade-api prefix by Express
@@ -574,7 +574,7 @@ app.use('/trade-api', (req, res, next) => {
 });
 
 // Handle /fund-api routes - forward directly to fund tracker
-app.use('/fund-api', (req, res, next) => {
+app.use('/fund-api', (req, res, _next) => {
   console.error(`[Fund-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
   requireAuth(req, res, async () => {
     // req.path is stripped of /fund-api prefix by Express
