@@ -1749,10 +1749,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     }>> = new Map();
     
     // Determine which creator addresses need token data
-    // PERFORMANCE: Limit to max 1000 creators to prevent loading too much data
-    const MAX_CREATORS_FOR_TOKEN_FETCH = 1000;
     const creatorAddressesForTokens = needsTokensForAll 
-      ? result.rows.slice(0, MAX_CREATORS_FOR_TOKEN_FETCH).map(row => row.address)  // Limit to prevent huge queries
+      ? result.rows.map(row => row.address)  // All filtered wallets
       : [];  // Will be set after pagination
     
     // Check if we need buy/sell stats from JSONB (for performance optimization)
