@@ -47,6 +47,11 @@ app.use((req, _res, next) => {
 });
 
 // Routes (authentication handled by frontend)
+// Support both /api prefix (for dev mode direct access) and without prefix (for proxy)
+app.use('/api/wallets', walletRoutes);
+app.use('/api/stream', streamRoutes);
+app.use('/api/tokens', tokenRoutes);
+app.use('/api/settings', settingsRoutes);
 app.use('/wallets', walletRoutes);
 app.use('/stream', streamRoutes);
 app.use('/tokens', tokenRoutes);
@@ -55,6 +60,19 @@ app.use('/settings', settingsRoutes);
 // Health check
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok' });
+});
+
+// 404 handler for undefined routes
+app.use((req, res) => {
+  console.error(`[Creator Tracker] 404 - Route not found: ${req.method} ${req.originalUrl || req.url}`);
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.originalUrl || req.url,
+    method: req.method
+  });
 });
 
 // Note: Static files are served by the frontend/auth server
