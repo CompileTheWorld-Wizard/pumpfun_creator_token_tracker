@@ -392,9 +392,10 @@ const getBackendTarget = (req: express.Request): string | null => {
   }
   
   // Creator Tracker token routes (generic /tokens)
+  // This includes: /tokens, /tokens/creators/analytics, /tokens/creators/list, etc.
   if (path.startsWith('/tokens')) {
     const target = `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
-    console.error(`[Frontend Proxy] -> Creator Tracker (tokens): ${target}`);
+    console.error(`[Frontend Proxy] -> Creator Tracker (tokens): ${target} for path: ${path}`);
     return target;
   }
   
@@ -482,10 +483,20 @@ app.use('/api', (req, res, next) => {
     // Create proxy for this specific request
     // Note: req.path has '/api' stripped by Express
     // Backend services expect paths WITHOUT /api prefix, so pass as-is
+    console.error(`[Frontend Proxy] Creating proxy to ${target} with path: ${req.path}`);
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
+      onProxyReq: (proxyReq, req, res) => {
+        console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
+      },
+      onProxyRes: (proxyRes, req, res) => {
+        console.error(`[Frontend Proxy] Response from ${target}${req.path}: ${proxyRes.statusCode}`);
+      },
+      onError: (err, req, res) => {
+        console.error(`[Frontend Proxy] Proxy error for ${req.path} to ${target}:`, err.message);
+      }
     });
     
     proxy(req, res, next);
@@ -494,7 +505,7 @@ app.use('/api', (req, res, next) => {
 
 // Handle /trade-api routes - proxy directly to trade tracker
 app.use('/trade-api', (req, res, next) => {
-  console.log(`[Trade-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
+  console.error(`[Trade-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
   requireAuth(req, res, () => {
     // req.path is stripped of /trade-api prefix by Express
     // So /trade-api/skip-tokens becomes /skip-tokens in req.path
