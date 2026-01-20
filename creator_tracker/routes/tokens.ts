@@ -63,7 +63,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
       'peakMC': 'ct.peak_market_cap_usd',
       'finalMC': 'ct.final_market_cap_usd',
       'athMC': 'ct.ath_market_cap_usd',
-      'trades': 'ct.trade_count_15s',
+      'trades': 'ct.trade_count',
       'created': 'ct.created_at'
     };
     
@@ -85,7 +85,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         ct.initial_market_cap_usd,
         ct.peak_market_cap_usd,
         ct.final_market_cap_usd,
-        ct.trade_count_15s,
+        ct.trade_count,
         ct.bonded,
         ct.ath_market_cap_usd,
         ct.tracked_at,
@@ -126,7 +126,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
         peakMarketCapUsd: row.peak_market_cap_usd ? parseFloat(row.peak_market_cap_usd) : null,
         finalMarketCapUsd: row.final_market_cap_usd ? parseFloat(row.final_market_cap_usd) : null,
-        tradeCount15s: row.trade_count_15s || 0,
+        tradeCount15s: row.trade_count || 0,
         bonded: row.bonded || false,
         athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
         trackedAt: row.tracked_at,
@@ -169,7 +169,7 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
         ct.initial_market_cap_usd,
         ct.peak_market_cap_usd,
         ct.final_market_cap_usd,
-        ct.trade_count_15s,
+        ct.trade_count,
         ct.bonded,
         ct.ath_market_cap_usd,
         ct.tracked_at,
@@ -216,7 +216,7 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
       initialMarketCapUsd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
       peakMarketCapUsd: row.peak_market_cap_usd ? parseFloat(row.peak_market_cap_usd) : null,
       finalMarketCapUsd: row.final_market_cap_usd ? parseFloat(row.final_market_cap_usd) : null,
-      tradeCount15s: row.trade_count_15s || 0,
+      tradeCount15s: row.trade_count || 0,
       bonded: row.bonded || false,
       athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
       trackedAt: row.tracked_at,
@@ -1221,14 +1221,14 @@ function calculateWhatIfPNL(
   };
 }
 
-// Helper function to check if filtering by avgFirst5BuySol, medianFirst5BuySol, or avgDevBuyAmount
+// Helper function to check if filtering by avgFirst5BuySol, medianFirst5BuySol, avgDevBuyAmount, or medianDevBuyAmount
 function needsFirst5BuySolFiltering(filters: any): boolean {
   if (!filters || !filters.avgBuySells || !Array.isArray(filters.avgBuySells)) {
     return false;
   }
   
   return filters.avgBuySells.some((f: any) => 
-    f.type === 'avgFirst5BuySol' || f.type === 'medianFirst5BuySol' || f.type === 'avgDevBuyAmount'
+    f.type === 'avgFirst5BuySol' || f.type === 'medianFirst5BuySol' || f.type === 'avgDevBuyAmount' || f.type === 'medianDevBuyAmount'
   );
 }
 
@@ -1332,6 +1332,7 @@ function calculateBuySellStats(
   avgFirst5BuySol: number;
   medianFirst5BuySol: number;
   avgDevBuyAmount: number;
+  medianDevBuyAmount: number;
 } {
   if (tokens.length === 0) {
     return {
@@ -1341,7 +1342,8 @@ function calculateBuySellStats(
       avgSellTotalSol: 0,
       avgFirst5BuySol: 0,
       medianFirst5BuySol: 0,
-      avgDevBuyAmount: 0
+      avgDevBuyAmount: 0,
+      medianDevBuyAmount: 0
     };
   }
   
@@ -1470,7 +1472,8 @@ function calculateBuySellStats(
     avgSellTotalSol: Math.round(avgSellTotalSol * 100) / 100,
     avgFirst5BuySol: Math.round(avgFirst5BuySol * 100) / 100,
     medianFirst5BuySol: Math.round(medianFirst5BuySol * 100) / 100,
-    avgDevBuyAmount: 0 // Dev buy amount is calculated from materialized column in SQL, not from time series
+    avgDevBuyAmount: 0, // Dev buy amount is calculated from materialized column in SQL, not from time series
+    medianDevBuyAmount: 0 // Dev buy amount is calculated from materialized column in SQL, not from time series
   };
 }
 
@@ -1652,7 +1655,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // Check if sorting by buy/sell fields - use materialized columns for fast sorting
     // Support both 'avgBuySol'/'avgSellSol' (frontend) and 'avgBuyTotalSol'/'avgSellTotalSol' (internal) names
-    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgBuySol', 'avgSellCount', 'avgSellTotalSol', 'avgSellSol', 'avgFirst5BuySol', 'medianFirst5BuySol', 'avgDevBuyAmount'];
+    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgBuySol', 'avgSellCount', 'avgSellTotalSol', 'avgSellSol', 'avgFirst5BuySol', 'medianFirst5BuySol', 'avgDevBuyAmount', 'medianDevBuyAmount'];
     const sortingByBuySellField = sortColumn && buySellSortFields.includes(sortColumn);
     
     // Build ORDER BY clause for SQL if sorting by a simple field or buy/sell field
@@ -1674,7 +1677,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         'avgSellSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)', // Alias for frontend compatibility
         'avgFirst5BuySol': 'NULLIF(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
         'medianFirst5BuySol': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
-        'avgDevBuyAmount': 'NULLIF(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)'
+        'avgDevBuyAmount': 'NULLIF(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)',
+        'medianDevBuyAmount': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)'
       };
       // Always put NULLs (including 0s converted to NULL) at the end for all buy/sell fields
       orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction} NULLS LAST`;
@@ -1701,7 +1705,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol,
         COALESCE(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as avg_first_5_buy_sol,
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
-        COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount
+        COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount,
+        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as median_dev_buy_amount
       FROM tbl_soltrack_created_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
@@ -1929,6 +1934,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         avgFirst5BuySol: number;
         medianFirst5BuySol: number;
         avgDevBuyAmount: number;
+        medianDevBuyAmount: number;
       };
       
       // Always use SQL-calculated values from materialized columns (fast!)
@@ -1941,7 +1947,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellTotalSol: parseFloat(row.avg_sell_total_sol) || 0,
           avgFirst5BuySol: parseFloat(row.avg_first_5_buy_sol) || 0,
           medianFirst5BuySol: parseFloat(row.median_first_5_buy_sol) || 0,
-          avgDevBuyAmount: parseFloat(row.avg_dev_buy_amount) || 0
+          avgDevBuyAmount: parseFloat(row.avg_dev_buy_amount) || 0,
+          medianDevBuyAmount: parseFloat(row.median_dev_buy_amount) || 0
         };
       } else if (hasBuySellData) {
         // Fallback: Calculate from token data if SQL values not available (shouldn't happen with new columns)
@@ -1954,7 +1961,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellTotalSol: 0,
           avgFirst5BuySol: 0,
           medianFirst5BuySol: 0,
-          avgDevBuyAmount: 0
+          avgDevBuyAmount: 0,
+          medianDevBuyAmount: 0
         };
       }
       
@@ -2030,7 +2038,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellTotalSol: buySellStats.avgSellTotalSol,
           avgFirst5BuySol: buySellStats.avgFirst5BuySol,
           medianFirst5BuySol: buySellStats.medianFirst5BuySol,
-          avgDevBuyAmount: buySellStats.avgDevBuyAmount
+          avgDevBuyAmount: buySellStats.avgDevBuyAmount,
+          medianDevBuyAmount: buySellStats.medianDevBuyAmount
         },
         expectedROI: {
           avgRoi1stBuy: expectedROI.avgRoi1stBuy,
@@ -2193,6 +2202,13 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
               const matches = (
                 (filter.min == null || avgDevBuyAmount >= filter.min) &&
                 (filter.max == null || avgDevBuyAmount <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'medianDevBuyAmount') {
+              const medianDevBuyAmount = (wallet.buySellStats as any).medianDevBuyAmount ?? 0;
+              const matches = (
+                (filter.min == null || medianDevBuyAmount >= filter.min) &&
+                (filter.max == null || medianDevBuyAmount <= filter.max)
               );
               if (!matches) return false;
             }
@@ -2618,7 +2634,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
       'peakMC': 'ct.peak_market_cap_usd',
       'finalMC': 'ct.final_market_cap_usd',
       'athMC': 'ct.ath_market_cap_usd',
-      'trades': 'ct.trade_count_15s',
+      'trades': 'ct.trade_count',
       'created': 'ct.created_at',
       'created_at': 'ct.created_at' // Support both formats
     };
@@ -2666,7 +2682,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
           ct.initial_market_cap_usd,
           ct.peak_market_cap_usd,
           ct.final_market_cap_usd,
-          ct.trade_count_15s,
+          ct.trade_count,
           ct.bonded,
           ct.ath_market_cap_usd,
           ct.tracked_at,
@@ -2696,7 +2712,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
           row.peak_market_cap_usd !== null ? row.peak_market_cap_usd : 'N/A',
           row.final_market_cap_usd !== null ? row.final_market_cap_usd : 'N/A',
           row.ath_market_cap_usd !== null ? row.ath_market_cap_usd : 'N/A',
-          row.trade_count_15s || 0,
+          row.trade_count || 0,
           row.created_at || '',
           row.create_tx_signature || '',
           row.tracked_at || '',
@@ -2929,6 +2945,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       'Avg First 5 Buy SOL',
       'Median First 5 Buy SOL',
       'Avg Dev Buy',
+      'Median Dev Buy',
       'Expected ROI 1st Buy',
       'Expected ROI 2nd Buy',
       'Expected ROI 3rd Buy',
@@ -3120,6 +3137,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           buySellStats.avgFirst5BuySol.toFixed(4),
           buySellStats.medianFirst5BuySol.toFixed(4),
           buySellStats.avgDevBuyAmount.toFixed(4),
+          buySellStats.medianDevBuyAmount.toFixed(4),
           expectedROI.avgRoi1stBuy.toFixed(2),
           expectedROI.avgRoi2ndBuy.toFixed(2),
           expectedROI.avgRoi3rdBuy.toFixed(2),
