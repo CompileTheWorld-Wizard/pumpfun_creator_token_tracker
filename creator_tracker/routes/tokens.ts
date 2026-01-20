@@ -1482,7 +1482,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
   const startTime = Date.now();
   const logStep = (step: string) => {
     const elapsed = Date.now() - startTime;
-    console.log(`[Analytics API] [${elapsed}ms] ${step}`);
+    // Use console.error to ensure logs appear immediately and are more visible
+    console.error(`[Analytics API] [${elapsed}ms] ${step}`);
   };
   
   try {
@@ -2639,7 +2640,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       totalTokens: totalTokensCount
     });
   } catch (error: any) {
-    console.error('Error fetching creator wallets analytics:', error);
+    const totalTime = Date.now() - startTime;
+    console.error(`[Analytics API] ERROR after ${totalTime}ms:`, error);
+    console.error(`[Analytics API] Error stack:`, error?.stack);
     res.status(500).json({
       error: 'Error fetching creator wallets analytics'
     });
