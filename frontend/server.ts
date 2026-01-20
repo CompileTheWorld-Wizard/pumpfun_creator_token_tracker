@@ -358,74 +358,72 @@ const proxyOptions = {
 };
 
 // Helper function to determine which backend service handles a route
+// Note: req.path inside app.use('/api', ...) has the '/api' prefix stripped
 const getBackendTarget = (req: express.Request): string | null => {
-  const path = req.path;
+  const path = req.path; // This will be like '/settings/applied/get', not '/api/settings/applied/get'
   const method = req.method.toUpperCase();
   
   // Fund Tracker routes (must come first to avoid conflicts)
-  if (path.startsWith('/api/sol-transfers') || path.startsWith('/api/tracking')) {
+  if (path.startsWith('/sol-transfers') || path.startsWith('/tracking')) {
     return `http://127.0.0.1:${FUND_TRACKER_PORT}`;
   }
   
   // Creator Tracker specific routes
-  if (path.startsWith('/api/stream') || path.startsWith('/api/settings')) {
+  if (path.startsWith('/stream') || path.startsWith('/settings')) {
     return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
   }
   
-  // Trade Tracker specific token routes (must come before generic /api/tokens)
-  if (path.startsWith('/api/tokens/fetch-info') || 
-      path.startsWith('/api/tokens/ath-mcap')) {
+  // Trade Tracker specific token routes (must come before generic /tokens)
+  if (path.startsWith('/tokens/fetch-info') || 
+      path.startsWith('/tokens/ath-mcap')) {
     return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
   }
   
-  // Creator Tracker token routes (generic /api/tokens)
-  if (path.startsWith('/api/tokens')) {
+  // Creator Tracker token routes (generic /tokens)
+  if (path.startsWith('/tokens')) {
     return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
   }
   
   // Trade Tracker specific routes
   const tradeTrackerRoutes = [
-    '/api/status',
-    '/api/addresses',
-    '/api/start',
-    '/api/stop',
-    '/api/transactions',
-    '/api/export-token',
-    '/api/export-token-excel',
-    '/api/export-all-tokens-excel',
-    '/api/analyze',
-    '/api/skip-tokens',
-    '/api/dashboard-statistics',
-    '/api/dashboard-data',
-    '/api/what-if',
-    '/api/creator-tokens',
-    '/api/wallet-activity',
-    '/api/dashboard-filter-presets',
-    '/api/sol-price'
+    '/status',
+    '/addresses',
+    '/start',
+    '/stop',
+    '/transactions',
+    '/export-token',
+    '/export-token-excel',
+    '/export-all-tokens-excel',
+    '/analyze',
+    '/skip-tokens',
+    '/dashboard-statistics',
+    '/dashboard-data',
+    '/what-if',
+    '/creator-tokens',
+    '/wallet-activity',
+    '/dashboard-filter-presets',
+    '/sol-price'
   ];
   
   if (tradeTrackerRoutes.some(route => path.startsWith(route))) {
     return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
   }
   
-  // Handle /api/wallets conflict: 
-  // - GET /api/wallets -> Trade Tracker (list tracked wallets)
-  // - DELETE /api/wallets/:address -> Trade Tracker (remove tracked wallet)
-  // - POST/PUT /api/wallets -> Creator Tracker (manage creator wallets)
-  if (path.startsWith('/api/wallets')) {
-    if (method === 'GET' || (method === 'DELETE' && path.match(/^\/api\/wallets\/[^/]+$/))) {
+  // Handle /wallets conflict: 
+  // - GET /wallets -> Trade Tracker (list tracked wallets)
+  // - DELETE /wallets/:address -> Trade Tracker (remove tracked wallet)
+  // - POST/PUT /wallets -> Creator Tracker (manage creator wallets)
+  if (path.startsWith('/wallets')) {
+    if (method === 'GET' || (method === 'DELETE' && path.match(/^\/wallets\/[^/]+$/))) {
       return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
     }
     // POST, PUT, etc. go to Creator Tracker
     return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
   }
   
-  // Default: route to trade tracker for any other /api routes
-  if (path.startsWith('/api/')) {
-    return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
-  }
-  
-  return null;
+  // Default: route to trade tracker for any other routes
+  // Since we're already inside /api middleware, any path here is an API route
+  return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
 };
 
 // Authentication check middleware for proxied routes
