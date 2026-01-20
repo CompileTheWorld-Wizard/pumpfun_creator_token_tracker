@@ -327,6 +327,8 @@ const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
 const proxyOptions = {
   changeOrigin: true,
   ws: false,
+  timeout: 30000, // 30 second timeout
+  proxyTimeout: 30000,
   onProxyReq: (proxyReq: any, req: express.Request) => {
     // Forward session cookie
     if (req.headers.cookie) {
@@ -340,14 +342,15 @@ const proxyOptions = {
       proxyReq.setHeader('X-Real-IP', req.headers['x-real-ip']);
     }
   },
-  onProxyRes: (proxyRes: any, _req: express.Request, res: express.Response) => {
+  onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
     // Forward set-cookie headers to maintain session
     if (proxyRes.headers['set-cookie']) {
       res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
     }
+    console.log(`[Proxy] ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
   },
   onError: (err: Error, req: express.Request, res: express.Response) => {
-    console.error(`[Proxy Error] ${req.path}:`, err.message);
+    console.error(`[Proxy Error] ${req.method} ${req.path}:`, err.message);
     if (!res.headersSent) {
       res.status(502).json({ 
         error: 'Backend service unavailable',
