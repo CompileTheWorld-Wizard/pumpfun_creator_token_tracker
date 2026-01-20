@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import RedisStore from 'connect-redis';
 import Redis from 'ioredis';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 
 dotenv.config();
 
@@ -330,6 +330,9 @@ const proxyOptions = {
   timeout: 300000, // 5 minute timeout for long-running queries
   proxyTimeout: 300000,
   onProxyReq: (proxyReq: any, req: express.Request) => {
+    // Fix request body if it was consumed by body-parser
+    fixRequestBody(proxyReq, req);
+    
     // Forward session cookie
     if (req.headers.cookie) {
       proxyReq.setHeader('Cookie', req.headers.cookie);
@@ -499,6 +502,10 @@ app.use('/api', (req, res, next) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
         console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}`);
+        
+        // Fix request body if it was consumed by body-parser
+        fixRequestBody(proxyReq, req);
+        
         // Call original onProxyReq if it exists
         if (originalOnProxyReq) {
           originalOnProxyReq(proxyReq, req);
