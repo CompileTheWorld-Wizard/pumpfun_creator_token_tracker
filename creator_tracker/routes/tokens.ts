@@ -1530,6 +1530,30 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Get rug threshold from settings (default 6000) - need this early for calculations
     const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
     
+    // Check if complex filters are active (these require token data) - CHECK EARLY for performance
+    // Complex filters: rugRate, avgRugTime, avgBuySells, expectedROI, finalScore
+    const hasComplexFilters = !!(
+      filters.rugRate || 
+      filters.avgRugTime || 
+      (filters.avgBuySells && Array.isArray(filters.avgBuySells) && filters.avgBuySells.length > 0) ||
+      (filters.expectedROI && Array.isArray(filters.expectedROI) && filters.expectedROI.length > 0) ||
+      filters.finalScore ||
+      (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.some((f: any) => f.type === 'score')) ||
+      (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.some((f: any) => f.type === 'score')) ||
+      (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.some((f: any) => f.type === 'score'))
+    );
+    
+    // Check if sorting by complex fields (these require token data)
+    // Note: avgBuyCount, avgBuyTotalSol, avgSellCount, avgSellTotalSol, avgFirst5BuySol, medianFirst5BuySol
+    // are now handled by materialized columns and don't need token data
+    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
+    const sortingByComplexField = sortColumn && complexSortFields.includes(sortColumn);
+    
+    // Determine which wallets need token data
+    // If complex filters or complex sorting is active, we need tokens for ALL filtered wallets
+    // Otherwise, we only need tokens for paginated wallets (for display)
+    const needsTokensForAll = hasComplexFilters || sortingByComplexField;
+    
     // Build SQL-level filters for simple metrics that can be filtered in SQL
     // These filters will reduce the dataset before fetching tokens
     const sqlFilterConditions: string[] = [];
@@ -1711,33 +1735,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       ${baseWhereClause}
       GROUP BY ct.creator
       ${havingClause}
-      ${orderByClause}`,
+      ${orderByClause}
+      ${!needsTokensForAll ? `LIMIT ${limit} OFFSET ${offset}` : ''}`,
       sqlFilterParams
     );
-    
-    // Check if complex filters are active (these require token data)
-    // Complex filters: rugRate, avgRugTime, avgBuySells, expectedROI, finalScore
-    const hasComplexFilters = !!(
-      filters.rugRate || 
-      filters.avgRugTime || 
-      (filters.avgBuySells && Array.isArray(filters.avgBuySells) && filters.avgBuySells.length > 0) ||
-      (filters.expectedROI && Array.isArray(filters.expectedROI) && filters.expectedROI.length > 0) ||
-      filters.finalScore ||
-      (filters.winRate && Array.isArray(filters.winRate) && filters.winRate.some((f: any) => f.type === 'score')) ||
-      (filters.avgMcap && Array.isArray(filters.avgMcap) && filters.avgMcap.some((f: any) => f.type === 'score')) ||
-      (filters.medianMcap && Array.isArray(filters.medianMcap) && filters.medianMcap.some((f: any) => f.type === 'score'))
-    );
-    
-    // Check if sorting by complex fields (these require token data)
-    // Note: avgBuyCount, avgBuyTotalSol, avgSellCount, avgSellTotalSol, avgFirst5BuySol, medianFirst5BuySol
-    // are now handled by materialized columns and don't need token data
-    const complexSortFields = ['avgRugRate', 'avgRugTime', 'avgRoi1stBuy', 'avgRoi2ndBuy', 'avgRoi3rdBuy', 'finalScore'];
-    const sortingByComplexField = sortColumn && complexSortFields.includes(sortColumn);
-    
-    // Determine which wallets need token data
-    // If complex filters or complex sorting is active, we need tokens for ALL filtered wallets
-    // Otherwise, we only need tokens for paginated wallets (for display)
-    const needsTokensForAll = hasComplexFilters || sortingByComplexField;
     
     let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
     let allTokensByCreator: Map<string, Array<{ 
@@ -1810,7 +1811,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       
       // Get ALL tokens for rug rate and buy/sell calculations (including invalid ones)
       // Only fetch market_cap_time_series when needed for buy/sell stats to improve performance
-      // PERFORMANCE WARNING: This can load a lot of data. Consider pagination or limiting creators.
+      // PERFORMANCE: Limit tokens per creator to prevent loading too much data
+      const MAX_TOKENS_PER_CREATOR = 100; // Limit to most recent 100 tokens per creator
+      let additionalWhereClause = '';
+      if (!viewAll) {
+        additionalWhereClause = ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      }
       const allTokensResult = await pool.query(
         `SELECT 
           ct.creator,
@@ -1820,7 +1826,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ct.create_tx_signature,
           ${needsBuySellStats ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
         FROM tbl_soltrack_created_tokens ct
-        ${tokenWhereClause}
+        WHERE ct.creator = ANY($1::text[])
+          ${additionalWhereClause}
+          AND ct.id IN (
+            SELECT id FROM tbl_soltrack_created_tokens ct2
+            WHERE ct2.creator = ct.creator
+            ORDER BY ct2.created_at DESC
+            LIMIT ${MAX_TOKENS_PER_CREATOR}
+          )
         ORDER BY ct.creator, ct.created_at DESC`,
         [creatorAddressesForTokens]
       );
