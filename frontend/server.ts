@@ -495,7 +495,7 @@ app.use('/api', (req, res, next) => {
       ...proxyOptions,
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
-      onProxyReq: (proxyReq: any, req: express.Request, res: express.Response) => {
+      onProxyReq: (proxyReq: any, req: express.Request) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
         console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}`);
