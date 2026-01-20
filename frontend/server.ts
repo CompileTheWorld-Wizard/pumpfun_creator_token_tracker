@@ -451,7 +451,10 @@ app.use('/api', (req, res, next) => {
   requireAuth(req, res, (): void => {
     const target = getBackendTarget(req);
     
+    console.log(`[API] ${req.method} ${req.path} -> target: ${target || 'NOT FOUND'}`);
+    
     if (!target) {
+      console.error(`[API] Route not found: ${req.method} ${req.path}`);
       res.status(404).json({ error: 'Route not found' });
       return;
     }
