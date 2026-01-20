@@ -498,7 +498,7 @@ app.use('/api', (req, res, next) => {
       onProxyReq: (proxyReq: any, req: express.Request) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
-        console.error(`[Frontend Proxy] Request headers:`, JSON.stringify(req.headers, null, 2));
+        console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}`);
         if (originalOnProxyReq) {
           originalOnProxyReq(proxyReq, req);
         }
@@ -522,14 +522,51 @@ app.use('/api', (req, res, next) => {
     
     try {
       console.error(`[Frontend Proxy] About to create proxy middleware for ${target}`);
+      console.error(`[Frontend Proxy] Request body parsed:`, req.body ? 'YES' : 'NO', 'Body keys:', req.body ? Object.keys(req.body) : 'none');
       const proxy = createProxyMiddleware(enhancedProxyOptions);
       console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
-      proxy(req, res, next);
-      console.error(`[Frontend Proxy] proxy() called successfully`);
+      
+      // Set a timeout to detect if proxy never executes
+      const proxyTimeout = setTimeout(() => {
+        if (!res.headersSent) {
+          console.error(`[Frontend Proxy] TIMEOUT: Proxy never executed after 1 second!`);
+        }
+      }, 1000);
+      
+      // Override res.end to detect when response is sent
+      const originalEnd = res.end;
+      res.end = function(...args: any[]) {
+        clearTimeout(proxyTimeout);
+        console.error(`[Frontend Proxy] Response ended with status: ${res.statusCode}`);
+        return originalEnd.apply(this, args as any);
+      };
+      
+      // Wrap proxy call to catch any immediate errors
+      try {
+        proxy(req, res, (err?: any) => {
+          clearTimeout(proxyTimeout);
+          if (err) {
+            console.error(`[Frontend Proxy] Proxy next() called with error:`, err);
+            return next(err);
+          }
+          console.error(`[Frontend Proxy] Proxy next() called without error`);
+          next();
+        });
+        console.error(`[Frontend Proxy] proxy() function returned (async execution should start now)`);
+      } catch (syncErr: any) {
+        clearTimeout(proxyTimeout);
+        console.error(`[Frontend Proxy] SYNCHRONOUS ERROR in proxy():`, syncErr.message);
+        console.error(`[Frontend Proxy] Error stack:`, syncErr.stack);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Proxy synchronous error', message: syncErr.message });
+        }
+      }
     } catch (err: any) {
       console.error(`[Frontend Proxy] ERROR creating/calling proxy:`, err.message);
       console.error(`[Frontend Proxy] Error stack:`, err.stack);
-      res.status(500).json({ error: 'Proxy error', message: err.message });
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Proxy error', message: err.message });
+      }
     }
   });
 });
