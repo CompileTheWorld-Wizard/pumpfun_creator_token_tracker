@@ -366,25 +366,36 @@ const getBackendTarget = (req: express.Request): string | null => {
   const path = req.path; // This will be like '/settings/applied/get', not '/api/settings/applied/get'
   const method = req.method.toUpperCase();
   
+  // Log routing decision for debugging
+  console.error(`[Frontend Proxy] Routing: ${method} ${path} (originalUrl: ${req.originalUrl})`);
+  
   // Fund Tracker routes (must come first to avoid conflicts)
   if (path.startsWith('/sol-transfers') || path.startsWith('/tracking')) {
-    return `http://127.0.0.1:${FUND_TRACKER_PORT}`;
+    const target = `http://127.0.0.1:${FUND_TRACKER_PORT}`;
+    console.error(`[Frontend Proxy] -> Fund Tracker: ${target}`);
+    return target;
   }
   
   // Creator Tracker specific routes
   if (path.startsWith('/stream') || path.startsWith('/settings')) {
-    return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+    const target = `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+    console.error(`[Frontend Proxy] -> Creator Tracker: ${target}`);
+    return target;
   }
   
   // Trade Tracker specific token routes (must come before generic /tokens)
   if (path.startsWith('/tokens/fetch-info') || 
       path.startsWith('/tokens/ath-mcap')) {
-    return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+    const target = `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+    console.error(`[Frontend Proxy] -> Trade Tracker: ${target}`);
+    return target;
   }
   
   // Creator Tracker token routes (generic /tokens)
   if (path.startsWith('/tokens')) {
-    return `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+    const target = `http://127.0.0.1:${CREATOR_TRACKER_PORT}`;
+    console.error(`[Frontend Proxy] -> Creator Tracker (tokens): ${target}`);
+    return target;
   }
   
   // Trade Tracker specific routes
@@ -426,7 +437,9 @@ const getBackendTarget = (req: express.Request): string | null => {
   
   // Default: route to trade tracker for any other routes
   // Since we're already inside /api middleware, any path here is an API route
-  return `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+  const target = `http://127.0.0.1:${TRADE_TRACKER_PORT}`;
+  console.error(`[Frontend Proxy] -> Trade Tracker (default): ${target}`);
+  return target;
 };
 
 // Authentication check middleware for proxied routes
@@ -443,8 +456,14 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
 
 // Proxy middleware for all API routes (except auth which is handled above)
 app.use('/api', (req, res, next) => {
+  // Log all incoming API requests
+  console.error(`[Frontend API Middleware] ${req.method} ${req.originalUrl || req.url}`);
+  console.error(`[Frontend API Middleware] req.path: ${req.path}, req.url: ${req.url}`);
+  
   // Skip auth routes and health check (handled directly above)
-  if (req.path.startsWith('/api/auth') || req.path === '/api/health') {
+  // Note: req.path inside app.use('/api', ...) has '/api' stripped, so check for '/auth' not '/api/auth'
+  if (req.path.startsWith('/auth') || req.path === '/health') {
+    console.error(`[Frontend API Middleware] Skipping auth/health route: ${req.path}`);
     return next();
   }
   
@@ -452,10 +471,10 @@ app.use('/api', (req, res, next) => {
   requireAuth(req, res, (): void => {
     const target = getBackendTarget(req);
     
-    console.log(`[API] ${req.method} ${req.path} -> target: ${target || 'NOT FOUND'}`);
+    console.error(`[Frontend API Middleware] ${req.method} ${req.path} -> target: ${target || 'NOT FOUND'}`);
     
     if (!target) {
-      console.error(`[API] Route not found: ${req.method} ${req.path}`);
+      console.error(`[Frontend API Middleware] Route not found: ${req.method} ${req.path}`);
       res.status(404).json({ error: 'Route not found' });
       return;
     }
