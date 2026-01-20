@@ -329,6 +329,8 @@ const proxyOptions = {
   ws: false,
   timeout: 300000, // 5 minute timeout for long-running queries
   proxyTimeout: 300000,
+  // Don't buffer the request - let onProxyReq handle body restoration
+  buffer: false,
   onProxyReq: (proxyReq: any, req: express.Request) => {
     console.error(`[Proxy] ORIGINAL onProxyReq FIRED for ${req.method} ${req.path}`);
     // Fix request body if it was consumed by body-parser
@@ -498,16 +500,22 @@ app.use('/api', (req, res, next) => {
     const enhancedProxyOptions: any = {
       ...proxyOptions,
       target,
+      // Ensure buffer is false so fixRequestBody can work properly
+      buffer: false,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
       onProxyReq: (proxyReq: any, req: express.Request) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
-        console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}`);
+        console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}, Body keys: ${req.body ? Object.keys(req.body).join(', ') : 'none'}`);
         
-        // Fix request body if it was consumed by body-parser
-        fixRequestBody(proxyReq, req);
+        // CRITICAL: Fix request body if it was consumed by body-parser
+        // This must be called FIRST before any other modifications
+        if (req.body) {
+          console.error(`[Frontend Proxy] Calling fixRequestBody to restore body to proxy request`);
+          fixRequestBody(proxyReq, req);
+        }
         
-        // Call original onProxyReq if it exists
+        // Call original onProxyReq if it exists (it also calls fixRequestBody)
         if (originalOnProxyReq) {
           originalOnProxyReq(proxyReq, req);
         }
@@ -537,6 +545,12 @@ app.use('/api', (req, res, next) => {
       console.error(`[Frontend Proxy] Request readable: ${req.readable}, destroyed: ${req.destroyed}`);
       console.error(`[Frontend Proxy] Response writable: ${res.writable}, headersSent: ${res.headersSent}`);
       
+      // If request body was parsed and stream is destroyed, we need to restore it
+      // The fixRequestBody will be called in onProxyReq, but we need to ensure the stream is readable
+      if (req.body && req.destroyed) {
+        console.error(`[Frontend Proxy] WARNING: Request stream is destroyed but body exists. fixRequestBody should handle this.`);
+      }
+      
       const proxy = createProxyMiddleware(enhancedProxyOptions);
       console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
       
@@ -550,6 +564,7 @@ app.use('/api', (req, res, next) => {
       });
       
       // Call the proxy middleware - it will handle the request/response
+      // The fixRequestBody in onProxyReq will restore the body to the proxy request
       const result = proxy(req, res, next);
       console.error(`[Frontend Proxy] proxy() function returned, result type: ${typeof result}`);
       
