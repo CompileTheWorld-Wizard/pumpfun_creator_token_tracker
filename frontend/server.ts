@@ -329,8 +329,6 @@ const proxyOptions = {
   ws: false,
   timeout: 300000, // 5 minute timeout for long-running queries
   proxyTimeout: 300000,
-  // Don't buffer the request - let onProxyReq handle body restoration
-  buffer: false,
   onProxyReq: (proxyReq: any, req: express.Request) => {
     console.error(`[Proxy] ORIGINAL onProxyReq FIRED for ${req.method} ${req.path}`);
     // Fix request body if it was consumed by body-parser
@@ -500,8 +498,6 @@ app.use('/api', (req, res, next) => {
     const enhancedProxyOptions: any = {
       ...proxyOptions,
       target,
-      // Ensure buffer is false so fixRequestBody can work properly
-      buffer: false,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
       onProxyReq: (proxyReq: any, req: express.Request) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
