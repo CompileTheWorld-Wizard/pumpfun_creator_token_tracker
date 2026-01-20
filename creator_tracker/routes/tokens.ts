@@ -1479,7 +1479,14 @@ function calculateBuySellStats(
 
 // Get creator wallets analytics with pagination
 router.post('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  const startTime = Date.now();
+  const logStep = (step: string) => {
+    const elapsed = Date.now() - startTime;
+    console.log(`[Analytics API] [${elapsed}ms] ${step}`);
+  };
+  
   try {
+    logStep('START: Request received');
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
@@ -1491,8 +1498,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     const sortDirection = req.query.sortDirection as string || 'desc';
     
     const offset = (page - 1) * limit;
+    logStep(`Params: page=${page}, limit=${limit}, sortColumn=${sortColumn}, sortDirection=${sortDirection}, hasFilters=${Object.keys(filters).length > 0}`);
     
     // Get applied scoring settings
+    const settingsStartTime = Date.now();
     let scoringSettings: any = null;
     try {
       const settingsResult = await pool.query(
@@ -1520,6 +1529,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       console.error('Error fetching scoring settings:', settingsError);
       // Continue without scoring if settings can't be loaded
     }
+    logStep(`Fetched scoring settings (${Date.now() - settingsStartTime}ms)`);
     
     // Build base WHERE clause
     let baseWhereClause = '';
@@ -1653,6 +1663,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Always get ALL wallets data to calculate percentile ranks for display
     // This is needed to show where each creator ranks among all creators (0-100 percentile)
     // Note: This query is fast because it only aggregates basic stats, no token details
+    const allWalletsStartTime = Date.now();
     const allWalletsResult = await pool.query(
       `SELECT 
         ct.creator,
@@ -1667,6 +1678,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       avgAthMcap: row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null,
       medianAthMcap: row.median_ath_mcap ? parseFloat(row.median_ath_mcap) : null
     }));
+    logStep(`Fetched all wallets data for percentile calculation: ${allWalletsResult.rows.length} creators (${Date.now() - allWalletsStartTime}ms)`);
     
     // Determine if we can use SQL sorting for simple fields
     const sqlSortableFields: Record<string, string> = {
@@ -1710,6 +1722,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // Always include buy/sell stats in SELECT for use in display and filtering
     // This uses materialized columns for fast performance
+    const mainQueryStartTime = Date.now();
     const result = await pool.query(
       `SELECT 
         ct.creator as address,
@@ -1739,6 +1752,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       ${!needsTokensForAll ? `LIMIT ${limit} OFFSET ${offset}` : ''}`,
       sqlFilterParams
     );
+    logStep(`Main query completed: ${result.rows.length} creators returned (${Date.now() - mainQueryStartTime}ms), needsTokensForAll=${needsTokensForAll}`);
     
     let tokensByCreator: Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>> = new Map();
     let allTokensByCreator: Map<string, Array<{ 
@@ -1760,6 +1774,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     if (needsTokensForAll && allCreatorAddresses.length > MAX_CREATORS_FOR_TOKEN_FETCH) {
       console.warn(`[Performance] Limiting token fetch to ${MAX_CREATORS_FOR_TOKEN_FETCH} creators out of ${allCreatorAddresses.length} total. Consider using pagination or filters.`);
     }
+    logStep(`Token fetch decision: needsTokensForAll=${needsTokensForAll}, creatorAddressesForTokens.length=${creatorAddressesForTokens.length}`);
     
     // Check if we need buy/sell stats from JSONB (for performance optimization)
     // Since we now have materialized columns, we only need market_cap_time_series for:
@@ -1776,6 +1791,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // Fetch tokens if needed
     if (creatorAddressesForTokens.length > 0) {
+      const tokenFetchStartTime = Date.now();
       // Build WHERE clause for token query (same filter as main query)
       let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
       if (!viewAll) {
@@ -1783,6 +1799,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       }
       
       // Get tokens for multiplier calculations (valid tokens only)
+      const tokensQueryStartTime = Date.now();
       const tokensResult = await pool.query(
         `SELECT 
           ct.creator,
@@ -1796,8 +1813,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         AND ct.ath_market_cap_usd > 0`,
         [creatorAddressesForTokens]
       );
+      logStep(`Fetched valid tokens for multipliers: ${tokensResult.rows.length} tokens (${Date.now() - tokensQueryStartTime}ms)`);
       
       // Group tokens by creator for multiplier calculations
+      const tokenGroupingStartTime = Date.now();
       tokensResult.rows.forEach(row => {
         const creator = row.creator;
         if (!tokensByCreator.has(creator)) {
@@ -1808,6 +1827,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null
         });
       });
+      logStep(`Grouped tokens by creator: ${tokensByCreator.size} creators (${Date.now() - tokenGroupingStartTime}ms)`);
       
       // Get ALL tokens for rug rate and buy/sell calculations (including invalid ones)
       // Only fetch market_cap_time_series when needed for buy/sell stats to improve performance
@@ -1817,6 +1837,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       if (!viewAll) {
         additionalWhereClause = ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
       }
+      const allTokensQueryStartTime = Date.now();
+      logStep(`Fetching all tokens (max ${MAX_TOKENS_PER_CREATOR} per creator) for ${creatorAddressesForTokens.length} creators, needsBuySellStats=${needsBuySellStats}`);
       const allTokensResult = await pool.query(
         `SELECT 
           ct.creator,
@@ -1837,8 +1859,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         ORDER BY ct.creator, ct.created_at DESC`,
         [creatorAddressesForTokens]
       );
+      logStep(`Fetched all tokens: ${allTokensResult.rows.length} tokens total (${Date.now() - allTokensQueryStartTime}ms)`);
       
       // Group all tokens by creator for rug rate calculations
+      const allTokensGroupingStartTime = Date.now();
       allTokensResult.rows.forEach(row => {
         const creator = row.creator;
         if (!allTokensByCreator.has(creator)) {
@@ -1852,18 +1876,23 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           createTxSignature: row.create_tx_signature || null
         });
       });
+      logStep(`Grouped all tokens by creator: ${allTokensByCreator.size} creators (${Date.now() - allTokensGroupingStartTime}ms)`);
+      logStep(`Total token fetch time: ${Date.now() - tokenFetchStartTime}ms`);
     }
     
     // No need to extract time buckets - we're calculating average rug time instead
     
     // Calculate percentile rank for each creator's avg ATH compared to all creators
     // Get all avg ATH values and sort them
+    const percentileStartTime = Date.now();
     const allAvgAthValues = allWalletsData
       .map(w => w.avgAthMcap)
       .filter((v): v is number => v !== null && v > 0)
       .sort((a, b) => a - b);
+    logStep(`Calculated percentile data: ${allAvgAthValues.length} values (${Date.now() - percentileStartTime}ms)`);
     
     // Calculate scores and create wallet objects
+    const walletProcessingStartTime = Date.now();
     const walletsWithScores = result.rows.map(row => {
       const winRate = parseFloat(row.win_rate) || 0;
       const avgAthMcap = row.avg_ath_mcap ? parseFloat(row.avg_ath_mcap) : null;
@@ -2086,8 +2115,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         }
       };
     });
+    logStep(`Processed wallets with scores: ${walletsWithScores.length} wallets (${Date.now() - walletProcessingStartTime}ms)`);
     
     // Apply filters if provided
+    const filteringStartTime = Date.now();
     let filteredWallets = walletsWithScores;
     
     if (filters && Object.keys(filters).length > 0) {
@@ -2417,6 +2448,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             return 0;
         }
       });
+      logStep(`Applied sorting: ${sortedWallets.length} wallets sorted by ${sortColumn} (${Date.now() - filteringStartTime}ms)`);
     } else if (!sortColumn) {
       // Default sorting: by final score if scoring settings are available, otherwise keep SQL order
       if (scoringSettings) {
@@ -2432,8 +2464,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // If we didn't fetch tokens for all wallets (no complex filters), fetch them now for paginated wallets only
     if (!needsTokensForAll && wallets.length > 0) {
+      const paginatedTokenFetchStartTime = Date.now();
       const paginatedWalletsBeforeTokens = wallets.slice(offset, offset + limit);
       const paginatedCreatorAddresses = paginatedWalletsBeforeTokens.map(w => w.address);
+      logStep(`Fetching tokens for paginated wallets: ${paginatedCreatorAddresses.length} creators`);
       
       if (paginatedCreatorAddresses.length > 0) {
         // Build WHERE clause for token query
@@ -2581,15 +2615,19 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             }
           }
         }
+        logStep(`Completed token fetch and recalculation for paginated wallets (${Date.now() - paginatedTokenFetchStartTime}ms)`);
       }
     }
     
     // Apply pagination to filtered results
+    const paginationStartTime = Date.now();
     const paginatedWallets = wallets.slice(offset, offset + limit);
+    logStep(`Applied pagination: ${paginatedWallets.length} wallets (from ${wallets.length} total) (${Date.now() - paginationStartTime}ms)`);
     
     // Calculate total token count from all filtered wallets (after all filters applied)
     const totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
     
+    logStep(`END: Sending response with ${paginatedWallets.length} wallets, totalCount=${wallets.length}, totalTime=${Date.now() - startTime}ms`);
     res.json({
       wallets: paginatedWallets,
       pagination: {
