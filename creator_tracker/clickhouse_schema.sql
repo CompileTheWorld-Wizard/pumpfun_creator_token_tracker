@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS tbl_soltrack_tokens
     -- Bonding status
     bonded UInt8 DEFAULT 0, -- 0 = false, 1 = true
     
+    -- AMM Pool information (when token migrates from bonding curve to AMM)
+    pool_address Nullable(String), -- AMM pool address
+    base_mint Nullable(String), -- Base token mint (the tracked token)
+    quote_mint Nullable(String), -- Quote token mint (usually SOL)
+    
     -- ATH (All-Time High) market cap tracking
     ath_market_cap_usd Nullable(Decimal64(2)),
     ath_updated_at Nullable(DateTime),
@@ -364,4 +369,15 @@ LIFETIME(MIN 300 MAX 600);
 -- 5. **Aggregations by creator** (uses materialized view):
 --    SELECT * FROM creator_wallet_stats_mv WHERE creator = '...'
 --
+-- ============================================================================
+-- 10. Migration: Add pool address columns (for existing databases)
+-- ============================================================================
+-- Run these ALTER TABLE statements if the columns don't exist yet
+-- ============================================================================
+
+ALTER TABLE tbl_soltrack_tokens 
+  ADD COLUMN IF NOT EXISTS pool_address Nullable(String),
+  ADD COLUMN IF NOT EXISTS base_mint Nullable(String),
+  ADD COLUMN IF NOT EXISTS quote_mint Nullable(String);
+
 -- ============================================================================

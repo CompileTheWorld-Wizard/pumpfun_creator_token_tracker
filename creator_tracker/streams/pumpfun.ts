@@ -507,8 +507,17 @@ async function loadPoolToMintMappings(): Promise<void> {
   } catch (error) {
     // Ignore errors if columns don't exist yet (migration not run)
     // ClickHouse error format differs from PostgreSQL
-    if ((error as any)?.message && !(error as any).message.includes('Missing columns')) {
+    const errorMessage = (error as any)?.message || String(error);
+    const isUnknownIdentifier = errorMessage.includes('Unknown expression identifier') || 
+                                errorMessage.includes('Unknown identifier') ||
+                                errorMessage.includes('Missing columns') ||
+                                (error as any)?.code === '47' || // ClickHouse UNKNOWN_IDENTIFIER error code
+                                (error as any)?.type === 'UNKNOWN_IDENTIFIER';
+    
+    if (!isUnknownIdentifier) {
       console.error('[PumpFun] Error loading pool->mint mappings from database:', error);
+    } else {
+      console.log('[PumpFun] Pool address columns not found in schema (expected for new ClickHouse setup)');
     }
   }
 }
