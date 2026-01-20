@@ -808,10 +808,13 @@ function calculateAvgRugTime(
 }
 
 // Calculate expected ROI for 1st/2nd/3rd buy positions
+// Note: Dev buy (first buy from create transaction) is excluded
+// So buyTrades[0] is the dev buy, buyTrades[1] is the 1st buy, buyTrades[2] is the 2nd buy, etc.
 function calculateExpectedROI(
   tokens: Array<{
     marketCapTimeSeries: any;
     athMarketCapUsd: number | null;
+    createTxSignature?: string | null;
   }>
 ): {
   avgRoi1stBuy: number;
@@ -856,10 +859,16 @@ function calculateExpectedROI(
     }
     
     // Filter only buy transactions and get them in order
+    // Exclude dev buy (first buy from create transaction) by matching signature
+    const createTxSignature = token.createTxSignature;
     const buyTrades = marketCapTimeSeries
       .filter((point: any) => {
         const tradeType = point.tradeType || point.trade_type;
+        const signature = point.signature;
+        // Exclude dev buy if we have create_tx_signature
+        const isDevBuy = createTxSignature && signature === createTxSignature;
         return tradeType === 'buy' && 
+               !isDevBuy && // Exclude dev buy
                point.executionPriceSol !== undefined && 
                point.executionPriceSol !== null &&
                point.executionPriceSol > 0;
@@ -870,7 +879,7 @@ function calculateExpectedROI(
       }))
       .sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to get order
     
-    // Need at least 1 buy to calculate ROI
+    // Need at least 1 buy (after excluding dev buy) to calculate ROI
     if (buyTrades.length === 0) {
       continue;
     }
@@ -916,8 +925,9 @@ function calculateExpectedROI(
     
     // Calculate ROI for each position
     // ROI = (sell_price - buy_price) / buy_price * 100
+    // Note: buyTrades[0] is the 1st buy (after dev buy), buyTrades[1] is the 2nd buy, etc.
     if (buyTrades.length >= 1 && priceAtAthSol > 0) {
-      const buyPrice1st = buyTrades[0].executionPriceSol;
+      const buyPrice1st = buyTrades[0].executionPriceSol; // 1st buy (after dev buy)
       if (buyPrice1st > 0) {
         const roi1st = ((priceAtAthSol - buyPrice1st) / buyPrice1st) * 100;
         totalRoi1st += roi1st;
@@ -926,7 +936,7 @@ function calculateExpectedROI(
     }
     
     if (buyTrades.length >= 2 && priceAtAthSol > 0) {
-      const buyPrice2nd = buyTrades[1].executionPriceSol;
+      const buyPrice2nd = buyTrades[1].executionPriceSol; // 2nd buy (after dev buy)
       if (buyPrice2nd > 0) {
         const roi2nd = ((priceAtAthSol - buyPrice2nd) / buyPrice2nd) * 100;
         totalRoi2nd += roi2nd;
@@ -935,7 +945,7 @@ function calculateExpectedROI(
     }
     
     if (buyTrades.length >= 3 && priceAtAthSol > 0) {
-      const buyPrice3rd = buyTrades[2].executionPriceSol;
+      const buyPrice3rd = buyTrades[2].executionPriceSol; // 3rd buy (after dev buy)
       if (buyPrice3rd > 0) {
         const roi3rd = ((priceAtAthSol - buyPrice3rd) / buyPrice3rd) * 100;
         totalRoi3rd += roi3rd;
@@ -957,13 +967,16 @@ function calculateExpectedROI(
 }
 
 // Calculate What If PNL for a creator wallet based on simulation settings
+// Note: Dev buy (first buy from create transaction) is excluded
+// So buyPosition 1 = first buy after dev, buyPosition 2 = second buy after dev, etc.
 function calculateWhatIfPNL(
   tokens: Array<{
     createdAt: Date;
     marketCapTimeSeries: any;
+    createTxSignature?: string | null;
   }>,
   settings: {
-    buyPosition: number; // Buy at position X after dev (e.g., 2 = 2nd buy after dev)
+    buyPosition: number; // Buy at position X after dev (e.g., 1 = 1st buy after dev, 2 = 2nd buy after dev)
     sellStrategy: 'time' | 'pnl' | 'multiple';
     sellAtSeconds?: number; // Sell at X seconds
     sellAtPnlPercent?: number; // Sell if PNL >= X%
@@ -1005,10 +1018,16 @@ function calculateWhatIfPNL(
     const createdAtMs = new Date(token.createdAt).getTime();
     
     // Filter only buy transactions and get them in order
+    // Exclude dev buy (first buy from create transaction) by matching signature
+    const createTxSignature = token.createTxSignature;
     const buyTrades = marketCapTimeSeries
       .filter((point: any) => {
         const tradeType = point.tradeType || point.trade_type;
+        const signature = point.signature;
+        // Exclude dev buy if we have create_tx_signature
+        const isDevBuy = createTxSignature && signature === createTxSignature;
         return tradeType === 'buy' && 
+               !isDevBuy && // Exclude dev buy
                point.executionPriceSol !== undefined && 
                point.executionPriceSol !== null &&
                point.executionPriceSol > 0;
@@ -1020,12 +1039,13 @@ function calculateWhatIfPNL(
       }))
       .sort((a, b) => a.timestamp - b.timestamp); // Sort by timestamp to get order
     
-    // Need at least buyPosition buys (position 1 = first buy after dev, position 2 = second buy, etc.)
+    // Need at least buyPosition buys (position 1 = first buy after dev, position 2 = second buy after dev, etc.)
     if (buyTrades.length < settings.buyPosition) {
       continue; // Not enough buys
     }
     
-    // Get buy price at the specified position (position is 1-indexed, so position 2 = index 1)
+    // Get buy price at the specified position (position is 1-indexed, so position 1 = index 0, position 2 = index 1, etc.)
+    // buyTrades[0] is the 1st buy after dev, buyTrades[1] is the 2nd buy after dev, etc.
     const buyTrade = buyTrades[settings.buyPosition - 1];
     if (!buyTrade || buyTrade.executionPriceSol <= 0) {
       continue;
@@ -1296,9 +1316,11 @@ function partition(arr: number[], left: number, right: number, pivotIndex: numbe
 }
 
 // Calculate average buy/sell statistics for a creator wallet
+// Note: Dev buy (first buy from create transaction) is excluded from first 5 buys
 function calculateBuySellStats(
   tokens: Array<{
     marketCapTimeSeries: any;
+    createTxSignature?: string | null;
   }>,
   minBuyAmountSol?: number | null,
   minBuyAmountToken?: number | null
@@ -1309,6 +1331,7 @@ function calculateBuySellStats(
   avgSellTotalSol: number;
   avgFirst5BuySol: number;
   medianFirst5BuySol: number;
+  avgDevBuyAmount: number;
 } {
   if (tokens.length === 0) {
     return {
@@ -1317,7 +1340,8 @@ function calculateBuySellStats(
       avgSellCount: 0,
       avgSellTotalSol: 0,
       avgFirst5BuySol: 0,
-      medianFirst5BuySol: 0
+      medianFirst5BuySol: 0,
+      avgDevBuyAmount: 0
     };
   }
   
@@ -1357,13 +1381,15 @@ function calculateBuySellStats(
     let sellCount = 0;
     let sellSol = 0;
     
-    // Collect first 5 buy SOL amounts for this token
+    // Collect first 5 buy SOL amounts for this token (excluding dev buy)
     const first5BuySols: number[] = [];
+    const createTxSignature = token.createTxSignature;
     
     // Early exit optimization: if we've collected 5 buys and don't need other stats,
     // we could exit early, but we still need to count all buys/sells for averages
     for (const point of marketCapTimeSeries) {
       const tradeType = point.tradeType || point.trade_type;
+      const signature = point.signature;
       // Use solAmount (actual SOL amount for the trade) - this is required for accurate calculations
       // Old data might not have solAmount, so we skip those trades
       const solAmount = point.solAmount !== undefined ? point.solAmount : 
@@ -1378,6 +1404,9 @@ function calculateBuySellStats(
         continue;
       }
       
+      // Check if this is the dev buy (matches create transaction signature)
+      const isDevBuy = createTxSignature && signature === createTxSignature && tradeType === 'buy';
+      
       if (tradeType === 'buy') {
         // Apply minimum buy amount filters if set
         if (minBuyAmountSol !== null && minBuyAmountSol !== undefined && solAmount < minBuyAmountSol) {
@@ -1391,8 +1420,8 @@ function calculateBuySellStats(
         buyCount++;
         buySol += solAmount;
         
-        // Collect first 5 buy SOL amounts (early exit when we have 5)
-        if (first5BuySols.length < 5) {
+        // Collect first 5 buy SOL amounts (excluding dev buy, early exit when we have 5)
+        if (!isDevBuy && first5BuySols.length < 5) {
           first5BuySols.push(solAmount);
         }
       } else if (tradeType === 'sell') {
@@ -1440,7 +1469,8 @@ function calculateBuySellStats(
     avgSellCount: Math.round(avgSellCount * 100) / 100,
     avgSellTotalSol: Math.round(avgSellTotalSol * 100) / 100,
     avgFirst5BuySol: Math.round(avgFirst5BuySol * 100) / 100,
-    medianFirst5BuySol: Math.round(medianFirst5BuySol * 100) / 100
+    medianFirst5BuySol: Math.round(medianFirst5BuySol * 100) / 100,
+    avgDevBuyAmount: 0 // Dev buy amount is calculated from materialized column in SQL, not from time series
   };
 }
 
@@ -1669,7 +1699,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         COALESCE(AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0), 0) as avg_sell_count,
         COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol,
         COALESCE(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as avg_first_5_buy_sol,
-        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol
+        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
+        COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount
       FROM tbl_soltrack_created_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
@@ -1708,6 +1739,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       isFetched: boolean;
       createdAt: Date;
       marketCapTimeSeries: any;
+      createTxSignature: string | null;
     }>> = new Map();
     
     // Determine which creator addresses need token data
@@ -1771,6 +1803,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ct.ath_market_cap_usd,
           ct.is_fetched,
           ct.created_at,
+          ct.create_tx_signature,
           ${needsBuySellStats ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
         FROM tbl_soltrack_created_tokens ct
         ${tokenWhereClause}`,
@@ -1787,7 +1820,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
           isFetched: row.is_fetched || false,
           createdAt: row.created_at,
-          marketCapTimeSeries: row.market_cap_time_series
+          marketCapTimeSeries: row.market_cap_time_series,
+          createTxSignature: row.create_tx_signature || null
         });
       });
     }
@@ -1893,6 +1927,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         avgSellTotalSol: number;
         avgFirst5BuySol: number;
         medianFirst5BuySol: number;
+        avgDevBuyAmount: number;
       };
       
       // Always use SQL-calculated values from materialized columns (fast!)
@@ -1904,7 +1939,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellCount: parseFloat(row.avg_sell_count) || 0,
           avgSellTotalSol: parseFloat(row.avg_sell_total_sol) || 0,
           avgFirst5BuySol: parseFloat(row.avg_first_5_buy_sol) || 0,
-          medianFirst5BuySol: parseFloat(row.median_first_5_buy_sol) || 0
+          medianFirst5BuySol: parseFloat(row.median_first_5_buy_sol) || 0,
+          avgDevBuyAmount: parseFloat(row.avg_dev_buy_amount) || 0
         };
       } else if (hasBuySellData) {
         // Fallback: Calculate from token data if SQL values not available (shouldn't happen with new columns)
@@ -1916,7 +1952,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellCount: 0,
           avgSellTotalSol: 0,
           avgFirst5BuySol: 0,
-          medianFirst5BuySol: 0
+          medianFirst5BuySol: 0,
+          avgDevBuyAmount: 0
         };
       }
       
@@ -1991,7 +2028,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           avgSellCount: buySellStats.avgSellCount,
           avgSellTotalSol: buySellStats.avgSellTotalSol,
           avgFirst5BuySol: buySellStats.avgFirst5BuySol,
-          medianFirst5BuySol: buySellStats.medianFirst5BuySol
+          medianFirst5BuySol: buySellStats.medianFirst5BuySol,
+          avgDevBuyAmount: buySellStats.avgDevBuyAmount
         },
         expectedROI: {
           avgRoi1stBuy: expectedROI.avgRoi1stBuy,
@@ -2395,6 +2433,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             ct.ath_market_cap_usd,
             ct.is_fetched,
             ct.created_at,
+            ct.create_tx_signature,
             ${needsTimeSeriesForPaginated ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
           FROM tbl_soltrack_created_tokens ct
           ${tokenWhereClause}`,
@@ -2411,7 +2450,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
             isFetched: row.is_fetched || false,
             createdAt: row.created_at,
-            marketCapTimeSeries: row.market_cap_time_series
+            marketCapTimeSeries: row.market_cap_time_series,
+            createTxSignature: row.create_tx_signature || null
           });
         });
         
@@ -2919,6 +2959,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           ct.ath_market_cap_usd,
           ct.is_fetched,
           ct.created_at,
+          ct.create_tx_signature,
           ct.market_cap_time_series
         FROM tbl_soltrack_created_tokens ct
         ${tokenWhereClause}`,
@@ -2932,6 +2973,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
         isFetched: boolean;
         createdAt: Date;
         marketCapTimeSeries: any;
+        createTxSignature: string | null;
       }>>();
       
       tokensResult.rows.forEach(row => {
@@ -2954,7 +2996,8 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
           isFetched: row.is_fetched || false,
           createdAt: row.created_at,
-          marketCapTimeSeries: row.market_cap_time_series
+          marketCapTimeSeries: row.market_cap_time_series,
+          createTxSignature: row.create_tx_signature || null
         });
       });
       

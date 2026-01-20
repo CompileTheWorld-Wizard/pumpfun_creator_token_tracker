@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS tbl_soltrack_created_tokens (
   buy_sol_amount DECIMAL(20, 9) DEFAULT 0,
   sell_sol_amount DECIMAL(20, 9) DEFAULT 0,
   first_5_buy_sol DECIMAL(20, 9) DEFAULT 0,
+  dev_buy_sol_amount DECIMAL(20, 9) DEFAULT 0, -- Dev buy is the first buy (from create transaction)
   
   -- Source tracking: false = from streaming, true = from Solscan API
   is_fetched BOOLEAN DEFAULT FALSE,
