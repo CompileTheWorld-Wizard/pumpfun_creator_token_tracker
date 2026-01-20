@@ -736,6 +736,14 @@ const handleExport = async () => {
       params.append('viewAll', 'true')
     }
     
+    // Pass sorting parameters to export filtered data
+    if (sortColumn.value) {
+      params.append('sortColumn', sortColumn.value)
+    }
+    if (sortDirection.value) {
+      params.append('sortDirection', sortDirection.value)
+    }
+    
     const response = await fetch(`${API_BASE_URL}/tokens/export?${params.toString()}`, {
       method: 'GET',
       credentials: 'include',

@@ -2568,6 +2568,10 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
     const creatorWallet = req.query.creator as string || null;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
+    // Parse sorting parameters (same as GET endpoint)
+    const sortColumn = req.query.sortColumn as string || 'created_at';
+    const sortDirection = req.query.sortDirection as string || 'desc';
+    
     // Set headers for CSV download
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
     res.setHeader('Content-Type', 'text/csv');
@@ -2595,6 +2599,25 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
         paramIndex++;
       }
     }
+    
+    // Validate and build ORDER BY clause (same logic as GET endpoint)
+    const validSortColumns: Record<string, string> = {
+      'name': 'ct.name',
+      'symbol': 'ct.symbol',
+      'creator': 'ct.creator',
+      'status': 'ct.bonded',
+      'initialMC': 'ct.initial_market_cap_usd',
+      'peakMC': 'ct.peak_market_cap_usd',
+      'finalMC': 'ct.final_market_cap_usd',
+      'athMC': 'ct.ath_market_cap_usd',
+      'trades': 'ct.trade_count_15s',
+      'created': 'ct.created_at',
+      'created_at': 'ct.created_at' // Support both formats
+    };
+    
+    const validSortDirection = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+    const dbSortColumn = validSortColumns[sortColumn] || 'ct.created_at';
+    const orderByClause = `ORDER BY ${dbSortColumn} ${validSortDirection}`;
     
     // Write CSV header
     const header = [
@@ -2642,7 +2665,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
           ct.updated_at
         FROM tbl_soltrack_created_tokens ct
         ${whereClause}
-        ORDER BY ct.created_at DESC
+        ${orderByClause}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
         [...queryParams, BATCH_SIZE, offset]
       );
@@ -2895,6 +2918,8 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       'Avg Buy Total SOL',
       'Avg Sell Count',
       'Avg Sell Total SOL',
+      'Avg First 5 Buy SOL',
+      'Median First 5 Buy SOL',
       'Expected ROI 1st Buy',
       'Expected ROI 2nd Buy',
       'Expected ROI 3rd Buy',
@@ -3083,6 +3108,8 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           buySellStats.avgBuyTotalSol.toFixed(4),
           buySellStats.avgSellCount.toFixed(2),
           buySellStats.avgSellTotalSol.toFixed(4),
+          buySellStats.avgFirst5BuySol.toFixed(4),
+          buySellStats.medianFirst5BuySol.toFixed(4),
           expectedROI.avgRoi1stBuy.toFixed(2),
           expectedROI.avgRoi2ndBuy.toFixed(2),
           expectedROI.avgRoi3rdBuy.toFixed(2),
