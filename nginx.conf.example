@@ -8,7 +8,8 @@ server {
 
     # IMPORTANT: Use absolute path, not ~/home/...
     # Replace /home/scraper/... with your actual deployment path
-    root /home/scraper/pumpfun_creator_token_tracker/dist-frontend;
+    # NOTE: Build outputs to frontend/dist-frontend, not dist-frontend at root
+    root /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend;
     index index.html;
 
     access_log /var/log/nginx/tool.dillwifit.com_access.log;
@@ -22,8 +23,52 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # All API routes and static files are handled by the frontend server
+    # Explicitly handle API routes - MUST come before location / to take precedence
     # Frontend server acts as a proxy/router to backend services (creator, trade, fund trackers)
+    location /api/ {
+        proxy_pass http://127.0.0.1:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+        
+        # Forward cookies for session management
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # Trade tracking API routes
+    location /trade-api/ {
+        proxy_pass http://127.0.0.1:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # Fund tracking API routes
+    location /fund-api/ {
+        proxy_pass http://127.0.0.1:5004;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    # All other routes (SPA routing) are handled by the frontend server
     # Use 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
     # The frontend server handles SPA routing internally
     location / {

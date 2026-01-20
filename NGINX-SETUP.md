@@ -17,23 +17,23 @@ ps aux | grep nginx
 # Option 1: Give nginx user read access (recommended)
 sudo chmod 755 /home/scraper
 sudo chmod 755 /home/scraper/pumpfun_creator_token_tracker
-sudo chmod -R 755 /home/scraper/pumpfun_creator_token_tracker/dist-frontend
+sudo chmod -R 755 /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend
 
 # Option 2: Add nginx user to your group (if you own the files)
 sudo usermod -a -G scraper www-data  # or 'nginx' instead of 'www-data'
-sudo chmod -R g+r /home/scraper/pumpfun_creator_token_tracker/dist-frontend
+sudo chmod -R g+r /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend
 
 # Option 3: Make files world-readable (less secure, but works)
-sudo chmod -R 644 /home/scraper/pumpfun_creator_token_tracker/dist-frontend
-sudo find /home/scraper/pumpfun_creator_token_tracker/dist-frontend -type d -exec chmod 755 {} \;
+sudo chmod -R 644 /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend
+sudo find /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend -type d -exec chmod 755 {} \;
 ```
 
 ### Step 3: Verify permissions
 ```bash
 # Check if nginx can read the files
-sudo -u www-data ls -la /home/scraper/pumpfun_creator_token_tracker/dist-frontend
+sudo -u www-data ls -la /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend
 # or
-sudo -u nginx ls -la /home/scraper/pumpfun_creator_token_tracker/dist-frontend
+sudo -u nginx ls -la /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend
 
 # If this fails, permissions are still wrong
 ```
@@ -43,7 +43,7 @@ If permission issues persist, consider moving files to a standard web directory:
 ```bash
 # Copy files to /var/www (standard nginx location)
 sudo mkdir -p /var/www/tool.dillwifit.com
-sudo cp -r /home/scraper/pumpfun_creator_token_tracker/dist-frontend/* /var/www/tool.dillwifit.com/
+sudo cp -r /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend/* /var/www/tool.dillwifit.com/
 sudo chown -R www-data:www-data /var/www/tool.dillwifit.com
 sudo chmod -R 755 /var/www/tool.dillwifit.com
 
@@ -92,7 +92,8 @@ server {
     include /etc/nginx/snippets/ssl-params.conf;
 
     # Use absolute path - update this to your actual path
-    root /home/scraper/pumpfun_creator_token_tracker/dist-frontend;
+    # NOTE: Build outputs to frontend/dist-frontend, not dist-frontend at root
+    root /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend;
     index index.html;
 
     access_log /var/log/nginx/tool.dillwifit.com_access.log;
@@ -249,9 +250,9 @@ sudo setsebool -P httpd_read_user_content 1
 ### Files not found?
 ```bash
 # Verify the path exists and has files
-ls -la /home/scraper/pumpfun_creator_token_tracker/dist-frontend/
+ls -la /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend/
 # Check if index.html exists
-ls -la /home/scraper/pumpfun_creator_token_tracker/dist-frontend/index.html
+ls -la /home/scraper/pumpfun_creator_token_tracker/frontend/dist-frontend/index.html
 ```
 
 ### Upstream still failing?
