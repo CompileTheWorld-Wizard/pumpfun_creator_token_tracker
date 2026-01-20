@@ -46,7 +46,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
     // Get total count
     const countResult = await pool.query(
       `SELECT count() as total
-       FROM tbl_soltrack_tbl_soltrack_tokens ct
+       FROM tbl_soltrack_tokens ct
        ${whereClause}`,
       queryParams
     );
@@ -88,7 +88,7 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${whereClause}
       ${orderByClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -205,7 +205,7 @@ router.get('/:mint', async (req: Request, res: Response): Promise<void> => {
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       WHERE ct.mint = $1 
         AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
       LIMIT 1`,
@@ -292,7 +292,7 @@ router.get('/creators/list', async (req: Request, res: Response): Promise<void> 
       // Show all creator wallets that have tokens
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ORDER BY ct.creator ASC
       `;
       params = [];
@@ -300,7 +300,7 @@ router.get('/creators/list', async (req: Request, res: Response): Promise<void> 
       // Show only creator wallets that have tokens AND are NOT blacklisted
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
         ORDER BY ct.creator ASC
       `;
@@ -336,7 +336,7 @@ router.get('/creators/ath-stats', async (req: Request, res: Response): Promise<v
     const result = await pool.query(
       `SELECT 
         avg(ct.ath_market_cap_usd) as avg_ath_mcap
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${whereClause}
       AND ct.ath_market_cap_usd IS NOT NULL`
     );
@@ -345,7 +345,7 @@ router.get('/creators/ath-stats', async (req: Request, res: Response): Promise<v
     const medianResult = await pool.query(
       `SELECT 
         quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${whereClause}
       AND ct.ath_market_cap_usd IS NOT NULL 
       AND ct.ath_market_cap_usd > 0`
@@ -397,7 +397,7 @@ router.get('/creators/avg-stats', async (req: Request, res: Response): Promise<v
           END as win_rate,
           avg(ct.ath_market_cap_usd) as avg_ath_mcap,
           quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${whereClause}
         GROUP BY ct.creator
       ) as wallet_stats`
@@ -408,7 +408,7 @@ router.get('/creators/avg-stats', async (req: Request, res: Response): Promise<v
     // Get all creator wallets to calculate complex metrics
     const creatorsResult = await pool.query(
       `SELECT DISTINCT ct.creator
-       FROM tbl_soltrack_tbl_soltrack_tokens ct
+       FROM tbl_soltrack_tokens ct
        ${whereClause}
        ORDER BY ct.creator`
     );
@@ -460,7 +460,7 @@ router.get('/creators/avg-stats', async (req: Request, res: Response): Promise<v
         ct.created_at,
         ct.ath_market_cap_usd,
         ct.initial_market_cap_usd
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${whereClause}
       ORDER BY ct.creator, ct.created_at DESC`
     );
@@ -1611,7 +1611,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
     // Build base WHERE clause
     let baseWhereClause = '';
     if (!viewAll) {
-      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_tbl_soltrack_blacklist_creator)';
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
     }
     
     // Get rug threshold from settings (default 6000) - need this early for calculations
@@ -1721,7 +1721,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
         ct.creator,
         avg(ct.ath_market_cap_usd) as avg_ath_mcap,
         quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator`
     );
@@ -1794,7 +1794,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
         COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount,
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as median_dev_buy_amount
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
       ${havingClause}
@@ -1869,7 +1869,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
           ct.creator,
           ct.initial_market_cap_usd,
           ct.ath_market_cap_usd
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${tokenWhereClause}
         AND ct.initial_market_cap_usd IS NOT NULL
         AND ct.initial_market_cap_usd > 0
@@ -1898,7 +1898,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
           ct.is_fetched,
           ct.created_at,
           ct.create_tx_signature
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${tokenWhereClause}`
       );
       
@@ -2557,7 +2557,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
             ct.creator,
             ct.initial_market_cap_usd,
             ct.ath_market_cap_usd
-          FROM tbl_soltrack_tbl_soltrack_tokens ct
+          FROM tbl_soltrack_tokens ct
           ${tokenWhereClause}
           AND ct.initial_market_cap_usd IS NOT NULL
           AND ct.initial_market_cap_usd > 0
@@ -2588,7 +2588,7 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
             ct.is_fetched,
             ct.created_at,
             ct.create_tx_signature
-          FROM tbl_soltrack_tbl_soltrack_tokens ct
+          FROM tbl_soltrack_tokens ct
           ${tokenWhereClause}`
         );
         
@@ -2859,7 +2859,7 @@ router.get('/export', async (req: Request, res: Response): Promise<void> => {
           ct.ath_market_cap_usd,
           ct.tracked_at,
           ct.updated_at
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${whereClause}
         ${orderByClause}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -2960,7 +2960,7 @@ router.post('/creators/export', async (req: Request, res: Response): Promise<voi
     // Build base WHERE clause
     let baseWhereClause = '';
     if (!viewAll) {
-      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_tbl_soltrack_blacklist_creator)';
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
     }
     
     const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
@@ -3057,7 +3057,7 @@ router.post('/creators/export', async (req: Request, res: Response): Promise<voi
         ct.creator,
         avg(ct.ath_market_cap_usd) as avg_ath_mcap,
         quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator`
     );
@@ -3085,7 +3085,7 @@ router.post('/creators/export', async (req: Request, res: Response): Promise<voi
         END as win_rate,
         avg(ct.ath_market_cap_usd) as avg_ath_mcap,
         quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
-      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      FROM tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
       ${havingClause}
@@ -3168,7 +3168,7 @@ router.post('/creators/export', async (req: Request, res: Response): Promise<voi
           ct.creator,
           ct.initial_market_cap_usd,
           ct.ath_market_cap_usd
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${tokenWhereClause}
         AND ct.initial_market_cap_usd IS NOT NULL
         AND ct.initial_market_cap_usd > 0
@@ -3184,7 +3184,7 @@ router.post('/creators/export', async (req: Request, res: Response): Promise<voi
           ct.is_fetched,
           ct.created_at,
           ct.create_tx_signature
-        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        FROM tbl_soltrack_tokens ct
         ${tokenWhereClause}`
       );
       
