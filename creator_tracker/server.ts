@@ -42,9 +42,16 @@ app.use(session({
 // Request logging middleware - log all API calls
 app.use((req, _res, next) => {
   const timestamp = new Date().toISOString();
-  console.error(`[API Request] [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
-  console.error(`[API Request] Query params:`, req.query);
-  console.error(`[API Request] Body keys:`, req.body ? Object.keys(req.body) : 'none');
+  console.error(`[Creator Tracker] [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
+  console.error(`[Creator Tracker] Query params:`, req.query);
+  console.error(`[Creator Tracker] Body keys:`, req.body ? Object.keys(req.body) : 'none');
+  
+  // Special logging for creators/analytics route
+  if (req.path.includes('/creators/analytics') || req.originalUrl?.includes('/creators/analytics')) {
+    console.error(`[Creator Tracker] ===== CREATORS/ANALYTICS REQUEST DETECTED =====`);
+    console.error(`[Creator Tracker] Full path: ${req.path}, OriginalUrl: ${req.originalUrl}, Method: ${req.method}`);
+  }
+  
   next();
 });
 

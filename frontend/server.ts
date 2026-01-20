@@ -490,7 +490,8 @@ app.use('/api', (req, res, next) => {
     const originalOnProxyRes = proxyOptions.onProxyRes;
     const originalOnError = proxyOptions.onError;
     
-    const proxy = createProxyMiddleware({
+    // Create proxy options with target and enhanced logging
+    const enhancedProxyOptions: any = {
       ...proxyOptions,
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
@@ -512,8 +513,9 @@ app.use('/api', (req, res, next) => {
           originalOnError(err, req, res);
         }
       }
-    });
+    };
     
+    const proxy = createProxyMiddleware(enhancedProxyOptions);
     proxy(req, res, next);
   });
 });
