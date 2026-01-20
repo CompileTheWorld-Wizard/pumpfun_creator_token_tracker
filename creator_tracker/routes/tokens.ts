@@ -1221,14 +1221,14 @@ function calculateWhatIfPNL(
   };
 }
 
-// Helper function to check if filtering by avgFirst5BuySol or medianFirst5BuySol
+// Helper function to check if filtering by avgFirst5BuySol, medianFirst5BuySol, or avgDevBuyAmount
 function needsFirst5BuySolFiltering(filters: any): boolean {
   if (!filters || !filters.avgBuySells || !Array.isArray(filters.avgBuySells)) {
     return false;
   }
   
   return filters.avgBuySells.some((f: any) => 
-    f.type === 'avgFirst5BuySol' || f.type === 'medianFirst5BuySol'
+    f.type === 'avgFirst5BuySol' || f.type === 'medianFirst5BuySol' || f.type === 'avgDevBuyAmount'
   );
 }
 
@@ -1652,7 +1652,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     
     // Check if sorting by buy/sell fields - use materialized columns for fast sorting
     // Support both 'avgBuySol'/'avgSellSol' (frontend) and 'avgBuyTotalSol'/'avgSellTotalSol' (internal) names
-    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgBuySol', 'avgSellCount', 'avgSellTotalSol', 'avgSellSol', 'avgFirst5BuySol', 'medianFirst5BuySol'];
+    const buySellSortFields = ['avgBuyCount', 'avgBuyTotalSol', 'avgBuySol', 'avgSellCount', 'avgSellTotalSol', 'avgSellSol', 'avgFirst5BuySol', 'medianFirst5BuySol', 'avgDevBuyAmount'];
     const sortingByBuySellField = sortColumn && buySellSortFields.includes(sortColumn);
     
     // Build ORDER BY clause for SQL if sorting by a simple field or buy/sell field
@@ -1673,7 +1673,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         'avgSellTotalSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)',
         'avgSellSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)', // Alias for frontend compatibility
         'avgFirst5BuySol': 'NULLIF(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
-        'medianFirst5BuySol': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)'
+        'medianFirst5BuySol': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
+        'avgDevBuyAmount': 'NULLIF(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)'
       };
       // Always put NULLs (including 0s converted to NULL) at the end for all buy/sell fields
       orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction} NULLS LAST`;
@@ -2185,6 +2186,13 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
               const matches = (
                 (filter.min == null || medianFirst5BuySol >= filter.min) &&
                 (filter.max == null || medianFirst5BuySol <= filter.max)
+              );
+              if (!matches) return false;
+            } else if (filter.type === 'avgDevBuyAmount') {
+              const avgDevBuyAmount = (wallet.buySellStats as any).avgDevBuyAmount ?? 0;
+              const matches = (
+                (filter.min == null || avgDevBuyAmount >= filter.min) &&
+                (filter.max == null || avgDevBuyAmount <= filter.max)
               );
               if (!matches) return false;
             }
@@ -2920,6 +2928,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       'Avg Sell Total SOL',
       'Avg First 5 Buy SOL',
       'Median First 5 Buy SOL',
+      'Avg Dev Buy',
       'Expected ROI 1st Buy',
       'Expected ROI 2nd Buy',
       'Expected ROI 3rd Buy',
@@ -3110,6 +3119,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           buySellStats.avgSellTotalSol.toFixed(4),
           buySellStats.avgFirst5BuySol.toFixed(4),
           buySellStats.medianFirst5BuySol.toFixed(4),
+          buySellStats.avgDevBuyAmount.toFixed(4),
           expectedROI.avgRoi1stBuy.toFixed(2),
           expectedROI.avgRoi2ndBuy.toFixed(2),
           expectedROI.avgRoi3rdBuy.toFixed(2),
