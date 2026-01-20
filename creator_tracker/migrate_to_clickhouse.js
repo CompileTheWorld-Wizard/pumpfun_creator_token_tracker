@@ -48,6 +48,25 @@ function boolToUInt8(value) {
 }
 
 /**
+ * Convert Date to ClickHouse DateTime string format
+ */
+function formatDateForClickHouse(date) {
+  if (!date) return null;
+  if (date instanceof Date) {
+    return date.toISOString().replace('T', ' ').replace('Z', '').substring(0, 19);
+  }
+  if (typeof date === 'string') {
+    // Try to parse and format
+    const d = new Date(date);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().replace('T', ' ').replace('Z', '').substring(0, 19);
+    }
+    return date;
+  }
+  return date;
+}
+
+/**
  * Parse and normalize time series data from JSONB
  */
 function normalizeTimeSeries(timeSeriesData, tokenCreatedAt, mint, creator) {
@@ -87,12 +106,14 @@ function normalizeTimeSeries(timeSeriesData, tokenCreatedAt, mint, creator) {
     const tradeType = point.tradeType || point.trade_type || 'buy';
     const isBuy = tradeType.toLowerCase() === 'buy' ? 1 : 0;
     
+    const timestampDate = new Date(timestampMs);
+    
     return {
       mint,
       creator,
       signature: point.signature || '',
       timestamp_ms: timestampMs,
-      timestamp: new Date(timestampMs),
+      timestamp: formatDateForClickHouse(timestampDate),
       time_seconds: Math.max(0, timeSeconds), // Ensure non-negative
       trade_type: tradeType,
       is_buy: isBuy,
@@ -157,13 +178,13 @@ async function migrateTokens() {
       symbol: row.symbol || null,
       creator: row.creator,
       bonding_curve: row.bonding_curve || null,
-      created_at: row.created_at,
+      created_at: formatDateForClickHouse(row.created_at),
       create_tx_signature: row.create_tx_signature || null,
-      tracked_at: row.tracked_at || row.created_at,
-      updated_at: row.updated_at || row.created_at,
+      tracked_at: formatDateForClickHouse(row.tracked_at || row.created_at),
+      updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
       bonded: boolToUInt8(row.bonded),
       ath_market_cap_usd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
-      ath_updated_at: row.ath_updated_at || null,
+      ath_updated_at: formatDateForClickHouse(row.ath_updated_at),
       initial_market_cap_usd: row.initial_market_cap_usd ? parseFloat(row.initial_market_cap_usd) : null,
       peak_market_cap_usd: row.peak_market_cap_usd ? parseFloat(row.peak_market_cap_usd) : null,
       final_market_cap_usd: row.final_market_cap_usd ? parseFloat(row.final_market_cap_usd) : null,
@@ -286,8 +307,8 @@ async function migrateBlacklist() {
   const blacklist = result.rows.map(row => ({
     wallet_address: row.wallet_address,
     name: row.name || null,
-    created_at: row.created_at,
-    updated_at: row.updated_at || row.created_at,
+    created_at: formatDateForClickHouse(row.created_at),
+    updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
     version: Date.now(),
   }));
   
@@ -325,8 +346,8 @@ async function migratePasswords() {
   const passwords = result.rows.map(row => ({
     id: parseInt(row.id, 10),
     password_hash: row.password_hash,
-    created_at: row.created_at,
-    updated_at: row.updated_at || row.created_at,
+    created_at: formatDateForClickHouse(row.created_at),
+    updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
     version: Date.now(),
   }));
   
@@ -374,8 +395,8 @@ async function migrateScoringSettings() {
       name: row.name,
       settings: settingsStr,
       is_default: boolToUInt8(row.is_default),
-      created_at: row.created_at,
-      updated_at: row.updated_at || row.created_at,
+      created_at: formatDateForClickHouse(row.created_at),
+      updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
       version: Date.now(),
     };
   });
@@ -422,8 +443,8 @@ async function migrateAppliedSettings() {
       id: parseInt(row.id, 10) || 1,
       preset_id: row.preset_id ? parseInt(row.preset_id, 10) : null,
       settings: settingsStr,
-      applied_at: row.applied_at || new Date(),
-      updated_at: row.updated_at || row.applied_at || new Date(),
+      applied_at: formatDateForClickHouse(row.applied_at || new Date()),
+      updated_at: formatDateForClickHouse(row.updated_at || row.applied_at || new Date()),
       version: Date.now(),
     };
   });
