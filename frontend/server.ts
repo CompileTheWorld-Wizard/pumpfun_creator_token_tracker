@@ -330,6 +330,7 @@ const proxyOptions = {
   timeout: 300000, // 5 minute timeout for long-running queries
   proxyTimeout: 300000,
   onProxyReq: (proxyReq: any, req: express.Request) => {
+    console.error(`[Proxy] ORIGINAL onProxyReq FIRED for ${req.method} ${req.path}`);
     // Fix request body if it was consumed by body-parser
     fixRequestBody(proxyReq, req);
     
@@ -533,13 +534,31 @@ app.use('/api', (req, res, next) => {
     try {
       console.error(`[Frontend Proxy] About to create proxy middleware for ${target}`);
       console.error(`[Frontend Proxy] Request body parsed:`, req.body ? 'YES' : 'NO', 'Body keys:', req.body ? Object.keys(req.body) : 'none');
+      console.error(`[Frontend Proxy] Request readable: ${req.readable}, destroyed: ${req.destroyed}`);
+      console.error(`[Frontend Proxy] Response writable: ${res.writable}, headersSent: ${res.headersSent}`);
       
       const proxy = createProxyMiddleware(enhancedProxyOptions);
       console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
       
+      // Add error handler to response to catch any errors
+      res.on('error', (err: Error) => {
+        console.error(`[Frontend Proxy] Response error:`, err.message);
+      });
+      
+      req.on('error', (err: Error) => {
+        console.error(`[Frontend Proxy] Request error:`, err.message);
+      });
+      
       // Call the proxy middleware - it will handle the request/response
-      proxy(req, res, next);
-      console.error(`[Frontend Proxy] proxy() function returned`);
+      const result = proxy(req, res, next);
+      console.error(`[Frontend Proxy] proxy() function returned, result type: ${typeof result}`);
+      
+      // Check if proxy returned a promise
+      if (result && typeof result.then === 'function') {
+        result.catch((err: Error) => {
+          console.error(`[Frontend Proxy] Proxy promise rejected:`, err.message);
+        });
+      }
     } catch (err: any) {
       console.error(`[Frontend Proxy] ERROR creating/calling proxy:`, err.message);
       console.error(`[Frontend Proxy] Error stack:`, err.stack);
