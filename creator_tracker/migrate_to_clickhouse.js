@@ -289,12 +289,28 @@ async function migrateTimeSeries() {
 async function migrateBlacklist() {
   console.log('\n🚫 Migrating blacklist...');
   
+  // First check what columns exist
+  let hasUpdatedAt = false;
+  try {
+    const checkResult = await pgClient.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbl_soltrack_blacklist_creator' 
+        AND column_name = 'updated_at'
+    `);
+    hasUpdatedAt = checkResult.rows.length > 0;
+  } catch (e) {
+    // If we can't check, assume it doesn't exist
+    hasUpdatedAt = false;
+  }
+  
+  const selectColumns = hasUpdatedAt 
+    ? 'wallet_address, name, created_at, updated_at'
+    : 'wallet_address, name, created_at';
+  
   const result = await pgClient.query(`
     SELECT 
-      wallet_address,
-      name,
-      created_at,
-      updated_at
+      ${selectColumns}
     FROM tbl_soltrack_blacklist_creator
     ORDER BY created_at
   `);
@@ -328,12 +344,31 @@ async function migrateBlacklist() {
 async function migratePasswords() {
   console.log('\n🔐 Migrating passwords...');
   
+  // Check what columns exist
+  let hasUpdatedAt = false;
+  let hasCreatedAt = false;
+  try {
+    const checkResult = await pgClient.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'passwords'
+    `);
+    hasUpdatedAt = checkResult.rows.some(r => r.column_name === 'updated_at');
+    hasCreatedAt = checkResult.rows.some(r => r.column_name === 'created_at');
+  } catch (e) {
+    // If we can't check, assume standard columns
+    hasUpdatedAt = true;
+    hasCreatedAt = true;
+  }
+  
+  const selectColumns = [];
+  if (hasCreatedAt) selectColumns.push('created_at');
+  if (hasUpdatedAt) selectColumns.push('updated_at');
+  const columnsStr = ['id', 'password_hash', ...selectColumns].join(', ');
+  
   const result = await pgClient.query(`
     SELECT 
-      id,
-      password_hash,
-      created_at,
-      updated_at
+      ${columnsStr}
     FROM passwords
     ORDER BY id
   `);
@@ -343,13 +378,18 @@ async function migratePasswords() {
     return 0;
   }
   
-  const passwords = result.rows.map(row => ({
-    id: parseInt(row.id, 10),
-    password_hash: row.password_hash,
-    created_at: formatDateForClickHouse(row.created_at),
-    updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
-    version: Date.now(),
-  }));
+  const passwords = result.rows.map(row => {
+    const createdAt = hasCreatedAt ? row.created_at : new Date();
+    const updatedAt = hasUpdatedAt ? (row.updated_at || createdAt) : createdAt;
+    
+    return {
+      id: parseInt(row.id, 10),
+      password_hash: row.password_hash,
+      created_at: formatDateForClickHouse(createdAt),
+      updated_at: formatDateForClickHouse(updatedAt),
+      version: Date.now(),
+    };
+  });
   
   await clickhouseClient.insert({
     table: 'tbl_soltrack_passwords',
@@ -367,14 +407,29 @@ async function migratePasswords() {
 async function migrateScoringSettings() {
   console.log('\n⚙️  Migrating scoring settings...');
   
+  // Check what columns exist
+  let hasUpdatedAt = false;
+  let hasCreatedAt = false;
+  try {
+    const checkResult = await pgClient.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbl_soltrack_scoring_settings'
+    `);
+    hasUpdatedAt = checkResult.rows.some(r => r.column_name === 'updated_at');
+    hasCreatedAt = checkResult.rows.some(r => r.column_name === 'created_at');
+  } catch (e) {
+    hasUpdatedAt = true;
+    hasCreatedAt = true;
+  }
+  
+  const selectColumns = ['id', 'name', 'settings', 'is_default'];
+  if (hasCreatedAt) selectColumns.push('created_at');
+  if (hasUpdatedAt) selectColumns.push('updated_at');
+  
   const result = await pgClient.query(`
     SELECT 
-      id,
-      name,
-      settings,
-      is_default,
-      created_at,
-      updated_at
+      ${selectColumns.join(', ')}
     FROM tbl_soltrack_scoring_settings
     ORDER BY id
   `);
@@ -390,13 +445,16 @@ async function migrateScoringSettings() {
       settingsStr = JSON.stringify(settingsStr);
     }
     
+    const createdAt = hasCreatedAt ? row.created_at : new Date();
+    const updatedAt = hasUpdatedAt ? (row.updated_at || createdAt) : createdAt;
+    
     return {
       id: parseInt(row.id, 10),
       name: row.name,
       settings: settingsStr,
       is_default: boolToUInt8(row.is_default),
-      created_at: formatDateForClickHouse(row.created_at),
-      updated_at: formatDateForClickHouse(row.updated_at || row.created_at),
+      created_at: formatDateForClickHouse(createdAt),
+      updated_at: formatDateForClickHouse(updatedAt),
       version: Date.now(),
     };
   });
@@ -417,13 +475,29 @@ async function migrateScoringSettings() {
 async function migrateAppliedSettings() {
   console.log('\n📋 Migrating applied settings...');
   
+  // Check what columns exist
+  let hasUpdatedAt = false;
+  let hasAppliedAt = false;
+  try {
+    const checkResult = await pgClient.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tbl_soltrack_applied_settings'
+    `);
+    hasUpdatedAt = checkResult.rows.some(r => r.column_name === 'updated_at');
+    hasAppliedAt = checkResult.rows.some(r => r.column_name === 'applied_at');
+  } catch (e) {
+    hasUpdatedAt = true;
+    hasAppliedAt = true;
+  }
+  
+  const selectColumns = ['id', 'preset_id', 'settings'];
+  if (hasAppliedAt) selectColumns.push('applied_at');
+  if (hasUpdatedAt) selectColumns.push('updated_at');
+  
   const result = await pgClient.query(`
     SELECT 
-      id,
-      preset_id,
-      settings,
-      applied_at,
-      updated_at
+      ${selectColumns.join(', ')}
     FROM tbl_soltrack_applied_settings
     ORDER BY id
   `);
@@ -439,12 +513,15 @@ async function migrateAppliedSettings() {
       settingsStr = JSON.stringify(settingsStr);
     }
     
+    const appliedAt = hasAppliedAt ? (row.applied_at || new Date()) : new Date();
+    const updatedAt = hasUpdatedAt ? (row.updated_at || appliedAt) : appliedAt;
+    
     return {
       id: parseInt(row.id, 10) || 1,
       preset_id: row.preset_id ? parseInt(row.preset_id, 10) : null,
       settings: settingsStr,
-      applied_at: formatDateForClickHouse(row.applied_at || new Date()),
-      updated_at: formatDateForClickHouse(row.updated_at || row.applied_at || new Date()),
+      applied_at: formatDateForClickHouse(appliedAt),
+      updated_at: formatDateForClickHouse(updatedAt),
       version: Date.now(),
     };
   });
