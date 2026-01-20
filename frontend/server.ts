@@ -9,7 +9,7 @@ import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
 import RedisStore from 'connect-redis';
 import Redis from 'ioredis';
-import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
+import axios, { AxiosRequestConfig } from 'axios';
 
 dotenv.config();
 
@@ -323,43 +323,105 @@ const CREATOR_TRACKER_PORT = parseInt(process.env.CREATOR_SERVER_PORT || '5005',
 const TRADE_TRACKER_PORT = parseInt(process.env.TRADE_SERVER_PORT || '5007', 10);
 const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
 
-// Proxy configuration for backend services
-const proxyOptions = {
-  changeOrigin: true,
-  ws: false,
-  timeout: 300000, // 5 minute timeout for long-running queries
-  proxyTimeout: 300000,
-  onProxyReq: (proxyReq: any, req: express.Request) => {
-    console.error(`[Proxy] ORIGINAL onProxyReq FIRED for ${req.method} ${req.path}`);
-    // Fix request body if it was consumed by body-parser
-    fixRequestBody(proxyReq, req);
+// Helper function to make HTTP requests to backend services
+const forwardRequest = async (req: express.Request, res: express.Response, target: string, path: string): Promise<void> => {
+  try {
+    console.error(`[HTTP Forward] ${req.method} ${path} -> ${target}${path}`);
+    
+    // Build the full URL with query parameters
+    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    const url = `${target}${path}${queryString}`;
+    
+    // Prepare headers to forward
+    const headers: Record<string, string> = {};
     
     // Forward session cookie
     if (req.headers.cookie) {
-      proxyReq.setHeader('Cookie', req.headers.cookie);
+      headers['Cookie'] = req.headers.cookie;
     }
-    // Forward other headers
+    
+    // Forward other important headers
     if (req.headers['x-forwarded-for']) {
-      proxyReq.setHeader('X-Forwarded-For', req.headers['x-forwarded-for']);
+      headers['X-Forwarded-For'] = req.headers['x-forwarded-for'] as string;
     }
     if (req.headers['x-real-ip']) {
-      proxyReq.setHeader('X-Real-IP', req.headers['x-real-ip']);
+      headers['X-Real-IP'] = req.headers['x-real-ip'] as string;
     }
-  },
-  onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
-    // Forward set-cookie headers to maintain session
-    if (proxyRes.headers['set-cookie']) {
-      res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
+    if (req.headers['content-type']) {
+      headers['Content-Type'] = req.headers['content-type'] as string;
     }
-    console.error(`[Proxy] ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
-  },
-  onError: (err: Error, req: express.Request, res: express.Response) => {
-    console.error(`[Proxy Error] ${req.method} ${req.path}:`, err.message);
+    
+    // Prepare axios config
+    const axiosConfig: AxiosRequestConfig = {
+      method: req.method as any,
+      url,
+      headers,
+      timeout: 300000, // 5 minute timeout
+      validateStatus: () => true, // Don't throw on any status code
+      responseType: 'arraybuffer', // Get raw response to forward headers properly
+    };
+    
+    // Add request body if present
+    if (req.body && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
+      axiosConfig.data = req.body;
+    }
+    
+    // Make the request
+    const response = await axios(axiosConfig);
+    
+    console.error(`[HTTP Forward] Response from ${target}${path}: ${response.status}`);
+    
+    // Forward response headers (set-cookie needs special handling)
+    if (response.headers['set-cookie']) {
+      const setCookie = response.headers['set-cookie'];
+      if (Array.isArray(setCookie)) {
+        setCookie.forEach(cookie => res.append('Set-Cookie', cookie));
+      } else {
+        res.setHeader('Set-Cookie', setCookie);
+      }
+    }
+    
+    // Forward all other headers (except ones that shouldn't be forwarded)
+    const headersToSkip = ['content-encoding', 'transfer-encoding', 'connection', 'content-length', 'set-cookie'];
+    Object.keys(response.headers).forEach(key => {
+      if (!headersToSkip.includes(key.toLowerCase())) {
+        const value = response.headers[key];
+        if (value) {
+          if (Array.isArray(value)) {
+            value.forEach(v => res.append(key, v));
+          } else {
+            res.setHeader(key, value);
+          }
+        }
+      }
+    });
+    
+    // Set status and send response
+    res.status(response.status);
+    
+    // Send response data
+    if (response.data) {
+      const buffer = Buffer.from(response.data);
+      res.send(buffer);
+    } else {
+      res.end();
+    }
+  } catch (err: any) {
+    console.error(`[HTTP Forward] Error for ${req.method} ${path} to ${target}:`, err.message);
+    console.error(`[HTTP Forward] Error stack:`, err.stack);
+    
     if (!res.headersSent) {
-      res.status(502).json({ 
-        error: 'Backend service unavailable',
-        message: err.message 
-      });
+      if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+        res.status(502).json({ 
+          error: 'Backend service unavailable',
+          message: err.message 
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Request failed',
+          message: err.message 
+        });
+      }
     }
   }
 };
@@ -447,8 +509,8 @@ const getBackendTarget = (req: express.Request): string | null => {
   return target;
 };
 
-// Authentication check middleware for proxied routes
-const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction): void => {
+// Authentication check middleware for forwarded routes
+const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction | (() => Promise<void>)): void => {
   const isAuthenticated = (req.session as any)?.authenticated === true;
   
   if (!isAuthenticated) {
@@ -456,7 +518,16 @@ const requireAuth = (req: express.Request, res: express.Response, next: express.
     return;
   }
   
-  next();
+  const result = next();
+  // If next returns a promise, handle it
+  if (result && typeof result === 'object' && 'then' in result) {
+    (result as Promise<void>).catch((err: Error) => {
+      console.error(`[Auth] Error in next callback:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+  }
 };
 
 // Proxy middleware for all API routes (except auth which is handled above)
@@ -472,8 +543,8 @@ app.use('/api', (req, res, next) => {
     return next();
   }
   
-  // Check authentication before proxying to backend services
-  requireAuth(req, res, (): void => {
+  // Check authentication before forwarding to backend services
+  requireAuth(req, res, async (): Promise<void> => {
     const target = getBackendTarget(req);
     
     console.error(`[Frontend API Middleware] ${req.method} ${req.path} -> target: ${target || 'NOT FOUND'}`);
@@ -484,131 +555,32 @@ app.use('/api', (req, res, next) => {
       return;
     }
     
-    // Create proxy for this specific request
+    // Forward request to backend service
     // Note: req.path has '/api' stripped by Express
     // Backend services expect paths WITHOUT /api prefix, so pass as-is
-    console.error(`[Frontend Proxy] Creating proxy to ${target} with path: ${req.path}`);
-    
-    // Extend existing proxyOptions with additional logging
-    const originalOnProxyReq = proxyOptions.onProxyReq;
-    const originalOnProxyRes = proxyOptions.onProxyRes;
-    const originalOnError = proxyOptions.onError;
-    
-    // Create proxy options with target and enhanced logging
-    const enhancedProxyOptions: any = {
-      ...proxyOptions,
-      target,
-      // No pathRewrite - pass path as-is (already stripped of /api by Express)
-      onProxyReq: (proxyReq: any, req: express.Request) => {
-        console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
-        console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
-        console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}, Body keys: ${req.body ? Object.keys(req.body).join(', ') : 'none'}`);
-        
-        // CRITICAL: Fix request body if it was consumed by body-parser
-        // This must be called FIRST before any other modifications
-        if (req.body) {
-          console.error(`[Frontend Proxy] Calling fixRequestBody to restore body to proxy request`);
-          fixRequestBody(proxyReq, req);
-        }
-        
-        // Call original onProxyReq if it exists (it also calls fixRequestBody)
-        if (originalOnProxyReq) {
-          originalOnProxyReq(proxyReq, req);
-        }
-      },
-      onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
-        console.error(`[Frontend Proxy] ===== PROXY RESPONSE RECEIVED =====`);
-        console.error(`[Frontend Proxy] Response from ${target}${req.path}: ${proxyRes.statusCode}`);
-        // Call original onProxyRes if it exists
-        if (originalOnProxyRes) {
-          originalOnProxyRes(proxyRes, req, res);
-        }
-      },
-      onError: (err: Error, req: express.Request, res: express.Response) => {
-        console.error(`[Frontend Proxy] ===== PROXY ERROR =====`);
-        console.error(`[Frontend Proxy] Proxy error for ${req.path} to ${target}:`, err.message);
-        console.error(`[Frontend Proxy] Error stack:`, err.stack);
-        // Call original onError if it exists
-        if (originalOnError) {
-          originalOnError(err, req, res);
-        }
-      }
-    };
-    
-    try {
-      console.error(`[Frontend Proxy] About to create proxy middleware for ${target}`);
-      console.error(`[Frontend Proxy] Request body parsed:`, req.body ? 'YES' : 'NO', 'Body keys:', req.body ? Object.keys(req.body) : 'none');
-      console.error(`[Frontend Proxy] Request readable: ${req.readable}, destroyed: ${req.destroyed}`);
-      console.error(`[Frontend Proxy] Response writable: ${res.writable}, headersSent: ${res.headersSent}`);
-      
-      // If request body was parsed and stream is destroyed, we need to restore it
-      // The fixRequestBody will be called in onProxyReq, but we need to ensure the stream is readable
-      if (req.body && req.destroyed) {
-        console.error(`[Frontend Proxy] WARNING: Request stream is destroyed but body exists. fixRequestBody should handle this.`);
-      }
-      
-      const proxy = createProxyMiddleware(enhancedProxyOptions);
-      console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
-      
-      // Add error handler to response to catch any errors
-      res.on('error', (err: Error) => {
-        console.error(`[Frontend Proxy] Response error:`, err.message);
-      });
-      
-      req.on('error', (err: Error) => {
-        console.error(`[Frontend Proxy] Request error:`, err.message);
-      });
-      
-      // Call the proxy middleware - it will handle the request/response
-      // The fixRequestBody in onProxyReq will restore the body to the proxy request
-      const result = proxy(req, res, next);
-      console.error(`[Frontend Proxy] proxy() function returned, result type: ${typeof result}`);
-      
-      // Check if proxy returned a promise
-      if (result && typeof result.then === 'function') {
-        result.catch((err: Error) => {
-          console.error(`[Frontend Proxy] Proxy promise rejected:`, err.message);
-        });
-      }
-    } catch (err: any) {
-      console.error(`[Frontend Proxy] ERROR creating/calling proxy:`, err.message);
-      console.error(`[Frontend Proxy] Error stack:`, err.stack);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Proxy error', message: err.message });
-      }
-    }
+    await forwardRequest(req, res, target, req.path);
   });
 });
 
-// Handle /trade-api routes - proxy directly to trade tracker
+// Handle /trade-api routes - forward directly to trade tracker
 app.use('/trade-api', (req, res, next) => {
   console.error(`[Trade-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
-  requireAuth(req, res, () => {
+  requireAuth(req, res, async () => {
     // req.path is stripped of /trade-api prefix by Express
     // So /trade-api/skip-tokens becomes /skip-tokens in req.path
     // Pass path as-is to backend (no /api prefix needed)
-    const proxy = createProxyMiddleware({
-      ...proxyOptions,
-      target: `http://127.0.0.1:${TRADE_TRACKER_PORT}`,
-      // No pathRewrite - pass path as-is (already stripped of /trade-api by Express)
-    });
-    proxy(req, res, next);
+    await forwardRequest(req, res, `http://127.0.0.1:${TRADE_TRACKER_PORT}`, req.path);
   });
 });
 
-// Handle /fund-api routes - proxy directly to fund tracker
+// Handle /fund-api routes - forward directly to fund tracker
 app.use('/fund-api', (req, res, next) => {
-  console.log(`[Fund-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
-  requireAuth(req, res, () => {
+  console.error(`[Fund-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
+  requireAuth(req, res, async () => {
     // req.path is stripped of /fund-api prefix by Express
     // So /fund-api/tracking/status becomes /tracking/status in req.path
     // Pass path as-is to backend (no /api prefix needed)
-    const proxy = createProxyMiddleware({
-      ...proxyOptions,
-      target: `http://127.0.0.1:${FUND_TRACKER_PORT}`,
-      // No pathRewrite - pass path as-is (already stripped of /fund-api by Express)
-    });
-    proxy(req, res, next);
+    await forwardRequest(req, res, `http://127.0.0.1:${FUND_TRACKER_PORT}`, req.path);
   });
 });
 
