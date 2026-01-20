@@ -484,18 +484,33 @@ app.use('/api', (req, res, next) => {
     // Note: req.path has '/api' stripped by Express
     // Backend services expect paths WITHOUT /api prefix, so pass as-is
     console.error(`[Frontend Proxy] Creating proxy to ${target} with path: ${req.path}`);
+    
+    // Extend existing proxyOptions with additional logging
+    const originalOnProxyReq = proxyOptions.onProxyReq;
+    const originalOnProxyRes = proxyOptions.onProxyRes;
+    const originalOnError = proxyOptions.onError;
+    
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
-      onProxyReq: (proxyReq, req, res) => {
+      onProxyReq: (proxyReq: any, req: express.Request) => {
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
+        if (originalOnProxyReq) {
+          originalOnProxyReq(proxyReq, req);
+        }
       },
-      onProxyRes: (proxyRes, req, res) => {
+      onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
         console.error(`[Frontend Proxy] Response from ${target}${req.path}: ${proxyRes.statusCode}`);
+        if (originalOnProxyRes) {
+          originalOnProxyRes(proxyRes, req, res);
+        }
       },
-      onError: (err, req, res) => {
+      onError: (err: Error, req: express.Request, res: express.Response) => {
         console.error(`[Frontend Proxy] Proxy error for ${req.path} to ${target}:`, err.message);
+        if (originalOnError) {
+          originalOnError(err, req, res);
+        }
       }
     });
     
