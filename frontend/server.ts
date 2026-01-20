@@ -476,6 +476,36 @@ app.use('/api', (req, res, next) => {
   });
 });
 
+// Handle /trade-api routes - proxy directly to trade tracker
+app.use('/trade-api', (req, res, next) => {
+  requireAuth(req, res, () => {
+    const proxy = createProxyMiddleware({
+      ...proxyOptions,
+      target: `http://127.0.0.1:${TRADE_TRACKER_PORT}`,
+      pathRewrite: (path: string) => {
+        // Rewrite /trade-api/... to /api/...
+        return path.replace(/^\/trade-api/, '/api');
+      },
+    });
+    proxy(req, res, next);
+  });
+});
+
+// Handle /fund-api routes - proxy directly to fund tracker
+app.use('/fund-api', (req, res, next) => {
+  requireAuth(req, res, () => {
+    const proxy = createProxyMiddleware({
+      ...proxyOptions,
+      target: `http://127.0.0.1:${FUND_TRACKER_PORT}`,
+      pathRewrite: (path: string) => {
+        // Rewrite /fund-api/... to /api/...
+        return path.replace(/^\/fund-api/, '/api');
+      },
+    });
+    proxy(req, res, next);
+  });
+});
+
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
   // __dirname is 'dist' when running from compiled server.js
