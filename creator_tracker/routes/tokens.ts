@@ -1749,9 +1749,16 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     }>> = new Map();
     
     // Determine which creator addresses need token data
+    // PERFORMANCE: Limit to max 1000 creators to prevent loading too much data
+    const MAX_CREATORS_FOR_TOKEN_FETCH = 1000;
+    const allCreatorAddresses = needsTokensForAll ? result.rows.map(row => row.address) : [];
     const creatorAddressesForTokens = needsTokensForAll 
-      ? result.rows.map(row => row.address)  // All filtered wallets
+      ? allCreatorAddresses.slice(0, MAX_CREATORS_FOR_TOKEN_FETCH)  // Limit to prevent huge queries
       : [];  // Will be set after pagination
+      
+    if (needsTokensForAll && allCreatorAddresses.length > MAX_CREATORS_FOR_TOKEN_FETCH) {
+      console.warn(`[Performance] Limiting token fetch to ${MAX_CREATORS_FOR_TOKEN_FETCH} creators out of ${allCreatorAddresses.length} total. Consider using pagination or filters.`);
+    }
     
     // Check if we need buy/sell stats from JSONB (for performance optimization)
     // Since we now have materialized columns, we only need market_cap_time_series for:
@@ -1803,6 +1810,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       
       // Get ALL tokens for rug rate and buy/sell calculations (including invalid ones)
       // Only fetch market_cap_time_series when needed for buy/sell stats to improve performance
+      // PERFORMANCE WARNING: This can load a lot of data. Consider pagination or limiting creators.
       const allTokensResult = await pool.query(
         `SELECT 
           ct.creator,
@@ -1812,7 +1820,8 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ct.create_tx_signature,
           ${needsBuySellStats ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
         FROM tbl_soltrack_created_tokens ct
-        ${tokenWhereClause}`,
+        ${tokenWhereClause}
+        ORDER BY ct.creator, ct.created_at DESC`,
         [creatorAddressesForTokens]
       );
       

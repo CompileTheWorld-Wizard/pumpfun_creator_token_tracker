@@ -1604,6 +1604,10 @@ app.post("/dashboard-data/:wallet", async (_req, res) => {
       tokenInfoMap.set(token.mint_address, token);
     });
     
+    // OPTIMIZATION: Fetch ALL transactions for all tokens in ONE query instead of N queries
+    // This eliminates the N+1 query problem where we were calling getTransactionsByWalletToken for each token
+    const transactionsByToken = await dbService.getTransactionsByWalletTokensBatch(wallet, uniqueTokenMints);
+    
     // Helper function to format timestamp
     const formatTimestamp = (dateString: string | null | undefined): string => {
       if (!dateString) return '';
@@ -1620,13 +1624,13 @@ app.post("/dashboard-data/:wallet", async (_req, res) => {
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     };
     
-    // Process ALL tokens first (needed for filtering)
-    const allDashboardData = await Promise.all(walletTrades.map(async (trade: any) => {
+    // Process ALL tokens first (needed for filtering) - now using pre-fetched transactions
+    const allDashboardData = walletTrades.map((trade: any) => {
       const token = trade.token_address;
       const tokenInfo = tokenInfoMap.get(token) || null;
       
-      // Get all transactions for this wallet+token pair
-      const transactions = await dbService.getTransactionsByWalletToken(wallet, token);
+      // Get transactions from pre-fetched map (no database query!)
+      const transactions = transactionsByToken.get(token) || [];
       
       // Sort transactions by block timestamp ASC
       transactions.sort((a: any, b: any) => {
@@ -1858,7 +1862,7 @@ app.post("/dashboard-data/:wallet", async (_req, res) => {
         // Sells
         sells: formattedSells
       };
-    }));
+    });
     
     // Apply filters if any (simplified filter logic)
     let filteredDashboardData = allDashboardData;

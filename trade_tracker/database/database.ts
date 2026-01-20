@@ -985,6 +985,73 @@ class DatabaseService {
   }
 
   /**
+   * Get all transactions for a wallet and multiple tokens in a single query (batch)
+   * Returns a Map with token address as key and transactions array as value
+   * This eliminates N+1 query problem
+   */
+  async getTransactionsByWalletTokensBatch(walletAddress: string, tokenAddresses: string[]): Promise<Map<string, any[]>> {
+    try {
+      if (tokenAddresses.length === 0) {
+        return new Map();
+      }
+
+      const SOL_MINT = 'So11111111111111111111111111111111111111112';
+      
+      const query = `
+        SELECT 
+          t.transaction_id,
+          t.platform,
+          t.type,
+          t.mint_from,
+          t.mint_to,
+          t.in_amount,
+          t.out_amount,
+          t.fee_payer as "feePayer",
+          t.tip_amount as "tipAmount",
+          t.fee_amount as "feeAmount",
+          t.market_cap as "marketCap",
+          t.total_supply as "totalSupply",
+          t.block_number as "blockNumber",
+          t.block_timestamp as "blockTimestamp",
+          t.dev_still_holding as "devStillHolding",
+          t.created_at,
+          CASE 
+            WHEN t.mint_from = $1 THEN t.mint_to
+            WHEN t.mint_to = $1 THEN t.mint_from
+            ELSE NULL
+          END as token_address
+        FROM tbl_solscan_transactions t
+        WHERE t.fee_payer = $2
+          AND (
+            (t.mint_from = ANY($3::text[]) AND t.mint_to = $1) OR
+            (t.mint_from = $1 AND t.mint_to = ANY($3::text[]))
+          )
+        ORDER BY COALESCE(t.block_timestamp, t.created_at) ASC
+      `;
+
+      const result = await this.pool.query(query, [SOL_MINT, walletAddress, tokenAddresses]);
+      
+      // Group transactions by token address
+      const transactionsByToken = new Map<string, any[]>();
+      result.rows.forEach((row: any) => {
+        const tokenAddr = row.token_address;
+        if (tokenAddr) {
+          if (!transactionsByToken.has(tokenAddr)) {
+            transactionsByToken.set(tokenAddr, []);
+          }
+          const { token_address, ...transaction } = row;
+          transactionsByToken.get(tokenAddr)!.push(transaction);
+        }
+      });
+      
+      return transactionsByToken;
+    } catch (error) {
+      console.error('Failed to get transactions by wallet and tokens batch:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Save token data to PostgreSQL
    */
   async saveToken(tokenData: TokenData): Promise<void> {
