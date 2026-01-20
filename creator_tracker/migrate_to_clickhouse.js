@@ -10,9 +10,13 @@
  * Usage: node migrate_to_clickhouse.js
  */
 
-require('dotenv').config();
-const { Client: PgClient } = require('pg');
-const { createClient } = require('@clickhouse/client');
+import dotenv from 'dotenv';
+import pg from 'pg';
+import { createClient } from '@clickhouse/client';
+
+dotenv.config();
+
+const { Client: PgClient } = pg;
 
 // Configuration
 const BATCH_SIZE = 1000; // Process tokens in batches
@@ -515,9 +519,7 @@ async function main() {
   }
 }
 
-// Run migration
-if (require.main === module) {
-  main().catch(console.error);
-}
+// Run migration when executed directly
+main().catch(console.error);
 
-module.exports = { main };
+export { main };
