@@ -1828,7 +1828,7 @@
       </div>
       
       <!-- Pagination Controls -->
-      <div v-if="pagination.total > 0" class="px-4 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
+      <div v-if="pagination && pagination.total > 0" class="px-4 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
         <div class="text-xs text-gray-400">
           <span v-if="itemsPerPage === 'all'">
             Showing all {{ pagination.total }} wallet{{ pagination.total !== 1 ? 's' : '' }}
