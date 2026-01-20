@@ -41,6 +41,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "@clickhouse/client": "^0.2.7",
+    "ioredis": "^5.3.2",
     "lodash": "^4.17.21",
     "pg": "^8.13.1",
     "shyft-parser-v1": "npm:@shyft-to/solana-transaction-parser@1.1.17",
