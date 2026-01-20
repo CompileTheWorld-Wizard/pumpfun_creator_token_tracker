@@ -461,15 +461,12 @@ app.use('/api', (req, res, next) => {
     }
     
     // Create proxy for this specific request
-    // Note: req.path has '/api' stripped by Express, so we need to add it back for the backend
-    // req.path is like '/settings/applied/get', we need '/api/settings/applied/get'
+    // Note: req.path has '/api' stripped by Express
+    // Backend services expect paths WITHOUT /api prefix, so pass as-is
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
-      pathRewrite: (path: string) => {
-        // Prepend /api to the path since backend services expect /api/... paths
-        return `/api${path}`;
-      },
+      // No pathRewrite - pass path as-is (already stripped of /api by Express)
     });
     
     proxy(req, res, next);
@@ -478,14 +475,15 @@ app.use('/api', (req, res, next) => {
 
 // Handle /trade-api routes - proxy directly to trade tracker
 app.use('/trade-api', (req, res, next) => {
+  console.log(`[Trade-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
   requireAuth(req, res, () => {
+    // req.path is stripped of /trade-api prefix by Express
+    // So /trade-api/skip-tokens becomes /skip-tokens in req.path
+    // Pass path as-is to backend (no /api prefix needed)
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target: `http://127.0.0.1:${TRADE_TRACKER_PORT}`,
-      pathRewrite: (path: string) => {
-        // Rewrite /trade-api/... to /api/...
-        return path.replace(/^\/trade-api/, '/api');
-      },
+      // No pathRewrite - pass path as-is (already stripped of /trade-api by Express)
     });
     proxy(req, res, next);
   });
@@ -493,14 +491,15 @@ app.use('/trade-api', (req, res, next) => {
 
 // Handle /fund-api routes - proxy directly to fund tracker
 app.use('/fund-api', (req, res, next) => {
+  console.log(`[Fund-API] Request received: ${req.method} ${req.originalUrl}, req.path: ${req.path}`);
   requireAuth(req, res, () => {
+    // req.path is stripped of /fund-api prefix by Express
+    // So /fund-api/tracking/status becomes /tracking/status in req.path
+    // Pass path as-is to backend (no /api prefix needed)
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target: `http://127.0.0.1:${FUND_TRACKER_PORT}`,
-      pathRewrite: (path: string) => {
-        // Rewrite /fund-api/... to /api/...
-        return path.replace(/^\/fund-api/, '/api');
-      },
+      // No pathRewrite - pass path as-is (already stripped of /fund-api by Express)
     });
     proxy(req, res, next);
   });
