@@ -327,7 +327,23 @@ const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
 const forwardRequest = async (req: express.Request, res: express.Response, target: string, path: string): Promise<void> => {
   try {
     // Build the full URL with query parameters
-    const queryString = req.url.includes('?') ? req.url.substring(req.url.indexOf('?')) : '';
+    // Use req.query to build query string, or extract from originalUrl
+    let queryString = '';
+    const queryKeys = Object.keys(req.query);
+    if (queryKeys.length > 0) {
+      const queryParams = new URLSearchParams();
+      queryKeys.forEach(key => {
+        const value = req.query[key];
+        if (value !== undefined) {
+          if (Array.isArray(value)) {
+            value.forEach(v => queryParams.append(key, String(v)));
+          } else {
+            queryParams.append(key, String(value));
+          }
+        }
+      });
+      queryString = '?' + queryParams.toString();
+    }
     const url = `${target}${path}${queryString}`;
     
     // Prepare headers to forward
