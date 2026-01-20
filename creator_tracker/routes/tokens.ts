@@ -1763,9 +1763,9 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
         'avgSellTotalSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)',
         'avgSellSol': 'NULLIF(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0)', // Alias for frontend compatibility
         'avgFirst5BuySol': 'NULLIF(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
-        'medianFirst5BuySol': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0)',
+        'medianFirst5BuySol': 'NULLIF(quantileIf(0.5)(ct.first_5_buy_sol, ct.first_5_buy_sol > 0), 0)',
         'avgDevBuyAmount': 'NULLIF(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)',
-        'medianDevBuyAmount': 'NULLIF(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0)'
+        'medianDevBuyAmount': 'NULLIF(quantileIf(0.5)(ct.dev_buy_sol_amount, ct.dev_buy_sol_amount > 0), 0)'
       };
       // Always put NULLs (including 0s converted to NULL) at the end for all buy/sell fields
       orderByClause = `ORDER BY ${sortFieldMap[sortColumn]} ${direction} NULLS LAST`;
@@ -1791,9 +1791,9 @@ router.post('/creators/analytics', async (req: Request, res: Response): Promise<
         COALESCE(AVG(ct.sell_count) FILTER (WHERE ct.sell_count > 0 OR ct.buy_count > 0), 0) as avg_sell_count,
         COALESCE(AVG(ct.sell_sol_amount) FILTER (WHERE ct.sell_sol_amount > 0 OR ct.buy_sol_amount > 0), 0) as avg_sell_total_sol,
         COALESCE(AVG(ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as avg_first_5_buy_sol,
-        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
+        COALESCE(quantileIf(0.5)(ct.first_5_buy_sol, ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
         COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount,
-        COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as median_dev_buy_amount
+        COALESCE(quantileIf(0.5)(ct.dev_buy_sol_amount, ct.dev_buy_sol_amount > 0), 0) as median_dev_buy_amount
       FROM tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
