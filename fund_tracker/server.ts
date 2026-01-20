@@ -40,7 +40,7 @@ app.use(session({
 
 // Set no-cache headers for API routes to prevent 304 responses
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
+  if (req.path.startsWith('/')) {
     res.set({
       'Cache-Control': 'no-store, no-cache, must-revalidate, private',
       'Pragma': 'no-cache',
@@ -51,7 +51,7 @@ app.use((req, res, next) => {
 });
 
 // Health check (public)
-app.get('/api/health', (_req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ 
     status: 'ok', 
     server: 'fund_tracking_server',
@@ -60,7 +60,7 @@ app.get('/api/health', (_req, res) => {
 });
 
 // API route to get SOL transfers (authentication handled by frontend proxy)
-app.get('/api/sol-transfers', async (req, res) => {
+app.get('/sol-transfers', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit as string) || 100;
     const offset = parseInt(req.query.offset as string) || 0;
@@ -73,7 +73,7 @@ app.get('/api/sol-transfers', async (req, res) => {
 });
 
 // API route to get SOL transfers by sender (authentication handled by frontend proxy)
-app.get('/api/sol-transfers/sender/:sender', async (req, res) => {
+app.get('/sol-transfers/sender/:sender', async (req, res) => {
   try {
     const { sender } = req.params;
     const limit = parseInt(req.query.limit as string) || 100;
@@ -86,7 +86,7 @@ app.get('/api/sol-transfers/sender/:sender', async (req, res) => {
 });
 
 // API route to get SOL transfers by receiver (authentication handled by frontend proxy)
-app.get('/api/sol-transfers/receiver/:receiver', async (req, res) => {
+app.get('/sol-transfers/receiver/:receiver', async (req, res) => {
   try {
     const { receiver } = req.params;
     const limit = parseInt(req.query.limit as string) || 100;
@@ -99,7 +99,7 @@ app.get('/api/sol-transfers/receiver/:receiver', async (req, res) => {
 });
 
 // API route to get tracking status (authentication handled by frontend proxy)
-app.get('/api/tracking/status', async (_req, res) => {
+app.get('/tracking/status', async (_req, res) => {
   try {
     res.json({
       isTracking: solTransferTracker.getIsStreaming(),
@@ -112,7 +112,7 @@ app.get('/api/tracking/status', async (_req, res) => {
 });
 
 // API route to start tracking (authentication handled by frontend proxy)
-app.post('/api/tracking/start', async (_req, res) => {
+app.post('/tracking/start', async (_req, res) => {
   try {
     const grpcUrl = process.env.GRPC_URL;
     const xToken = process.env.X_TOKEN;
@@ -135,7 +135,7 @@ app.post('/api/tracking/start', async (_req, res) => {
 });
 
 // API route to stop tracking (authentication handled by frontend proxy)
-app.post('/api/tracking/stop', async (_req, res) => {
+app.post('/tracking/stop', async (_req, res) => {
   try {
     solTransferTracker.stop();
     res.json({ success: true, message: 'Tracking stopped' });
@@ -146,7 +146,7 @@ app.post('/api/tracking/stop', async (_req, res) => {
 });
 
 // API route to update minimum SOL amount (authentication handled by frontend proxy)
-app.put('/api/tracking/min-sol', async (req, res) => {
+app.put('/tracking/min-sol', async (req, res) => {
   try {
     const { amount } = req.body;
     

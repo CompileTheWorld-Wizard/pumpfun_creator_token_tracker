@@ -462,11 +462,14 @@ app.use('/api', (req, res, next) => {
     
     // Create proxy for this specific request
     // Note: req.path has '/api' stripped by Express
-    // Backend services expect paths WITHOUT /api prefix, so pass as-is
+    // Backend services expect paths WITH /api prefix, so add it back
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
-      // No pathRewrite - pass path as-is (already stripped of /api by Express)
+      pathRewrite: (path: string) => {
+        // Add /api prefix back since backend services expect /api/... paths
+        return `/api${path}`;
+      },
     });
     
     proxy(req, res, next);
