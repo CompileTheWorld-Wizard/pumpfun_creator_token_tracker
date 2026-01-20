@@ -40,7 +40,7 @@ app.use(session({
 }));
 
 // Request logging middleware - log all API calls
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   const timestamp = new Date().toISOString();
   console.error(`[API Request] [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
   console.error(`[API Request] Query params:`, req.query);
