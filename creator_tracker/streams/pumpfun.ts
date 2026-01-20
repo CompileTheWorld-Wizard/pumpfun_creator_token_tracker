@@ -493,7 +493,7 @@ async function loadPoolToMintMappings(): Promise<void> {
     const { pool } = await import('../db.js');
     const result = await pool.query(
       `SELECT pool_address, base_mint 
-       FROM tbl_soltrack_created_tokens 
+       FROM tbl_soltrack_tokens 
        WHERE pool_address IS NOT NULL AND base_mint IS NOT NULL`
     );
     
@@ -506,7 +506,8 @@ async function loadPoolToMintMappings(): Promise<void> {
     console.log(`[PumpFun] Loaded ${result.rows.length} pool->mint mappings from database`);
   } catch (error) {
     // Ignore errors if columns don't exist yet (migration not run)
-    if ((error as any)?.code !== '42703') {
+    // ClickHouse error format differs from PostgreSQL
+    if ((error as any)?.message && !(error as any).message.includes('Missing columns')) {
       console.error('[PumpFun] Error loading pool->mint mappings from database:', error);
     }
   }

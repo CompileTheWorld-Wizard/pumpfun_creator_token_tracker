@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth.js';
 import { pool } from '../db.js';
 
 const router = Router();
 
 // Get all scoring settings presets
-router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.get('/',  async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -24,7 +23,7 @@ router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void>
         id: row.id,
         name: row.name,
         settings: row.settings,
-        isDefault: row.is_default,
+        isDefault: row.is_default === 1 || row.is_default === true,
         createdAt: row.created_at,
         updatedAt: row.updated_at
       }))
@@ -38,7 +37,7 @@ router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void>
 });
 
 // Get a specific preset by ID
-router.get('/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/:id',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     
@@ -78,7 +77,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
 });
 
 // Get default preset
-router.get('/default/get', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.get('/default/get',  async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -89,7 +88,7 @@ router.get('/default/get', requireAuth, async (_req: Request, res: Response): Pr
         created_at,
         updated_at
       FROM tbl_soltrack_scoring_settings
-      WHERE is_default = TRUE
+      WHERE is_default = 1
       LIMIT 1`
     );
     
@@ -116,7 +115,7 @@ router.get('/default/get', requireAuth, async (_req: Request, res: Response): Pr
 });
 
 // Create a new preset
-router.post('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, settings, isDefault } = req.body;
     
@@ -131,18 +130,34 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
       return;
     }
     
-    // If setting as default, unset other defaults
+    // If setting as default, unset other defaults (ClickHouse: use ALTER TABLE UPDATE)
     if (isDefault) {
       await pool.query(
-        'UPDATE tbl_soltrack_scoring_settings SET is_default = FALSE WHERE is_default = TRUE'
+        'ALTER TABLE tbl_soltrack_scoring_settings UPDATE is_default = 0 WHERE is_default = 1'
       );
     }
     
+    // ClickHouse: Generate ID (use max + 1, or use a sequence)
+    // For simplicity, we'll use a timestamp-based ID or query max
+    const maxIdResult = await pool.query(
+      'SELECT max(id) as max_id FROM tbl_soltrack_scoring_settings'
+    );
+    const nextId = (parseInt(maxIdResult.rows[0]?.max_id || '0') || 0) + 1;
+    
+    await pool.query(
+      `INSERT INTO tbl_soltrack_scoring_settings (id, name, settings, is_default)
+       VALUES ($1, $2, $3, $4)`,
+      [nextId, name, JSON.stringify(settings), isDefault ? 1 : 0]
+    );
+    
+    // Fetch the inserted row (ClickHouse doesn't support RETURNING)
     const result = await pool.query(
-      `INSERT INTO tbl_soltrack_scoring_settings (name, settings, is_default)
-       VALUES ($1, $2, $3)
-       RETURNING id, name, settings, is_default, created_at, updated_at`,
-      [name, JSON.stringify(settings), isDefault || false]
+      `SELECT id, name, settings, is_default, created_at, updated_at
+       FROM tbl_soltrack_scoring_settings
+       WHERE id = $1
+       ORDER BY version DESC
+       LIMIT 1`,
+      [nextId]
     );
     
     const row = result.rows[0];
@@ -167,7 +182,7 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
 });
 
 // Update a preset
-router.put('/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.put('/:id',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     const { name, settings, isDefault } = req.body;
@@ -184,7 +199,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
     }
     
     // Prevent updating default preset
-    if (checkResult.rows[0].is_default) {
+    if (checkResult.rows[0].is_default === 1 || checkResult.rows[0].is_default === true) {
       res.status(400).json({ error: 'Cannot update the default preset. Please create a new preset or set another preset as default first.' });
       return;
     }
@@ -209,26 +224,58 @@ router.put('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
     }
     
     if (isDefault !== undefined) {
-      // If setting as default, unset other defaults
+      // If setting as default, unset other defaults (ClickHouse: use ALTER TABLE UPDATE)
       if (isDefault) {
         await pool.query(
-          'UPDATE tbl_soltrack_scoring_settings SET is_default = FALSE WHERE is_default = TRUE AND id != $1',
+          'ALTER TABLE tbl_soltrack_scoring_settings UPDATE is_default = 0 WHERE is_default = 1 AND id != $1',
           [id]
         );
       }
       updates.push(`is_default = $${paramIndex++}`);
-      values.push(isDefault);
+      values.push(isDefault ? 1 : 0);
     }
     
-    updates.push(`updated_at = NOW()`);
+    updates.push(`updated_at = now()`);
     values.push(id);
     
+    // ClickHouse: Use ALTER TABLE UPDATE (async operation)
+    // Build UPDATE statement for all fields at once
+    const updatePairs: string[] = [];
+    const updateValues: any[] = [];
+    let updateParamIndex = 1;
+    
+    for (let i = 0; i < updates.length - 1; i++) { // Exclude updated_at from pairs
+      const update = updates[i];
+      const value = values[i];
+      // Extract column name from update string (e.g., "name = $1" -> "name")
+      const columnMatch = update.match(/^(\w+)\s*=/);
+      if (columnMatch) {
+        const column = columnMatch[1];
+        updatePairs.push(`${column} = $${updateParamIndex++}`);
+        updateValues.push(value);
+      }
+    }
+    
+    // Add updated_at
+    updatePairs.push(`updated_at = now()`);
+    updateValues.push(id); // Add id for WHERE clause
+    
+    // Execute ALTER TABLE UPDATE (ClickHouse syntax)
+    await pool.query(
+      `ALTER TABLE tbl_soltrack_scoring_settings 
+       UPDATE ${updatePairs.join(', ')}
+       WHERE id = $${updateParamIndex}`,
+      updateValues
+    );
+    
+    // Fetch the updated row (ClickHouse doesn't support RETURNING)
     const result = await pool.query(
-      `UPDATE tbl_soltrack_scoring_settings 
-       SET ${updates.join(', ')}
-       WHERE id = $${paramIndex}
-       RETURNING id, name, settings, is_default, created_at, updated_at`,
-      values
+      `SELECT id, name, settings, is_default, created_at, updated_at
+       FROM tbl_soltrack_scoring_settings
+       WHERE id = $1
+       ORDER BY version DESC
+       LIMIT 1`,
+      [id]
     );
     
     const row = result.rows[0];
@@ -253,7 +300,7 @@ router.put('/:id', requireAuth, async (req: Request, res: Response): Promise<voi
 });
 
 // Delete a preset
-router.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.delete('/:id',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     
@@ -269,13 +316,14 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<
     }
     
     // Prevent deletion of default preset
-    if (checkResult.rows[0].is_default) {
+    if (checkResult.rows[0].is_default === 1 || checkResult.rows[0].is_default === true) {
       res.status(400).json({ error: 'Cannot delete the default preset. Please set another preset as default first.' });
       return;
     }
     
+    // ClickHouse: Use ALTER TABLE DELETE
     await pool.query(
-      'DELETE FROM tbl_soltrack_scoring_settings WHERE id = $1 RETURNING id',
+      'ALTER TABLE tbl_soltrack_scoring_settings DELETE WHERE id = $1',
       [id]
     );
     
@@ -289,7 +337,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<
 });
 
 // Set default preset
-router.post('/:id/set-default', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/set-default',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
     
@@ -304,17 +352,26 @@ router.post('/:id/set-default', requireAuth, async (req: Request, res: Response)
       return;
     }
     
-    // Unset other defaults
+    // Unset other defaults (ClickHouse: use ALTER TABLE UPDATE)
     await pool.query(
-      'UPDATE tbl_soltrack_scoring_settings SET is_default = FALSE WHERE is_default = TRUE'
+      'ALTER TABLE tbl_soltrack_scoring_settings UPDATE is_default = 0 WHERE is_default = 1'
     );
     
-    // Set this as default
+    // Set this as default (ClickHouse: use ALTER TABLE UPDATE)
+    await pool.query(
+      `ALTER TABLE tbl_soltrack_scoring_settings 
+       UPDATE is_default = 1, updated_at = now()
+       WHERE id = $1`,
+      [id]
+    );
+    
+    // Fetch the updated row (ClickHouse doesn't support RETURNING)
     const result = await pool.query(
-      `UPDATE tbl_soltrack_scoring_settings 
-       SET is_default = TRUE, updated_at = NOW()
+      `SELECT id, name, settings, is_default, created_at, updated_at
+       FROM tbl_soltrack_scoring_settings
        WHERE id = $1
-       RETURNING id, name, settings, is_default, created_at, updated_at`,
+       ORDER BY version DESC
+       LIMIT 1`,
       [id]
     );
     
@@ -336,7 +393,7 @@ router.post('/:id/set-default', requireAuth, async (req: Request, res: Response)
 });
 
 // Get currently applied settings
-router.get('/applied/get', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.get('/applied/get',  async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       `SELECT 
@@ -356,7 +413,7 @@ router.get('/applied/get', requireAuth, async (_req: Request, res: Response): Pr
           id,
           settings
         FROM tbl_soltrack_scoring_settings
-        WHERE is_default = TRUE
+        WHERE is_default = 1
         LIMIT 1`
       );
       
@@ -391,7 +448,7 @@ router.get('/applied/get', requireAuth, async (_req: Request, res: Response): Pr
 });
 
 // Apply settings (validate and save)
-router.post('/applied/apply', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/applied/apply',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { settings, presetId } = req.body;
     
@@ -507,19 +564,24 @@ router.post('/applied/apply', requireAuth, async (req: Request, res: Response): 
       return;
     }
     
-    // Upsert applied settings (delete all and insert new, or update if exists)
-    await pool.query('DELETE FROM tbl_soltrack_applied_settings');
+    // Upsert applied settings (ClickHouse: use ReplacingMergeTree pattern)
+    // Delete existing (if any) and insert new
+    await pool.query('ALTER TABLE tbl_soltrack_applied_settings DELETE WHERE id = 1');
     
-    // Insert new applied settings
-    const result = await pool.query(
+    // Insert new applied settings (ReplacingMergeTree will handle duplicates)
+    await pool.query(
       `INSERT INTO tbl_soltrack_applied_settings (id, preset_id, settings, applied_at, updated_at)
-       VALUES (1, $1, $2, NOW(), NOW())
-       ON CONFLICT (id) DO UPDATE 
-       SET preset_id = EXCLUDED.preset_id,
-           settings = EXCLUDED.settings,
-           updated_at = NOW()
-       RETURNING preset_id, settings, applied_at, updated_at`,
+       VALUES (1, $1, $2, now(), now())`,
       [presetId || null, JSON.stringify(settings)]
+    );
+    
+    // Fetch the inserted row (ClickHouse doesn't support RETURNING)
+    const result = await pool.query(
+      `SELECT preset_id, settings, applied_at, updated_at
+       FROM tbl_soltrack_applied_settings
+       WHERE id = 1
+       ORDER BY version DESC
+       LIMIT 1`
     );
     
     const row = result.rows[0];

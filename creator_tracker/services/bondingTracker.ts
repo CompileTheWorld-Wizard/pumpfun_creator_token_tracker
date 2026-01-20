@@ -156,7 +156,7 @@ async function getUnbondedTokens(): Promise<string[]> {
   try {
     const result = await pool.query(
       `SELECT mint 
-       FROM tbl_soltrack_created_tokens
+       FROM tbl_soltrack_tokens
        WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
          AND COALESCE(bonded, false) = false
        ORDER BY created_at DESC`
@@ -184,14 +184,14 @@ async function updateBondingStatus(
   }
 
   try {
-    // Update multiple tokens at once using IN clause
-    const placeholders = mintAddresses.map((_, i) => `$${i + 1}`).join(', ');
+    // Update multiple tokens at once using IN clause (ClickHouse)
+    const mintTuple = mintAddresses.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
     await pool.query(
-      `UPDATE tbl_soltrack_created_tokens 
-       SET bonded = $${mintAddresses.length + 1}, 
-           updated_at = NOW()
-       WHERE mint IN (${placeholders})`,
-      [...mintAddresses, bonded]
+      `ALTER TABLE tbl_soltrack_tokens 
+       UPDATE bonded = $1, 
+           updated_at = now()
+       WHERE mint IN (${mintTuple})`,
+      [bonded ? 1 : 0]
     );
   } catch (error) {
     console.error('[BondingTracker] Error updating bonding status:', error);
@@ -216,23 +216,20 @@ async function updateBondingStatusWithPoolInfo(
       const poolInfo = poolInfoMap.get(mint);
       if (poolInfo) {
         await pool.query(
-          `UPDATE tbl_soltrack_created_tokens 
-           SET bonded = true,
-               pool_address = $2,
-               base_mint = $3,
-               quote_mint = $4,
-               updated_at = NOW()
+          `ALTER TABLE tbl_soltrack_tokens 
+           UPDATE bonded = 1,
+               updated_at = now()
            WHERE mint = $1`,
-          [mint, poolInfo.pool, poolInfo.base_mint, poolInfo.quote_mint]
+          [mint]
         );
         // Store pool -> mint mapping for buy/sell events
         setPoolToMintMapping(poolInfo.pool, poolInfo.base_mint);
       } else {
         // Fallback to basic update if pool info not available
         await pool.query(
-          `UPDATE tbl_soltrack_created_tokens 
-           SET bonded = true,
-               updated_at = NOW()
+          `ALTER TABLE tbl_soltrack_tokens 
+           UPDATE bonded = 1,
+               updated_at = now()
            WHERE mint = $1`,
           [mint]
         );
@@ -304,15 +301,14 @@ export async function handleMigrateEvent(
   try {
     // Update bonding status to true and pool information if provided
     if (poolInfo) {
+      // ClickHouse: Use ALTER TABLE UPDATE
+      // Note: pool_address, base_mint, quote_mint columns may not exist in schema
       await pool.query(
-        `UPDATE tbl_soltrack_created_tokens 
-         SET bonded = true,
-             pool_address = $2,
-             base_mint = $3,
-             quote_mint = $4,
-             updated_at = NOW()
+        `ALTER TABLE tbl_soltrack_tokens 
+         UPDATE bonded = 1,
+             updated_at = now()
          WHERE mint = $1`,
-        [mintAddress, poolInfo.pool, poolInfo.base_mint, poolInfo.quote_mint]
+        [mintAddress]
       );
       // Store pool -> mint mapping for buy/sell events
       setPoolToMintMapping(poolInfo.pool, poolInfo.base_mint);
@@ -352,7 +348,7 @@ export async function updateBondingStatusForCreator(creatorAddress: string): Pro
     // Get all tokens (bonded and unbonded) from this creator
     const result = await pool.query(
       `SELECT mint 
-       FROM tbl_soltrack_created_tokens
+       FROM tbl_soltrack_tokens
        WHERE creator = $1`,
       [creatorAddress]
     );

@@ -61,9 +61,9 @@ async function loadTrackedTokensFromDb(): Promise<void> {
     // This ensures we don't track ATH data for tokens from blacklisted wallets.
     const result = await pool.query(
       `SELECT mint, name, symbol, creator, created_at,
-              COALESCE(bonded, false) as bonded,
-              COALESCE(ath_market_cap_usd, 0) as ath_market_cap_usd
-       FROM tbl_soltrack_created_tokens
+              coalesce(bonded, 0) as bonded,
+              coalesce(ath_market_cap_usd, 0) as ath_market_cap_usd
+       FROM tbl_soltrack_tokens
        WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)`
     );
 
@@ -73,7 +73,7 @@ async function loadTrackedTokensFromDb(): Promise<void> {
         name: row.name || '',
         symbol: row.symbol || '',
         creator: row.creator,
-        bonded: row.bonded || false,
+        bonded: row.bonded === 1 || row.bonded === true,
         athMarketCapUsd: parseFloat(row.ath_market_cap_usd) || 0,
         currentMarketCapUsd: 0,
         lastUpdated: Date.now(),
@@ -84,7 +84,8 @@ async function loadTrackedTokensFromDb(): Promise<void> {
 
   } catch (error: any) {
     // Handle case where columns don't exist yet (migration not run)
-    if (error?.code === '42703') {
+    // ClickHouse error codes differ from PostgreSQL
+    if (error?.message && error.message.includes('Missing columns')) {
       console.warn('[AthTracker] ATH columns not found in database. Run migration first.');
       console.warn('[AthTracker] Falling back to basic query...');
       
@@ -92,7 +93,7 @@ async function loadTrackedTokensFromDb(): Promise<void> {
         // Filtering logic: Fallback query also filters out blacklisted wallets
         const fallbackResult = await pool.query(
           `SELECT mint, name, symbol, creator, created_at
-           FROM tbl_soltrack_created_tokens
+           FROM tbl_soltrack_tokens
            WHERE creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)`
         );
 
@@ -174,7 +175,7 @@ export async function fetchAthForTokens(
       try {
         const peakResult = await pool.query(
           `SELECT mint, peak_market_cap_usd 
-           FROM tbl_soltrack_created_tokens 
+           FROM tbl_soltrack_tokens 
            WHERE mint = ANY($1) AND peak_market_cap_usd IS NOT NULL`,
           [batch]
         );
@@ -278,18 +279,19 @@ export async function fetchAthForTokens(
             if (startingMarketCap > 0) {
               console.log(`[AthTracker] Updating initial_market_cap_usd for ${mint} (${athData?.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
             }
+            // ClickHouse: Use ALTER TABLE UPDATE
             await pool.query(
-              `UPDATE tbl_soltrack_created_tokens 
-               SET ath_market_cap_usd = GREATEST(
-                 $1::DECIMAL, 
-                 COALESCE(ath_market_cap_usd, 0),
-                 COALESCE(peak_market_cap_usd, 0)
+              `ALTER TABLE tbl_soltrack_tokens 
+               UPDATE ath_market_cap_usd = greatest(
+                 $1, 
+                 coalesce(ath_market_cap_usd, 0),
+                 coalesce(peak_market_cap_usd, 0)
                ),
                    initial_market_cap_usd = CASE 
-                     WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
+                     WHEN $3 > 0 THEN $3 
                      ELSE initial_market_cap_usd
                    END,
-                   updated_at = NOW()
+                   updated_at = now()
                WHERE mint = $2`,
               [effectiveAth, mint, startingMarketCap]
             );
@@ -299,13 +301,14 @@ export async function fetchAthForTokens(
         } else if (peakMcap > 0) {
           // No Bitquery data but we have peak - update ATH with peak
           try {
+            // ClickHouse: Use ALTER TABLE UPDATE
             await pool.query(
-              `UPDATE tbl_soltrack_created_tokens 
-               SET ath_market_cap_usd = GREATEST(
+              `ALTER TABLE tbl_soltrack_tokens 
+               UPDATE ath_market_cap_usd = greatest(
                  $1, 
-                 COALESCE(ath_market_cap_usd, 0)
+                 coalesce(ath_market_cap_usd, 0)
                ),
-                   updated_at = NOW()
+                   updated_at = now()
                WHERE mint = $2`,
               [peakMcap, mint]
             );
@@ -319,13 +322,14 @@ export async function fetchAthForTokens(
 
       // Ensure all tokens in batch have ATH >= peak_market_cap_usd (even if Bitquery failed)
       try {
+        // ClickHouse: Use ALTER TABLE UPDATE
         await pool.query(
-          `UPDATE tbl_soltrack_created_tokens 
-           SET ath_market_cap_usd = GREATEST(
-             COALESCE(ath_market_cap_usd, 0),
-             COALESCE(peak_market_cap_usd, 0)
+          `ALTER TABLE tbl_soltrack_tokens 
+           UPDATE ath_market_cap_usd = greatest(
+             coalesce(ath_market_cap_usd, 0),
+             coalesce(peak_market_cap_usd, 0)
            ),
-               updated_at = NOW()
+               updated_at = now()
            WHERE mint = ANY($1) 
              AND peak_market_cap_usd IS NOT NULL 
              AND (ath_market_cap_usd IS NULL OR ath_market_cap_usd < peak_market_cap_usd)`,
@@ -735,77 +739,92 @@ async function saveAthDataToDb(): Promise<void> {
         // Try with ATH columns
         console.log(`[AthTracker] Saving token ${token.mint} to database (ATH: $${token.athMarketCapUsd.toFixed(2)})`);
         
+        // ClickHouse: Use ReplacingMergeTree pattern (insert with version)
+        // First, get current values to preserve them
+        const currentResult = await pool.query(
+          'SELECT name, symbol, is_fetched, ath_market_cap_usd, peak_market_cap_usd FROM tbl_soltrack_tokens WHERE mint = $1 ORDER BY version DESC LIMIT 1',
+          [token.mint]
+        );
+        
+        const current = currentResult.rows[0];
+        const preservedName = current?.name || token.name;
+        const preservedSymbol = current?.symbol || token.symbol;
+        const preservedIsFetched = current?.is_fetched !== undefined ? current.is_fetched : 0;
+        const currentAth = current?.ath_market_cap_usd ? parseFloat(current.ath_market_cap_usd) : 0;
+        const currentPeak = current?.peak_market_cap_usd ? parseFloat(current.peak_market_cap_usd) : 0;
+        const newAth = Math.max(token.athMarketCapUsd, currentAth, currentPeak);
+        
         await pool.query(
-          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, ath_market_cap_usd, created_at, is_fetched)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
-           ON CONFLICT (mint) DO UPDATE SET
-             name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
-             symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-             -- ATH tracker does NOT update bonded status - that's handled by bonding tracker
-             -- bonded field is preserved as-is
-             ath_market_cap_usd = GREATEST(
-               EXCLUDED.ath_market_cap_usd, 
-               COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
-               COALESCE(tbl_soltrack_created_tokens.peak_market_cap_usd, 0)
-             ),
-             is_fetched = tbl_soltrack_created_tokens.is_fetched,
-             updated_at = NOW()`,
+          `INSERT INTO tbl_soltrack_tokens (mint, name, symbol, creator, ath_market_cap_usd, created_at, is_fetched, version)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, now64())`,
           [
             token.mint,
-            token.name,
-            token.symbol,
+            preservedName,
+            preservedSymbol,
             token.creator,
-            token.athMarketCapUsd,
+            newAth,
             new Date(token.createdAt),
-            false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
+            preservedIsFetched,
           ]
         );
         
       } else {
         // Fallback: save without ATH columns
+        // ClickHouse: Use ReplacingMergeTree pattern
+        const currentResult = await pool.query(
+          'SELECT name, symbol, is_fetched FROM tbl_soltrack_tokens WHERE mint = $1 ORDER BY version DESC LIMIT 1',
+          [token.mint]
+        );
+        
+        const current = currentResult.rows[0];
+        const preservedName = current?.name || token.name;
+        const preservedSymbol = current?.symbol || token.symbol;
+        const preservedIsFetched = current?.is_fetched !== undefined ? current.is_fetched : 0;
+        
         await pool.query(
-          `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, created_at, is_fetched)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (mint) DO UPDATE SET
-             name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
-             symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-             is_fetched = tbl_soltrack_created_tokens.is_fetched,
-             updated_at = NOW()`,
+          `INSERT INTO tbl_soltrack_tokens (mint, name, symbol, creator, created_at, is_fetched, version)
+           VALUES ($1, $2, $3, $4, $5, $6, now64())`,
           [
             token.mint,
-            token.name,
-            token.symbol,
+            preservedName,
+            preservedSymbol,
             token.creator,
             new Date(token.createdAt),
-            false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
+            preservedIsFetched,
           ]
         );
       }
       
       token.dirty = false;
     } catch (error: any) {
-      // Check if error is due to missing columns
-      if (error?.code === '42703' && athColumnsExist) {
+      // Check if error is due to missing columns (ClickHouse error format)
+      if (error?.message && error.message.includes('Missing columns') && athColumnsExist) {
         console.warn('[AthTracker] ATH columns not found. Run migration! Falling back to basic save...');
         athColumnsExist = false;
         
         // Retry with fallback query
         try {
+          // ClickHouse: Use ReplacingMergeTree pattern
+          const currentResult = await pool.query(
+            'SELECT name, symbol, is_fetched FROM tbl_soltrack_tokens WHERE mint = $1 ORDER BY version DESC LIMIT 1',
+            [token.mint]
+          );
+          
+          const current = currentResult.rows[0];
+          const preservedName = current?.name || token.name;
+          const preservedSymbol = current?.symbol || token.symbol;
+          const preservedIsFetched = current?.is_fetched !== undefined ? current.is_fetched : 0;
+          
           await pool.query(
-            `INSERT INTO tbl_soltrack_created_tokens (mint, name, symbol, creator, created_at, is_fetched)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (mint) DO UPDATE SET
-               name = COALESCE(EXCLUDED.name, tbl_soltrack_created_tokens.name),
-               symbol = COALESCE(EXCLUDED.symbol, tbl_soltrack_created_tokens.symbol),
-               is_fetched = tbl_soltrack_created_tokens.is_fetched,
-               updated_at = NOW()`,
+            `INSERT INTO tbl_soltrack_tokens (mint, name, symbol, creator, created_at, is_fetched, version)
+             VALUES ($1, $2, $3, $4, $5, $6, now64())`,
             [
               token.mint,
-              token.name,
-              token.symbol,
+              preservedName,
+              preservedSymbol,
               token.creator,
               new Date(token.createdAt),
-              false, // is_fetched = false (ATH tracker doesn't create new tokens, just updates existing ones)
+              preservedIsFetched,
             ]
           );
           token.dirty = false;
@@ -852,7 +871,7 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
     // Get all tokens from this creator
     const result = await pool.query(
       `SELECT mint, name, symbol, created_at, COALESCE(ath_market_cap_usd, 0) as current_ath
-       FROM tbl_soltrack_created_tokens
+       FROM tbl_soltrack_tokens
        WHERE creator = $1`,
       [creatorAddress]
     );
@@ -905,18 +924,19 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
         if (tokenInfo && athData.athMarketCapUsd > tokenInfo.currentAth) {
           try {
             const oldAth = tokenInfo.currentAth;
+            // ClickHouse: Use ALTER TABLE UPDATE
             await pool.query(
-              `UPDATE tbl_soltrack_created_tokens 
-               SET ath_market_cap_usd = GREATEST(
-                 $1::DECIMAL, 
-                 COALESCE(ath_market_cap_usd, 0),
-                 COALESCE(peak_market_cap_usd, 0)
+              `ALTER TABLE tbl_soltrack_tokens 
+               UPDATE ath_market_cap_usd = greatest(
+                 $1, 
+                 coalesce(ath_market_cap_usd, 0),
+                 coalesce(peak_market_cap_usd, 0)
                ),
                    initial_market_cap_usd = CASE 
-                     WHEN $3::DECIMAL > 0 THEN $3::DECIMAL 
+                     WHEN $3 > 0 THEN $3 
                      ELSE initial_market_cap_usd
                    END,
-                   updated_at = NOW()
+                   updated_at = now()
                WHERE mint = $2`,
               [athData.athMarketCapUsd, athData.mintAddress, startingMarketCap]
             );
@@ -942,10 +962,11 @@ export async function updateAthMcapForCreator(creatorAddress: string): Promise<v
         // ATH didn't change, but we might have starting market cap to update
         try {
           console.log(`[AthTracker] Updating initial_market_cap_usd for ${athData.mintAddress} (${athData.symbol || 'unknown'}): $${startingMarketCap.toFixed(2)}`);
+          // ClickHouse: Use ALTER TABLE UPDATE
           await pool.query(
-            `UPDATE tbl_soltrack_created_tokens 
-             SET initial_market_cap_usd = $1::DECIMAL,
-                 updated_at = NOW()
+            `ALTER TABLE tbl_soltrack_tokens 
+             UPDATE initial_market_cap_usd = $1,
+                 updated_at = now()
              WHERE mint = $2`,
             [startingMarketCap, athData.mintAddress]
           );

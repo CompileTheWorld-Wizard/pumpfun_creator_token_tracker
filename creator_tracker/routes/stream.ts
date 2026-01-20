@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth.js';
 import { startStream, stopStream, getStatus } from '../services/stream.js';
 
 const router = Router();
 
 // Start streaming endpoint
-router.post('/start', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.post('/start',  async (_req: Request, res: Response): Promise<void> => {
   try {
     if (getStatus()) {
       res.status(400).json({ 
@@ -31,7 +30,7 @@ router.post('/start', requireAuth, async (_req: Request, res: Response): Promise
 });
 
 // Stop streaming endpoint
-router.post('/stop', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.post('/stop',  async (_req: Request, res: Response): Promise<void> => {
   try {
     if (!getStatus()) {
       res.status(400).json({ 
@@ -57,7 +56,7 @@ router.post('/stop', requireAuth, async (_req: Request, res: Response): Promise<
 });
 
 // Get streaming status endpoint
-router.get('/status', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.get('/status',  async (_req: Request, res: Response): Promise<void> => {
   try {
     res.json({ 
       success: true, 

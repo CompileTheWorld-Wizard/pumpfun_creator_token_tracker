@@ -4,7 +4,6 @@ import cors from "cors";
 import bodyParser from "body-parser";
 import path from "path";
 import fs from "fs";
-import session from "express-session";
 import ExcelJS from "exceljs";
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import { setupFileLogging } from "./utils/logger.js";
@@ -13,17 +12,8 @@ import { redisService } from "./services/redisService.js";
 import { tracker } from "./tracker/index.js";
 import { tokenService } from "./services/tokenService.js";
 import { bitqueryService } from "./services/index.js";
-import { sessionStore } from "./src/shared/sessionStore.js";
-import { getSessionConfig } from "./src/shared/auth.js";
 
 dotenv.config();
-
-// Extend session type to include authenticated property
-declare module "express-session" {
-  interface SessionData {
-    authenticated?: boolean;
-  }
-}
 
 // Setup file logging (must be done early, before any console.log calls)
 setupFileLogging();
@@ -58,12 +48,6 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Session middleware - using shared Redis store
-app.use(session({
-  ...getSessionConfig(),
-  store: sessionStore,
-}));
-
 // Set no-cache headers for API routes to prevent 304 responses
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
@@ -77,8 +61,8 @@ app.use((req, res, next) => {
 });
 
 // HTML route handlers (must come BEFORE static middleware)
-// Note: Static files and HTML pages are served by the frontend/auth server
-// Authentication is handled by the frontend proxy, so no requireAuth needed here
+// Note: Static files and HTML pages are served by the frontend server
+// Authentication is handled by the frontend
 
 // Initialize database and tracker
 async function initializeApp() {
@@ -98,8 +82,7 @@ async function initializeApp() {
   }
 }
 
-// Note: Authentication is handled by the frontend/auth server
-// All API routes below require authentication via shared session
+// Note: Authentication is handled by the frontend
 
 // API Routes (protected)
 

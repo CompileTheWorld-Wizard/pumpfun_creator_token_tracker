@@ -1,9 +1,6 @@
 import express from 'express';
-import session from 'express-session';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { sessionStore } from './src/shared/sessionStore.js';
-import { getSessionConfig } from './src/shared/auth.js';
 import { dbService } from './database.js';
 import { SolTransferTracker } from './services/solTransferTracker.js';
 
@@ -31,12 +28,6 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Session configuration - using shared Redis store
-app.use(session({
-  ...getSessionConfig(),
-  store: sessionStore,
-}));
 
 // Set no-cache headers for API routes to prevent 304 responses
 app.use((req, res, next) => {

@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { PublicKey, Connection } from '@solana/web3.js';
-import { requireAuth } from '../middleware/auth.js';
 import { pool } from '../db.js';
 import { updateBondingStatusForCreator } from '../services/bondingTracker.js';
 import { updateAthMcapForCreator } from '../services/athTracker.js';
@@ -11,7 +10,7 @@ const router = Router();
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 // Validate wallet address endpoint
-router.post('/validate', requireAuth, async (req: Request, res: Response) => {
+router.post('/validate',  async (req: Request, res: Response) => {
   try {
     const { address } = req.body;
 
@@ -97,7 +96,7 @@ router.post('/validate', requireAuth, async (req: Request, res: Response) => {
 });
 
 // Get all blacklist wallets for the authenticated user
-router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void> => {
+router.get('/',  async (_req: Request, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
       'SELECT wallet_address, name as nickname FROM tbl_soltrack_blacklist_creator ORDER BY created_at DESC'
@@ -117,7 +116,7 @@ router.get('/', requireAuth, async (_req: Request, res: Response): Promise<void>
 });
 
 // Add a blacklist wallet
-router.post('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { address, nickname } = req.body;
 
@@ -200,8 +199,10 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
         message: 'Blacklist wallet added successfully' 
       });
     } catch (dbError: any) {
-      // Check if it's a unique constraint violation
-      if (dbError.code === '23505') {
+      // Check if it's a duplicate key error (ClickHouse error format may differ)
+      // ClickHouse doesn't have unique constraints like PostgreSQL, but ReplacingMergeTree handles duplicates
+      // Check error message for duplicate indication
+      if (dbError.message && (dbError.message.includes('duplicate') || dbError.message.includes('already exists'))) {
         res.status(400).json({ 
           error: 'This wallet address is already in the blacklist' 
         });
@@ -218,7 +219,7 @@ router.post('/', requireAuth, async (req: Request, res: Response): Promise<void>
 });
 
 // Delete a blacklist wallet
-router.delete('/:address', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.delete('/:address',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
 
@@ -238,21 +239,29 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
       return;
     }
 
-    const result = await pool.query(
-      'DELETE FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1',
+    // Check if wallet exists first
+    const checkResult = await pool.query(
+      'SELECT wallet_address FROM tbl_soltrack_blacklist_creator WHERE wallet_address = $1 LIMIT 1',
       [walletAddress]
     );
-
-    if (result.rowCount === 0) {
+    
+    if (checkResult.rows.length === 0) {
       res.status(404).json({ 
         error: 'Wallet address not found in blacklist' 
       });
       return;
     }
 
+    // ClickHouse: Use ALTER TABLE DELETE (async operation)
+    // For ReplacingMergeTree, we could also insert with higher version, but DELETE is cleaner
+    await pool.query(
+      'ALTER TABLE tbl_soltrack_blacklist_creator DELETE WHERE wallet_address = $1',
+      [walletAddress]
+    );
+
     res.json({ 
       success: true, 
-      message: 'Blacklist wallet removed successfully' 
+      message: 'Blacklist wallet removal initiated (ClickHouse async delete)' 
     });
   } catch (error: any) {
     console.error('Error deleting blacklist wallet:', error);
@@ -263,7 +272,7 @@ router.delete('/:address', requireAuth, async (req: Request, res: Response): Pro
 });
 
 // Get wallet statistics (bonded rate and average ATH mcap)
-router.get('/:address/stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/:address/stats',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
 
@@ -283,13 +292,13 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
       return;
     }
 
-    // Check if wallet has any tokens in tbl_soltrack_created_tokens
+    // Check if wallet has any tokens in tokens table
     const tokenCheck = await pool.query(
-      'SELECT COUNT(*) as count FROM tbl_soltrack_created_tokens WHERE creator = $1',
+      'SELECT count() as count FROM tbl_soltrack_tokens WHERE creator = $1',
       [walletAddress]
     );
 
-    const tokenCount = parseInt(tokenCheck.rows[0].count) || 0;
+    const tokenCount = parseInt(tokenCheck.rows[0]?.count || '0') || 0;
     if (tokenCount === 0) {
       res.status(404).json({ 
         error: 'No tokens found for this wallet address' 
@@ -326,11 +335,12 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
     // Get statistics for tokens created by this wallet
     const statsResult = await pool.query(
       `SELECT 
-        COUNT(*) as total_tokens,
-        COUNT(*) FILTER (WHERE bonded = true) as bonded_tokens,
-        AVG(ath_market_cap_usd) FILTER (WHERE ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
-      FROM tbl_soltrack_created_tokens
-      WHERE creator = $1`,
+        count() as total_tokens,
+        countIf(bonded = 1) as bonded_tokens,
+        avg(ath_market_cap_usd) as avg_ath_mcap
+      FROM tbl_soltrack_tokens
+      WHERE creator = $1
+      AND ath_market_cap_usd IS NOT NULL`,
       [walletAddress]
     );
 
@@ -355,7 +365,7 @@ router.get('/:address/stats', requireAuth, async (req: Request, res: Response): 
 });
 
 // Get wallets that received more than X SOL from a creator wallet
-router.get('/:address/receivers', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/:address/receivers',  async (req: Request, res: Response): Promise<void> => {
   try {
     const { address } = req.params;
     const minAmount = parseFloat(req.query.minAmount as string) || 0;
@@ -378,15 +388,17 @@ router.get('/:address/receivers', requireAuth, async (req: Request, res: Respons
     }
 
     // Query the fund tracking database for wallets that received SOL from this creator wallet
-    // Note: This assumes both databases are in the same PostgreSQL instance
+    // Note: This assumes both databases are accessible
+    // For ClickHouse, if fund_tracker is still on PostgreSQL, this query won't work
+    // You may need to update fund_tracker separately or use a different approach
     const query = `
       SELECT 
         receiver as address,
-        SUM(amount)::numeric as total_received
+        toDecimal64(sum(amount), 9) as total_received
       FROM tbl_fund_sol_transfers
       WHERE sender = $1
       GROUP BY receiver
-      HAVING SUM(amount) > $2
+      HAVING sum(amount) > $2
       ORDER BY total_received DESC
       LIMIT $3
     `;

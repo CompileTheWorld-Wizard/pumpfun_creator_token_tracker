@@ -1,11 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { requireAuth } from '../middleware/auth.js';
 import { pool } from '../db.js';
 
 const router = Router();
 
 // Get all created tokens with their 15-second market cap data
-router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/', async (req: Request, res: Response): Promise<void> => {
   try {
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
@@ -46,12 +45,12 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
     
     // Get total count
     const countResult = await pool.query(
-      `SELECT COUNT(*) as total
-       FROM tbl_soltrack_created_tokens ct
+      `SELECT count() as total
+       FROM tbl_soltrack_tbl_soltrack_tokens ct
        ${whereClause}`,
       queryParams
     );
-    const total = parseInt(countResult.rows[0].total);
+    const total = parseInt(countResult.rows[0]?.total || '0');
     
     // Validate and build ORDER BY clause
     const validSortColumns: Record<string, string> = {
@@ -81,7 +80,6 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         ct.bonding_curve,
         ct.created_at,
         ct.create_tx_signature,
-        ct.market_cap_time_series,
         ct.initial_market_cap_usd,
         ct.peak_market_cap_usd,
         ct.final_market_cap_usd,
@@ -90,29 +88,63 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM tbl_soltrack_created_tokens ct
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${whereClause}
       ${orderByClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...queryParams, limit, offset]
     );
     
-    const tokens = result.rows.map(row => {
-      // Parse market_cap_time_series if it's a string, otherwise use as-is
-      let marketCapTimeSeries = row.market_cap_time_series || [];
-      if (typeof marketCapTimeSeries === 'string') {
-        try {
-          marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
-        } catch (e) {
-          console.error('Error parsing market_cap_time_series:', e);
-          marketCapTimeSeries = [];
-        }
-      }
+    // Get mints for time series query
+    const mints = result.rows.map(row => row.mint);
+    
+    // Fetch time series data for all tokens in batch
+    let timeSeriesMap = new Map<string, any[]>();
+    if (mints.length > 0) {
+      // ClickHouse: use tuple for IN clause
+      const mintTuple = mints.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
+      const timeSeriesResult = await pool.query(
+        `SELECT 
+          mint,
+          signature,
+          timestamp_ms,
+          time_seconds,
+          trade_type,
+          is_buy,
+          sol_amount,
+          token_amount,
+          market_cap_sol,
+          market_cap_usd,
+          sol_price_usd,
+          execution_price_sol,
+          trade_index
+        FROM tbl_soltrack_token_time_series
+        WHERE mint IN (${mintTuple})
+        ORDER BY mint, timestamp_ms`
+      );
       
-      // Ensure it's an array
-      if (!Array.isArray(marketCapTimeSeries)) {
-        marketCapTimeSeries = [];
+      // Group time series by mint
+      for (const row of timeSeriesResult.rows) {
+        if (!timeSeriesMap.has(row.mint)) {
+          timeSeriesMap.set(row.mint, []);
+        }
+        timeSeriesMap.get(row.mint)!.push({
+          signature: row.signature,
+          timestamp: row.timestamp_ms,
+          tradeType: row.trade_type,
+          solAmount: parseFloat(row.sol_amount),
+          tokenAmount: parseFloat(row.token_amount),
+          marketCapSol: parseFloat(row.market_cap_sol),
+          marketCapUsd: parseFloat(row.market_cap_usd),
+          solPriceUsd: parseFloat(row.sol_price_usd),
+          executionPriceSol: parseFloat(row.execution_price_sol),
+        });
       }
+    }
+    
+    const tokens = result.rows.map(row => {
+      // Get time series from map
+      const marketCapTimeSeries = timeSeriesMap.get(row.mint) || [];
       
       return {
         mint: row.mint,
@@ -127,7 +159,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
         peakMarketCapUsd: row.peak_market_cap_usd ? parseFloat(row.peak_market_cap_usd) : null,
         finalMarketCapUsd: row.final_market_cap_usd ? parseFloat(row.final_market_cap_usd) : null,
         tradeCount15s: row.trade_count || 0,
-        bonded: row.bonded || false,
+        bonded: row.bonded === 1 || row.bonded === true, // Convert UInt8 to boolean
         athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
         trackedAt: row.tracked_at,
         updatedAt: row.updated_at,
@@ -152,7 +184,7 @@ router.get('/', requireAuth, async (req: Request, res: Response): Promise<void> 
 });
 
 // Get a specific token by mint address
-router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/:mint', async (req: Request, res: Response): Promise<void> => {
   try {
     const { mint } = req.params;
     
@@ -165,7 +197,6 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
         ct.bonding_curve,
         ct.created_at,
         ct.create_tx_signature,
-        ct.market_cap_time_series,
         ct.initial_market_cap_usd,
         ct.peak_market_cap_usd,
         ct.final_market_cap_usd,
@@ -174,7 +205,7 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
         ct.ath_market_cap_usd,
         ct.tracked_at,
         ct.updated_at
-      FROM tbl_soltrack_created_tokens ct
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       WHERE ct.mint = $1 
         AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
       LIMIT 1`,
@@ -188,21 +219,38 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
     
     const row = result.rows[0];
     
-    // Parse market_cap_time_series if it's a string, otherwise use as-is
-    let marketCapTimeSeries = row.market_cap_time_series || [];
-    if (typeof marketCapTimeSeries === 'string') {
-      try {
-        marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
-      } catch (e) {
-        console.error('Error parsing market_cap_time_series:', e);
-        marketCapTimeSeries = [];
-      }
-    }
+    // Fetch time series data separately
+    const timeSeriesResult = await pool.query(
+      `SELECT 
+        signature,
+        timestamp_ms,
+        time_seconds,
+        trade_type,
+        is_buy,
+        sol_amount,
+        token_amount,
+        market_cap_sol,
+        market_cap_usd,
+        sol_price_usd,
+        execution_price_sol,
+        trade_index
+      FROM tbl_soltrack_token_time_series
+      WHERE mint = $1
+      ORDER BY timestamp_ms`,
+      [mint]
+    );
     
-    // Ensure it's an array
-    if (!Array.isArray(marketCapTimeSeries)) {
-      marketCapTimeSeries = [];
-    }
+    const marketCapTimeSeries = timeSeriesResult.rows.map(ts => ({
+      signature: ts.signature,
+      timestamp: ts.timestamp_ms,
+      tradeType: ts.trade_type,
+      solAmount: parseFloat(ts.sol_amount),
+      tokenAmount: parseFloat(ts.token_amount),
+      marketCapSol: parseFloat(ts.market_cap_sol),
+      marketCapUsd: parseFloat(ts.market_cap_usd),
+      solPriceUsd: parseFloat(ts.sol_price_usd),
+      executionPriceSol: parseFloat(ts.execution_price_sol),
+    }));
     
     const token = {
       mint: row.mint,
@@ -217,7 +265,7 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
       peakMarketCapUsd: row.peak_market_cap_usd ? parseFloat(row.peak_market_cap_usd) : null,
       finalMarketCapUsd: row.final_market_cap_usd ? parseFloat(row.final_market_cap_usd) : null,
       tradeCount15s: row.trade_count || 0,
-      bonded: row.bonded || false,
+      bonded: row.bonded === 1 || row.bonded === true,
       athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
       trackedAt: row.tracked_at,
       updatedAt: row.updated_at,
@@ -232,8 +280,8 @@ router.get('/:mint', requireAuth, async (req: Request, res: Response): Promise<v
   }
 });
 
-// Get distinct creator wallets from tbl_soltrack_created_tokens
-router.get('/creators/list', requireAuth, async (req: Request, res: Response): Promise<void> => {
+// Get distinct creator wallets from tokens
+router.get('/creators/list', async (req: Request, res: Response): Promise<void> => {
   try {
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
@@ -244,7 +292,7 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
       // Show all creator wallets that have tokens
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM tbl_soltrack_created_tokens ct
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         ORDER BY ct.creator ASC
       `;
       params = [];
@@ -252,7 +300,7 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
       // Show only creator wallets that have tokens AND are NOT blacklisted
       query = `
         SELECT DISTINCT ct.creator as address
-        FROM tbl_soltrack_created_tokens ct
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)
         ORDER BY ct.creator ASC
       `;
@@ -273,7 +321,7 @@ router.get('/creators/list', requireAuth, async (req: Request, res: Response): P
 });
 
 // Get overall ATH mcap statistics for all creator wallets
-router.get('/creators/ath-stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/creators/ath-stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
@@ -287,17 +335,20 @@ router.get('/creators/ath-stats', requireAuth, async (req: Request, res: Respons
     // First, get the average ATH mcap per creator wallet
     const result = await pool.query(
       `SELECT 
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
-      ${whereClause}`
+        avg(ct.ath_market_cap_usd) as avg_ath_mcap
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      ${whereClause}
+      AND ct.ath_market_cap_usd IS NOT NULL`
     );
     
-    // Get median ATH mcap across all tokens
+    // Get median ATH mcap across all tokens (ClickHouse uses quantile)
     const medianResult = await pool.query(
       `SELECT 
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
-      ${whereClause}`
+        quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
+      ${whereClause}
+      AND ct.ath_market_cap_usd IS NOT NULL 
+      AND ct.ath_market_cap_usd > 0`
     );
     
     const avgAthMcap = result.rows[0]?.avg_ath_mcap ? parseFloat(result.rows[0].avg_ath_mcap) : null;
@@ -316,7 +367,7 @@ router.get('/creators/ath-stats', requireAuth, async (req: Request, res: Respons
 });
 
 // Get overall average metrics for all creator wallets
-router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/creators/avg-stats', async (req: Request, res: Response): Promise<void> => {
   try {
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     
@@ -329,24 +380,24 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
     // Get basic statistics that can be calculated directly from database
     const basicStatsResult = await pool.query(
       `SELECT 
-        AVG(wallet_stats.total_tokens) as avg_total_tokens,
-        AVG(wallet_stats.bonded_tokens) as avg_bonded_tokens,
-        AVG(wallet_stats.win_rate) as avg_win_rate,
-        AVG(wallet_stats.avg_ath_mcap) FILTER (WHERE wallet_stats.avg_ath_mcap IS NOT NULL) as avg_ath_mcap,
-        AVG(wallet_stats.median_ath_mcap) FILTER (WHERE wallet_stats.median_ath_mcap IS NOT NULL) as avg_median_ath_mcap
+        avg(wallet_stats.total_tokens) as avg_total_tokens,
+        avg(wallet_stats.bonded_tokens) as avg_bonded_tokens,
+        avg(wallet_stats.win_rate) as avg_win_rate,
+        avg(wallet_stats.avg_ath_mcap) as avg_ath_mcap,
+        avg(wallet_stats.median_ath_mcap) as avg_median_ath_mcap
       FROM (
         SELECT 
           ct.creator,
-          COUNT(*)::DECIMAL as total_tokens,
-          COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL as bonded_tokens,
+          toDecimal64(count(), 2) as total_tokens,
+          toDecimal64(countIf(ct.bonded = 1), 2) as bonded_tokens,
           CASE 
-            WHEN COUNT(*) > 0 THEN 
-              ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+            WHEN count() > 0 THEN 
+              round((toDecimal64(countIf(ct.bonded = 1), 2) / toDecimal64(count(), 2)) * 100, 2)
             ELSE 0
           END as win_rate,
-          AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-          PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-        FROM tbl_soltrack_created_tokens ct
+          avg(ct.ath_market_cap_usd) as avg_ath_mcap,
+          quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         ${whereClause}
         GROUP BY ct.creator
       ) as wallet_stats`
@@ -357,7 +408,7 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
     // Get all creator wallets to calculate complex metrics
     const creatorsResult = await pool.query(
       `SELECT DISTINCT ct.creator
-       FROM tbl_soltrack_created_tokens ct
+       FROM tbl_soltrack_tbl_soltrack_tokens ct
        ${whereClause}
        ORDER BY ct.creator`
     );
@@ -390,7 +441,7 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
       const settingsResult = await pool.query(
         `SELECT settings
          FROM tbl_soltrack_scoring_settings
-         WHERE is_default = TRUE
+         WHERE is_default = 1
          LIMIT 1`
       );
       if (settingsResult.rows.length > 0 && settingsResult.rows[0].settings) {
@@ -404,15 +455,61 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
     // Get all tokens for all creators (limit to reasonable amount for performance)
     const tokensResult = await pool.query(
       `SELECT 
+        ct.mint,
         ct.creator,
-        ct.market_cap_time_series,
         ct.created_at,
         ct.ath_market_cap_usd,
         ct.initial_market_cap_usd
-      FROM tbl_soltrack_created_tokens ct
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${whereClause}
       ORDER BY ct.creator, ct.created_at DESC`
     );
+    
+    // Get all mints to fetch time series
+    const mints = tokensResult.rows.map(row => row.mint);
+    
+    // Fetch time series data for all tokens
+    const timeSeriesMap = new Map<string, any[]>();
+    if (mints.length > 0) {
+      const mintTuple = mints.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
+      const timeSeriesResult = await pool.query(
+        `SELECT 
+          mint,
+          signature,
+          timestamp_ms,
+          time_seconds,
+          trade_type,
+          is_buy,
+          sol_amount,
+          token_amount,
+          market_cap_sol,
+          market_cap_usd,
+          sol_price_usd,
+          execution_price_sol,
+          trade_index
+        FROM tbl_soltrack_token_time_series
+        WHERE mint IN (${mintTuple})
+        ORDER BY mint, timestamp_ms`
+      );
+      
+      // Group time series by mint
+      for (const ts of timeSeriesResult.rows) {
+        if (!timeSeriesMap.has(ts.mint)) {
+          timeSeriesMap.set(ts.mint, []);
+        }
+        timeSeriesMap.get(ts.mint)!.push({
+          signature: ts.signature,
+          timestamp: ts.timestamp_ms,
+          tradeType: ts.trade_type,
+          solAmount: parseFloat(ts.sol_amount),
+          tokenAmount: parseFloat(ts.token_amount),
+          marketCapSol: parseFloat(ts.market_cap_sol),
+          marketCapUsd: parseFloat(ts.market_cap_usd),
+          solPriceUsd: parseFloat(ts.sol_price_usd),
+          executionPriceSol: parseFloat(ts.execution_price_sol),
+        });
+      }
+    }
     
     // Group tokens by creator
     const tokensByCreator = new Map<string, Array<{
@@ -428,17 +525,7 @@ router.get('/creators/avg-stats', requireAuth, async (req: Request, res: Respons
         tokensByCreator.set(row.creator, []);
       }
       
-      let marketCapTimeSeries = row.market_cap_time_series;
-      if (typeof marketCapTimeSeries === 'string') {
-        try {
-          marketCapTimeSeries = JSON.parse(marketCapTimeSeries);
-        } catch (e) {
-          marketCapTimeSeries = [];
-        }
-      }
-      if (!Array.isArray(marketCapTimeSeries)) {
-        marketCapTimeSeries = [];
-      }
+      const marketCapTimeSeries = timeSeriesMap.get(row.mint) || [];
       
       tokensByCreator.get(row.creator)!.push({
         marketCapTimeSeries,
@@ -1478,7 +1565,7 @@ function calculateBuySellStats(
 }
 
 // Get creator wallets analytics with pagination
-router.post('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/creators/analytics', async (req: Request, res: Response): Promise<void> => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
@@ -1524,7 +1611,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Build base WHERE clause
     let baseWhereClause = '';
     if (!viewAll) {
-      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_tbl_soltrack_blacklist_creator)';
     }
     
     // Get rug threshold from settings (default 6000) - need this early for calculations
@@ -1539,12 +1626,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Filter by total tokens (can be done in SQL HAVING clause)
     if (filters.totalTokens) {
       if (filters.totalTokens.min !== undefined && filters.totalTokens.min !== null) {
-        sqlFilterConditions.push(`COUNT(*) >= $${paramIndex}`);
+        sqlFilterConditions.push(`count() >= $${paramIndex}`);
         sqlFilterParams.push(filters.totalTokens.min);
         paramIndex++;
       }
       if (filters.totalTokens.max !== undefined && filters.totalTokens.max !== null) {
-        sqlFilterConditions.push(`COUNT(*) <= $${paramIndex}`);
+        sqlFilterConditions.push(`count() <= $${paramIndex}`);
         sqlFilterParams.push(filters.totalTokens.max);
         paramIndex++;
       }
@@ -1553,12 +1640,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Filter by bonded tokens (can be done in SQL HAVING clause)
     if (filters.bondedTokens) {
       if (filters.bondedTokens.min !== undefined && filters.bondedTokens.min !== null) {
-        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) >= $${paramIndex}`);
+        sqlFilterConditions.push(`countIf( ct.bonded = 1) >= $${paramIndex}`);
         sqlFilterParams.push(filters.bondedTokens.min);
         paramIndex++;
       }
       if (filters.bondedTokens.max !== undefined && filters.bondedTokens.max !== null) {
-        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) <= $${paramIndex}`);
+        sqlFilterConditions.push(`countIf( ct.bonded = 1) <= $${paramIndex}`);
         sqlFilterParams.push(filters.bondedTokens.max);
         paramIndex++;
       }
@@ -1569,12 +1656,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       for (const filter of filters.winRate) {
         if (filter.type === 'percent') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) >= $${paramIndex}`);
+            sqlFilterConditions.push(`(countIf( ct.bonded = 1) / NULLIF(toDecimal64(count(), 2), 0) * 100) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) <= $${paramIndex}`);
+            sqlFilterConditions.push(`(countIf( ct.bonded = 1) / NULLIF(toDecimal64(count(), 2), 0) * 100) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -1588,12 +1675,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       for (const filter of filters.avgMcap) {
         if (filter.type === 'mcap') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) >= $${paramIndex}`);
+            sqlFilterConditions.push(`avg(ct.ath_market_cap_usd) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) <= $${paramIndex}`);
+            sqlFilterConditions.push(`avg(ct.ath_market_cap_usd) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -1607,12 +1694,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       for (const filter of filters.medianMcap) {
         if (filter.type === 'mcap') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) >= $${paramIndex}`);
+            sqlFilterConditions.push(`quantile(0.5)(ct.ath_market_cap_usd) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) <= $${paramIndex}`);
+            sqlFilterConditions.push(`quantile(0.5)(ct.ath_market_cap_usd) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -1632,9 +1719,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     const allWalletsResult = await pool.query(
       `SELECT 
         ct.creator,
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
+        avg(ct.ath_market_cap_usd) as avg_ath_mcap,
+        quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator`
     );
@@ -1647,10 +1734,10 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Determine if we can use SQL sorting for simple fields
     const sqlSortableFields: Record<string, string> = {
       'totalTokens': 'COUNT(*)',
-      'bondedTokens': 'COUNT(*) FILTER (WHERE ct.bonded = true)',
-      'winRate': '(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100)',
-      'avgAthMcap': 'AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL)',
-      'medianAthMcap': 'PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0)'
+      'bondedTokens': 'countIf( ct.bonded = 1)',
+      'winRate': '(countIf( ct.bonded = 1) / NULLIF(toDecimal64(count(), 2), 0) * 100)',
+      'avgAthMcap': 'avg(ct.ath_market_cap_usd)',
+      'medianAthMcap': 'quantile(0.5)(ct.ath_market_cap_usd)'
     };
     
     // Check if sorting by buy/sell fields - use materialized columns for fast sorting
@@ -1690,14 +1777,14 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       `SELECT 
         ct.creator as address,
         COUNT(*) as total_tokens,
-        COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+        countIf( ct.bonded = 1) as bonded_tokens,
         CASE 
           WHEN COUNT(*) > 0 THEN 
-            ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+            ROUND((countIf( ct.bonded = 1) / toDecimal64(count(), 2)) * 100, 2)
           ELSE 0
         END as win_rate,
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap,
+        avg(ct.ath_market_cap_usd) as avg_ath_mcap,
+        quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap,
         -- Always include buy/sell stats using materialized columns (fast!)
         COALESCE(AVG(ct.buy_count) FILTER (WHERE ct.buy_count > 0 OR ct.sell_count > 0), 0) as avg_buy_count,
         COALESCE(AVG(ct.buy_sol_amount) FILTER (WHERE ct.buy_sol_amount > 0 OR ct.sell_sol_amount > 0), 0) as avg_buy_total_sol,
@@ -1707,7 +1794,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.first_5_buy_sol) FILTER (WHERE ct.first_5_buy_sol > 0), 0) as median_first_5_buy_sol,
         COALESCE(AVG(ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as avg_dev_buy_amount,
         COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.dev_buy_sol_amount) FILTER (WHERE ct.dev_buy_sol_amount > 0), 0) as median_dev_buy_amount
-      FROM tbl_soltrack_created_tokens ct
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
       ${havingClause}
@@ -1769,7 +1856,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     // Fetch tokens if needed
     if (creatorAddressesForTokens.length > 0) {
       // Build WHERE clause for token query (same filter as main query)
-      let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+      // Build IN clause for ClickHouse
+      const creatorTuple = creatorAddressesForTokens.map(c => `'${c.replace(/'/g, "''")}'`).join(', ');
+      let tokenWhereClause = `WHERE ct.creator IN (${creatorTuple})`;
       if (!viewAll) {
         tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
       }
@@ -1780,13 +1869,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           ct.creator,
           ct.initial_market_cap_usd,
           ct.ath_market_cap_usd
-        FROM tbl_soltrack_created_tokens ct
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         ${tokenWhereClause}
         AND ct.initial_market_cap_usd IS NOT NULL
         AND ct.initial_market_cap_usd > 0
         AND ct.ath_market_cap_usd IS NOT NULL
-        AND ct.ath_market_cap_usd > 0`,
-        [creatorAddressesForTokens]
+        AND ct.ath_market_cap_usd > 0`
       );
       
       // Group tokens by creator for multiplier calculations
@@ -1802,19 +1890,61 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       });
       
       // Get ALL tokens for rug rate and buy/sell calculations (including invalid ones)
-      // Only fetch market_cap_time_series when needed for buy/sell stats to improve performance
       const allTokensResult = await pool.query(
         `SELECT 
+          ct.mint,
           ct.creator,
           ct.ath_market_cap_usd,
           ct.is_fetched,
           ct.created_at,
-          ct.create_tx_signature,
-          ${needsBuySellStats ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
-        FROM tbl_soltrack_created_tokens ct
-        ${tokenWhereClause}`,
-        [creatorAddressesForTokens]
+          ct.create_tx_signature
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        ${tokenWhereClause}`
       );
+      
+      // Fetch time series data if needed
+      const timeSeriesMap = new Map<string, any[]>();
+      if (needsBuySellStats && allTokensResult.rows.length > 0) {
+        const mints = allTokensResult.rows.map(row => row.mint);
+        const mintTuple = mints.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
+        const timeSeriesResult = await pool.query(
+          `SELECT 
+            mint,
+            signature,
+            timestamp_ms,
+            time_seconds,
+            trade_type,
+            is_buy,
+            sol_amount,
+            token_amount,
+            market_cap_sol,
+            market_cap_usd,
+            sol_price_usd,
+            execution_price_sol,
+            trade_index
+          FROM tbl_soltrack_token_time_series
+          WHERE mint IN (${mintTuple})
+          ORDER BY mint, timestamp_ms`
+        );
+        
+        // Group time series by mint
+        for (const ts of timeSeriesResult.rows) {
+          if (!timeSeriesMap.has(ts.mint)) {
+            timeSeriesMap.set(ts.mint, []);
+          }
+          timeSeriesMap.get(ts.mint)!.push({
+            signature: ts.signature,
+            timestamp: ts.timestamp_ms,
+            tradeType: ts.trade_type,
+            solAmount: parseFloat(ts.sol_amount),
+            tokenAmount: parseFloat(ts.token_amount),
+            marketCapSol: parseFloat(ts.market_cap_sol),
+            marketCapUsd: parseFloat(ts.market_cap_usd),
+            solPriceUsd: parseFloat(ts.sol_price_usd),
+            executionPriceSol: parseFloat(ts.execution_price_sol),
+          });
+        }
+      }
       
       // Group all tokens by creator for rug rate calculations
       allTokensResult.rows.forEach(row => {
@@ -1824,9 +1954,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         }
         allTokensByCreator.get(creator)!.push({
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
-          isFetched: row.is_fetched || false,
+          isFetched: row.is_fetched === 1 || row.is_fetched === true,
           createdAt: row.created_at,
-          marketCapTimeSeries: row.market_cap_time_series,
+          marketCapTimeSeries: timeSeriesMap.get(row.mint) || [],
           createTxSignature: row.create_tx_signature || null
         });
       });
@@ -2414,8 +2544,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
       const paginatedCreatorAddresses = paginatedWalletsBeforeTokens.map(w => w.address);
       
       if (paginatedCreatorAddresses.length > 0) {
-        // Build WHERE clause for token query
-        let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+        // Build WHERE clause for token query (ClickHouse)
+        const creatorTuple = paginatedCreatorAddresses.map(c => `'${c.replace(/'/g, "''")}'`).join(', ');
+        let tokenWhereClause = `WHERE ct.creator IN (${creatorTuple})`;
         if (!viewAll) {
           tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
         }
@@ -2426,13 +2557,12 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
             ct.creator,
             ct.initial_market_cap_usd,
             ct.ath_market_cap_usd
-          FROM tbl_soltrack_created_tokens ct
+          FROM tbl_soltrack_tbl_soltrack_tokens ct
           ${tokenWhereClause}
           AND ct.initial_market_cap_usd IS NOT NULL
           AND ct.initial_market_cap_usd > 0
           AND ct.ath_market_cap_usd IS NOT NULL
-          AND ct.ath_market_cap_usd > 0`,
-          [paginatedCreatorAddresses]
+          AND ct.ath_market_cap_usd > 0`
         );
         
         // Group tokens by creator for multiplier calculations
@@ -2448,21 +2578,63 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
         });
         
         // Get ALL tokens for rug rate calculations (including invalid ones)
-        // Only fetch market_cap_time_series if we need it for complex calculations (ROI, rug rate, etc.)
-        // Buy/sell stats are already calculated from materialized columns, so we don't need time series for that
+        // Only fetch time series if we need it for complex calculations (ROI, rug rate, etc.)
         const needsTimeSeriesForPaginated = hasComplexFilters || sortingByComplexField || needsBuySellStatsForFiltering;
         const allTokensResult = await pool.query(
           `SELECT 
+            ct.mint,
             ct.creator,
             ct.ath_market_cap_usd,
             ct.is_fetched,
             ct.created_at,
-            ct.create_tx_signature,
-            ${needsTimeSeriesForPaginated ? 'ct.market_cap_time_series' : 'NULL::jsonb as market_cap_time_series'}
-          FROM tbl_soltrack_created_tokens ct
-          ${tokenWhereClause}`,
-          [paginatedCreatorAddresses]
+            ct.create_tx_signature
+          FROM tbl_soltrack_tbl_soltrack_tokens ct
+          ${tokenWhereClause}`
         );
+        
+        // Fetch time series data if needed
+        const paginatedTimeSeriesMap = new Map<string, any[]>();
+        if (needsTimeSeriesForPaginated && allTokensResult.rows.length > 0) {
+          const mints = allTokensResult.rows.map(row => row.mint);
+          const mintTuple = mints.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
+          const timeSeriesResult = await pool.query(
+            `SELECT 
+              mint,
+              signature,
+              timestamp_ms,
+              time_seconds,
+              trade_type,
+              is_buy,
+              sol_amount,
+              token_amount,
+              market_cap_sol,
+              market_cap_usd,
+              sol_price_usd,
+              execution_price_sol,
+              trade_index
+            FROM tbl_soltrack_token_time_series
+            WHERE mint IN (${mintTuple})
+            ORDER BY mint, timestamp_ms`
+          );
+          
+          // Group time series by mint
+          for (const ts of timeSeriesResult.rows) {
+            if (!paginatedTimeSeriesMap.has(ts.mint)) {
+              paginatedTimeSeriesMap.set(ts.mint, []);
+            }
+            paginatedTimeSeriesMap.get(ts.mint)!.push({
+              signature: ts.signature,
+              timestamp: ts.timestamp_ms,
+              tradeType: ts.trade_type,
+              solAmount: parseFloat(ts.sol_amount),
+              tokenAmount: parseFloat(ts.token_amount),
+              marketCapSol: parseFloat(ts.market_cap_sol),
+              marketCapUsd: parseFloat(ts.market_cap_usd),
+              solPriceUsd: parseFloat(ts.sol_price_usd),
+              executionPriceSol: parseFloat(ts.execution_price_sol),
+            });
+          }
+        }
         
         // Group all tokens by creator for rug rate calculations
         allTokensResult.rows.forEach(row => {
@@ -2472,9 +2644,9 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
           }
           allTokensByCreator.get(creator)!.push({
             athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
-            isFetched: row.is_fetched || false,
+            isFetched: row.is_fetched === 1 || row.is_fetched === true,
             createdAt: row.created_at,
-            marketCapTimeSeries: row.market_cap_time_series,
+            marketCapTimeSeries: paginatedTimeSeriesMap.get(row.mint) || [],
             createTxSignature: row.create_tx_signature || null
           });
         });
@@ -2587,7 +2759,7 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
 });
 
 // Export tokens as CSV (streaming for large datasets)
-router.get('/export', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get('/export', async (req: Request, res: Response): Promise<void> => {
   try {
     const creatorWallet = req.query.creator as string || null;
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
@@ -2687,7 +2859,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
           ct.ath_market_cap_usd,
           ct.tracked_at,
           ct.updated_at
-        FROM tbl_soltrack_created_tokens ct
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         ${whereClause}
         ${orderByClause}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
@@ -2747,7 +2919,7 @@ router.get('/export', requireAuth, async (req: Request, res: Response): Promise<
 });
 
 // Export creator wallets as CSV (streaming for large datasets)
-router.post('/creators/export', requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.post('/creators/export', async (req: Request, res: Response): Promise<void> => {
   try {
     const viewAll = req.query.viewAll === 'true' || req.query.viewAll === '1';
     const filters = req.body?.filters || {};
@@ -2788,7 +2960,7 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
     // Build base WHERE clause
     let baseWhereClause = '';
     if (!viewAll) {
-      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
+      baseWhereClause = 'WHERE ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_tbl_soltrack_blacklist_creator)';
     }
     
     const rugThresholdMcap = scoringSettings?.rugThresholdMcap || 6000;
@@ -2800,12 +2972,12 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
     
     if (filters.totalTokens) {
       if (filters.totalTokens.min !== undefined && filters.totalTokens.min !== null) {
-        sqlFilterConditions.push(`COUNT(*) >= $${paramIndex}`);
+        sqlFilterConditions.push(`count() >= $${paramIndex}`);
         sqlFilterParams.push(filters.totalTokens.min);
         paramIndex++;
       }
       if (filters.totalTokens.max !== undefined && filters.totalTokens.max !== null) {
-        sqlFilterConditions.push(`COUNT(*) <= $${paramIndex}`);
+        sqlFilterConditions.push(`count() <= $${paramIndex}`);
         sqlFilterParams.push(filters.totalTokens.max);
         paramIndex++;
       }
@@ -2813,12 +2985,12 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
     
     if (filters.bondedTokens) {
       if (filters.bondedTokens.min !== undefined && filters.bondedTokens.min !== null) {
-        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) >= $${paramIndex}`);
+        sqlFilterConditions.push(`countIf( ct.bonded = 1) >= $${paramIndex}`);
         sqlFilterParams.push(filters.bondedTokens.min);
         paramIndex++;
       }
       if (filters.bondedTokens.max !== undefined && filters.bondedTokens.max !== null) {
-        sqlFilterConditions.push(`COUNT(*) FILTER (WHERE ct.bonded = true) <= $${paramIndex}`);
+        sqlFilterConditions.push(`countIf( ct.bonded = 1) <= $${paramIndex}`);
         sqlFilterParams.push(filters.bondedTokens.max);
         paramIndex++;
       }
@@ -2828,12 +3000,12 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       for (const filter of filters.winRate) {
         if (filter.type === 'percent') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) >= $${paramIndex}`);
+            sqlFilterConditions.push(`(countIf( ct.bonded = 1) / NULLIF(toDecimal64(count(), 2), 0) * 100) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`(COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / NULLIF(COUNT(*)::DECIMAL, 0) * 100) <= $${paramIndex}`);
+            sqlFilterConditions.push(`(countIf( ct.bonded = 1) / NULLIF(toDecimal64(count(), 2), 0) * 100) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -2845,12 +3017,12 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       for (const filter of filters.avgMcap) {
         if (filter.type === 'mcap') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) >= $${paramIndex}`);
+            sqlFilterConditions.push(`avg(ct.ath_market_cap_usd) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) <= $${paramIndex}`);
+            sqlFilterConditions.push(`avg(ct.ath_market_cap_usd) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -2862,12 +3034,12 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       for (const filter of filters.medianMcap) {
         if (filter.type === 'mcap') {
           if (filter.min !== undefined && filter.min !== null) {
-            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) >= $${paramIndex}`);
+            sqlFilterConditions.push(`quantile(0.5)(ct.ath_market_cap_usd) >= $${paramIndex}`);
             sqlFilterParams.push(filter.min);
             paramIndex++;
           }
           if (filter.max !== undefined && filter.max !== null) {
-            sqlFilterConditions.push(`PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) <= $${paramIndex}`);
+            sqlFilterConditions.push(`quantile(0.5)(ct.ath_market_cap_usd) <= $${paramIndex}`);
             sqlFilterParams.push(filter.max);
             paramIndex++;
           }
@@ -2883,9 +3055,9 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
     const allWalletsResult = await pool.query(
       `SELECT 
         ct.creator,
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
+        avg(ct.ath_market_cap_usd) as avg_ath_mcap,
+        quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator`
     );
@@ -2905,15 +3077,15 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       `SELECT 
         ct.creator as address,
         COUNT(*) as total_tokens,
-        COUNT(*) FILTER (WHERE ct.bonded = true) as bonded_tokens,
+        countIf( ct.bonded = 1) as bonded_tokens,
         CASE 
           WHEN COUNT(*) > 0 THEN 
-            ROUND((COUNT(*) FILTER (WHERE ct.bonded = true)::DECIMAL / COUNT(*)::DECIMAL) * 100, 2)
+            ROUND((countIf( ct.bonded = 1) / toDecimal64(count(), 2)) * 100, 2)
           ELSE 0
         END as win_rate,
-        AVG(ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL) as avg_ath_mcap,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ct.ath_market_cap_usd) FILTER (WHERE ct.ath_market_cap_usd IS NOT NULL AND ct.ath_market_cap_usd > 0) as median_ath_mcap
-      FROM tbl_soltrack_created_tokens ct
+        avg(ct.ath_market_cap_usd) as avg_ath_mcap,
+        quantile(0.5)(ct.ath_market_cap_usd) as median_ath_mcap
+      FROM tbl_soltrack_tbl_soltrack_tokens ct
       ${baseWhereClause}
       GROUP BY ct.creator
       ${havingClause}
@@ -2984,8 +3156,9 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
       const batch = walletsResult.rows.slice(i, i + BATCH_SIZE);
       const batchAddresses = batch.map(row => row.address);
       
-      // Fetch tokens for this batch
-      let tokenWhereClause = 'WHERE ct.creator = ANY($1::text[])';
+      // Fetch tokens for this batch (ClickHouse)
+      const creatorTuple = batchAddresses.map(c => `'${c.replace(/'/g, "''")}'`).join(', ');
+      let tokenWhereClause = `WHERE ct.creator IN (${creatorTuple})`;
       if (!viewAll) {
         tokenWhereClause += ' AND ct.creator NOT IN (SELECT wallet_address FROM tbl_soltrack_blacklist_creator)';
       }
@@ -2995,27 +3168,69 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
           ct.creator,
           ct.initial_market_cap_usd,
           ct.ath_market_cap_usd
-        FROM tbl_soltrack_created_tokens ct
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
         ${tokenWhereClause}
         AND ct.initial_market_cap_usd IS NOT NULL
         AND ct.initial_market_cap_usd > 0
         AND ct.ath_market_cap_usd IS NOT NULL
-        AND ct.ath_market_cap_usd > 0`,
-        [batchAddresses]
+        AND ct.ath_market_cap_usd > 0`
       );
       
       const allTokensResult = await pool.query(
         `SELECT 
+          ct.mint,
           ct.creator,
           ct.ath_market_cap_usd,
           ct.is_fetched,
           ct.created_at,
-          ct.create_tx_signature,
-          ct.market_cap_time_series
-        FROM tbl_soltrack_created_tokens ct
-        ${tokenWhereClause}`,
-        [batchAddresses]
+          ct.create_tx_signature
+        FROM tbl_soltrack_tbl_soltrack_tokens ct
+        ${tokenWhereClause}`
       );
+      
+      // Fetch time series for all tokens in batch
+      const batchMints = allTokensResult.rows.map(row => row.mint);
+      const batchTimeSeriesMap = new Map<string, any[]>();
+      if (batchMints.length > 0) {
+        const mintTuple = batchMints.map(m => `'${m.replace(/'/g, "''")}'`).join(', ');
+        const timeSeriesResult = await pool.query(
+          `SELECT 
+            mint,
+            signature,
+            timestamp_ms,
+            time_seconds,
+            trade_type,
+            is_buy,
+            sol_amount,
+            token_amount,
+            market_cap_sol,
+            market_cap_usd,
+            sol_price_usd,
+            execution_price_sol,
+            trade_index
+          FROM tbl_soltrack_token_time_series
+          WHERE mint IN (${mintTuple})
+          ORDER BY mint, timestamp_ms`
+        );
+        
+        // Group time series by mint
+        for (const ts of timeSeriesResult.rows) {
+          if (!batchTimeSeriesMap.has(ts.mint)) {
+            batchTimeSeriesMap.set(ts.mint, []);
+          }
+          batchTimeSeriesMap.get(ts.mint)!.push({
+            signature: ts.signature,
+            timestamp: ts.timestamp_ms,
+            tradeType: ts.trade_type,
+            solAmount: parseFloat(ts.sol_amount),
+            tokenAmount: parseFloat(ts.token_amount),
+            marketCapSol: parseFloat(ts.market_cap_sol),
+            marketCapUsd: parseFloat(ts.market_cap_usd),
+            solPriceUsd: parseFloat(ts.sol_price_usd),
+            executionPriceSol: parseFloat(ts.execution_price_sol),
+          });
+        }
+      }
       
       // Group tokens by creator
       const tokensByCreator = new Map<string, Array<{ initialMarketCapUsd: number | null; athMarketCapUsd: number | null }>>();
@@ -3045,9 +3260,9 @@ router.post('/creators/export', requireAuth, async (req: Request, res: Response)
         }
         allTokensByCreator.get(creator)!.push({
           athMarketCapUsd: row.ath_market_cap_usd ? parseFloat(row.ath_market_cap_usd) : null,
-          isFetched: row.is_fetched || false,
+          isFetched: row.is_fetched === 1 || row.is_fetched === true,
           createdAt: row.created_at,
-          marketCapTimeSeries: row.market_cap_time_series,
+          marketCapTimeSeries: batchTimeSeriesMap.get(row.mint) || [],
           createTxSignature: row.create_tx_signature || null
         });
       });

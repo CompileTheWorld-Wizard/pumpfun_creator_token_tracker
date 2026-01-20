@@ -5,7 +5,7 @@
  * their first 15-seconds market cap data after creation.
  */
 
-import { pool } from '../db.js';
+import { pool, insertBatch } from '../db.js';
 import { redis } from '../redis.js';
 import type { CreateEventData, TradeEventData } from '../types.js';
 import { getCreatedTokens } from '../utils/solscan.js';
@@ -703,15 +703,20 @@ async function collectAndSaveTokenData(
 }
 
 /**
- * Save token tracking result to PostgreSQL
+ * Save token tracking result to ClickHouse
+ * Inserts into tokens table and normalizes time series into tbl_soltrack_token_time_series table
  */
 async function saveTokenTrackingResult(
   result: TokenTrackingResult,
   createTxSignature: string
 ): Promise<void> {
   try {
+    const createdAt = new Date(result.createdAt);
+    const createdAtMs = createdAt.getTime();
+    
+    // Insert/update token metadata (using ReplacingMergeTree pattern)
     await pool.query(
-      `INSERT INTO tbl_soltrack_created_tokens (
+      `INSERT INTO tbl_soltrack_tokens (
         mint,
         name,
         symbol,
@@ -719,7 +724,6 @@ async function saveTokenTrackingResult(
         bonding_curve,
         created_at,
         create_tx_signature,
-        market_cap_time_series,
         initial_market_cap_usd,
         peak_market_cap_usd,
         final_market_cap_usd,
@@ -731,39 +735,40 @@ async function saveTokenTrackingResult(
         first_5_buy_sol,
         dev_buy_sol_amount,
         is_fetched,
-        bonded
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
-      ON CONFLICT (mint) DO UPDATE SET
-        market_cap_time_series = EXCLUDED.market_cap_time_series,
-        initial_market_cap_usd = EXCLUDED.initial_market_cap_usd,
-        peak_market_cap_usd = EXCLUDED.peak_market_cap_usd,
-        final_market_cap_usd = EXCLUDED.final_market_cap_usd,
-        trade_count = EXCLUDED.trade_count,
-        buy_count = EXCLUDED.buy_count,
-        sell_count = EXCLUDED.sell_count,
-        buy_sol_amount = EXCLUDED.buy_sol_amount,
-        sell_sol_amount = EXCLUDED.sell_sol_amount,
-        first_5_buy_sol = EXCLUDED.first_5_buy_sol,
-        dev_buy_sol_amount = EXCLUDED.dev_buy_sol_amount,
-        is_fetched = COALESCE(EXCLUDED.is_fetched, tbl_soltrack_created_tokens.is_fetched),
-        -- Don't update bonded field - it should only be set by migrate events or bonding tracker
-        -- This preserves bonding status set by handleMigrateEvent or bonding tracker
-        bonded = tbl_soltrack_created_tokens.bonded,
-        -- Ensure ATH is at least as high as peak_market_cap_usd
-        ath_market_cap_usd = GREATEST(
-          COALESCE(tbl_soltrack_created_tokens.ath_market_cap_usd, 0),
-          COALESCE(EXCLUDED.peak_market_cap_usd, 0)
-        ),
-        updated_at = NOW()`,
+        bonded,
+        ath_market_cap_usd,
+        version
+      ) VALUES (
+        {mint:String},
+        {name:Nullable(String)},
+        {symbol:Nullable(String)},
+        {creator:String},
+        {bonding_curve:Nullable(String)},
+        {created_at:DateTime},
+        {create_tx_signature:Nullable(String)},
+        {initial_market_cap_usd:Nullable(Decimal64(2))},
+        {peak_market_cap_usd:Nullable(Decimal64(2))},
+        {final_market_cap_usd:Nullable(Decimal64(2))},
+        {trade_count:UInt32},
+        {buy_count:UInt32},
+        {sell_count:UInt32},
+        {buy_sol_amount:Decimal64(9)},
+        {sell_sol_amount:Decimal64(9)},
+        {first_5_buy_sol:Decimal64(9)},
+        {dev_buy_sol_amount:Decimal64(9)},
+        {is_fetched:UInt8},
+        {bonded:UInt8},
+        {ath_market_cap_usd:Nullable(Decimal64(2))},
+        now64()
+      )`,
       [
         result.mint,
         result.name,
         result.symbol,
         result.creator,
         result.bondingCurve,
-        new Date(result.createdAt),
+        createdAt,
         createTxSignature,
-        JSON.stringify(result.marketCapTimeSeries),
         result.initialMarketCapUsd,
         result.peakMarketCapUsd,
         result.finalMarketCapUsd,
@@ -774,12 +779,43 @@ async function saveTokenTrackingResult(
         result.sellSolAmount || 0,
         result.first5BuySol || 0,
         result.devBuySolAmount || 0,
-        false, // is_fetched = false (from streaming)
-        false, // bonded = false (newly created tokens are not bonded)
+        0, // is_fetched = 0 (from streaming)
+        0, // bonded = 0 (newly created tokens are not bonded)
+        result.peakMarketCapUsd, // Set ATH to peak for new tokens
       ]
     );
+
+    // Insert time series data (normalized into separate table)
+    if (result.marketCapTimeSeries && result.marketCapTimeSeries.length > 0) {
+      const timeSeriesRows = result.marketCapTimeSeries.map((point, index) => {
+        const timestampMs = point.timestamp;
+        const timestamp = new Date(timestampMs);
+        const timeSeconds = Math.floor((timestampMs - createdAtMs) / 1000);
+        
+        return {
+          mint: result.mint,
+          creator: result.creator,
+          signature: point.signature,
+          timestamp_ms: timestampMs,
+          timestamp: timestamp,
+          time_seconds: timeSeconds,
+          trade_type: point.tradeType,
+          is_buy: point.tradeType === 'buy' ? 1 : 0,
+          sol_amount: point.solAmount,
+          token_amount: point.tokenAmount,
+          market_cap_sol: point.marketCapSol,
+          market_cap_usd: point.marketCapUsd,
+          sol_price_usd: point.solPriceUsd,
+          execution_price_sol: point.executionPriceSol,
+          trade_index: index + 1, // Sequential trade number
+        };
+      });
+
+      // Batch insert time series data (ClickHouse is optimized for batch inserts)
+      await insertBatch('tbl_soltrack_token_time_series', timeSeriesRows);
+    }
   } catch (error) {
-    console.error('[TokenTracker] Error saving to database:', error);
+    console.error('[TokenTracker] Error saving to ClickHouse:', error);
     throw error;
   }
 }

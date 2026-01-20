@@ -1,15 +1,12 @@
 import express from 'express';
-import session from 'express-session';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { pool } from './db.js';
+import { pool, testConnection } from './db.js';
 import walletRoutes from './routes/wallets.js';
 import streamRoutes from './routes/stream.js';
 import tokenRoutes from './routes/tokens.js';
 import settingsRoutes from './routes/settings.js';
 import { initializeConsoleSanitizer } from './utils/consoleSanitizer.js';
-import { sessionStore } from './src/shared/sessionStore.js';
-import { getSessionConfig } from './src/shared/auth.js';
 
 dotenv.config();
 
@@ -33,12 +30,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Session configuration - using shared Redis store
-app.use(session({
-  ...getSessionConfig(),
-  store: sessionStore,
-}));
-
 // Request logging middleware - log all API calls
 app.use((req, _res, next) => {
   const timestamp = new Date().toISOString();
@@ -55,7 +46,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-// Routes (authentication is handled by frontend proxy)
+// Routes (authentication handled by frontend)
 app.use('/wallets', walletRoutes);
 app.use('/stream', streamRoutes);
 app.use('/tokens', tokenRoutes);
@@ -71,171 +62,18 @@ app.get('/health', (_req, res) => {
 // Initialize database and start server
 async function startServer() {
   try {
-    // Test database connection
-    const client = await pool.connect();
+    // Test ClickHouse connection
+    await testConnection();
     
-    // Migrate creator_wallets to tbl_soltrack_blacklist_creator if old table exists
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'creator_wallets'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'tbl_soltrack_blacklist_creator'
-        ) THEN
-          ALTER TABLE creator_wallets RENAME TO tbl_soltrack_blacklist_creator;
-        END IF;
-      END $$;
-    `);
+    console.log('✅ Database connection successful');
+    console.log('📝 Note: Ensure ClickHouse schema is created using clickhouse_schema.sql');
     
-    // Migrate blacklist_creator to tbl_soltrack_blacklist_creator if old table exists
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'blacklist_creator'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'tbl_soltrack_blacklist_creator'
-        ) THEN
-          ALTER TABLE blacklist_creator RENAME TO tbl_soltrack_blacklist_creator;
-        END IF;
-      END $$;
-    `);
-    
-    // Create tbl_soltrack_blacklist_creator table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS tbl_soltrack_blacklist_creator (
-        id SERIAL PRIMARY KEY,
-        wallet_address VARCHAR(64) NOT NULL UNIQUE,
-        name VARCHAR(255),
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    
-    // Add name column if it doesn't exist (migration for existing tables)
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'tbl_soltrack_blacklist_creator' AND column_name = 'name'
-        ) THEN
-          ALTER TABLE tbl_soltrack_blacklist_creator ADD COLUMN name VARCHAR(255);
-        END IF;
-      END $$;
-    `);
-    
-    // Remove user_id column if it exists (migration for old schema)
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'tbl_soltrack_blacklist_creator' AND column_name = 'user_id'
-        ) THEN
-          ALTER TABLE tbl_soltrack_blacklist_creator DROP COLUMN user_id;
-        END IF;
-      END $$;
-    `);
-    
-    // Ensure wallet_address is unique if not already
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint 
-          WHERE conname = 'tbl_soltrack_blacklist_creator_wallet_address_key'
-        ) THEN
-          ALTER TABLE tbl_soltrack_blacklist_creator ADD CONSTRAINT tbl_soltrack_blacklist_creator_wallet_address_key UNIQUE (wallet_address);
-        END IF;
-      END $$;
-    `);
-    
-    // Migrate created_tokens to tbl_soltrack_created_tokens if old table exists
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'created_tokens'
-        ) AND NOT EXISTS (
-          SELECT 1 FROM information_schema.tables 
-          WHERE table_name = 'tbl_soltrack_created_tokens'
-        ) THEN
-          ALTER TABLE created_tokens RENAME TO tbl_soltrack_created_tokens;
-        END IF;
-      END $$;
-    `);
-    
-    
-    // Add is_fetched column to tbl_soltrack_created_tokens if it doesn't exist
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'tbl_soltrack_created_tokens' AND column_name = 'is_fetched'
-        ) THEN
-          ALTER TABLE tbl_soltrack_created_tokens ADD COLUMN is_fetched BOOLEAN DEFAULT FALSE;
-        END IF;
-      END $$;
-    `);
-    
-    // Create scoring settings table if it doesn't exist
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS tbl_soltrack_scoring_settings (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
-        settings JSONB NOT NULL,
-        is_default BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    
-    // Create index for faster lookups
-    await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_tbl_soltrack_scoring_settings_default 
-      ON tbl_soltrack_scoring_settings(is_default)
-    `);
-    
-    // Ensure only one default setting exists (create unique partial index)
-    await client.query(`
-      DO $$ 
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_indexes 
-          WHERE indexname = 'idx_tbl_soltrack_scoring_settings_single_default'
-        ) THEN
-          CREATE UNIQUE INDEX idx_tbl_soltrack_scoring_settings_single_default 
-          ON tbl_soltrack_scoring_settings(is_default) 
-          WHERE is_default = TRUE;
-        END IF;
-      END $$;
-    `);
-    
-    // Create table for currently applied settings (only one row allowed)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS tbl_soltrack_applied_settings (
-        id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-        preset_id INTEGER REFERENCES tbl_soltrack_scoring_settings(id) ON DELETE SET NULL,
-        settings JSONB NOT NULL,
-        applied_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    
-    // Initialize default scoring settings if none exists
-    const scoringSettingsCheck = await client.query(
-      'SELECT COUNT(*) as count FROM tbl_soltrack_scoring_settings WHERE is_default = TRUE'
+    // Initialize default scoring settings if none exists (ClickHouse version)
+    const scoringSettingsCheck = await pool.query(
+      'SELECT count() as count FROM tbl_soltrack_scoring_settings WHERE is_default = 1'
     );
     
-    if (parseInt(scoringSettingsCheck.rows[0].count) === 0) {
+    if (parseInt(scoringSettingsCheck.rows[0]?.count || '0') === 0) {
       const defaultScoringSettings = {
         trackingTimeSeconds: 15,
         rugThresholdMcap: 6000, // Default 6k market cap threshold
@@ -339,13 +177,11 @@ async function startServer() {
         }
       };
       
-      await client.query(
+      await pool.query(
         'INSERT INTO tbl_soltrack_scoring_settings (name, settings, is_default) VALUES ($1, $2, $3)',
-        ['Default', JSON.stringify(defaultScoringSettings), true]
+        ['Default', JSON.stringify(defaultScoringSettings), 1]
       );
     }
-    
-    client.release();
 
     // Bind to localhost only (accessed via frontend server proxy)
     const HOST = process.env.HOST || '127.0.0.1';
