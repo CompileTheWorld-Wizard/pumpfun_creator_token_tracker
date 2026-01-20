@@ -3139,7 +3139,23 @@ const loadWallets = async () => {
       sortDirection.value
     )
     wallets.value = response.wallets
-    pagination.value = response.pagination
+    // Ensure pagination object is properly set
+    if (response.pagination) {
+      pagination.value = {
+        page: response.pagination.page || 1,
+        limit: response.pagination.limit || limit,
+        total: response.pagination.total || 0,
+        totalPages: response.pagination.totalPages || Math.ceil((response.pagination.total || 0) / (response.pagination.limit || limit))
+      }
+    } else {
+      // Fallback if pagination is missing
+      pagination.value = {
+        page: 1,
+        limit: limit,
+        total: wallets.value.length,
+        totalPages: Math.ceil(wallets.value.length / limit)
+      }
+    }
     
     // Emit total token count to parent component
     if (response.totalTokens !== undefined) {
