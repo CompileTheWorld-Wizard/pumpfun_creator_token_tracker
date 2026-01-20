@@ -327,8 +327,8 @@ const FUND_TRACKER_PORT = parseInt(process.env.FUND_SERVER_PORT || '5006', 10);
 const proxyOptions = {
   changeOrigin: true,
   ws: false,
-  timeout: 30000, // 30 second timeout
-  proxyTimeout: 30000,
+  timeout: 300000, // 5 minute timeout for long-running queries
+  proxyTimeout: 300000,
   onProxyReq: (proxyReq: any, req: express.Request) => {
     // Forward session cookie
     if (req.headers.cookie) {
@@ -462,14 +462,11 @@ app.use('/api', (req, res, next) => {
     
     // Create proxy for this specific request
     // Note: req.path has '/api' stripped by Express
-    // Backend services expect paths WITH /api prefix, so add it back
+    // Backend services expect paths WITHOUT /api prefix, so pass as-is
     const proxy = createProxyMiddleware({
       ...proxyOptions,
       target,
-      pathRewrite: (path: string) => {
-        // Add /api prefix back since backend services expect /api/... paths
-        return `/api${path}`;
-      },
+      // No pathRewrite - pass path as-is (already stripped of /api by Express)
     });
     
     proxy(req, res, next);

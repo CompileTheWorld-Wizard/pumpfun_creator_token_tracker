@@ -40,13 +40,13 @@ app.use(session({
 }));
 
 // Routes (authentication is handled by frontend proxy)
-app.use('/api/wallets', walletRoutes);
-app.use('/api/stream', streamRoutes);
-app.use('/api/tokens', tokenRoutes);
-app.use('/api/settings', settingsRoutes);
+app.use('/wallets', walletRoutes);
+app.use('/stream', streamRoutes);
+app.use('/tokens', tokenRoutes);
+app.use('/settings', settingsRoutes);
 
 // Health check
-app.get('/api/health', (_req, res) => {
+app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
