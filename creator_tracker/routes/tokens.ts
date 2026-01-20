@@ -2631,8 +2631,28 @@ router.post('/creators/analytics', requireAuth, async (req: Request, res: Respon
     const paginatedWallets = wallets.slice(offset, offset + limit);
     logStep(`Applied pagination: ${paginatedWallets.length} wallets (from ${wallets.length} total) (${Date.now() - paginationStartTime}ms)`);
     
-    // Calculate total token count from all filtered wallets (after all filters applied)
-    const totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
+    // Calculate total token count from ALL filtered wallets (not just paginated ones)
+    // If we used SQL-level pagination (!needsTokensForAll), we need to query all filtered creators
+    let totalTokensCount = 0;
+    if (!needsTokensForAll && filteredTotal > 0) {
+      // Query all filtered creators to get accurate total token count
+      const totalTokensQueryStartTime = Date.now();
+      const totalTokensResult = await pool.query(
+        `SELECT 
+          ct.creator as address,
+          COUNT(*) as total_tokens
+        FROM tbl_soltrack_created_tokens ct
+        ${baseWhereClause}
+        GROUP BY ct.creator
+        ${havingClause}`,
+        sqlFilterParams
+      );
+      totalTokensCount = totalTokensResult.rows.reduce((sum, row) => sum + (parseInt(row.total_tokens) || 0), 0);
+      logStep(`Calculated total tokens from all filtered creators: ${totalTokensCount} tokens (${Date.now() - totalTokensQueryStartTime}ms)`);
+    } else {
+      // If we fetched all wallets, calculate from the wallets array
+      totalTokensCount = wallets.reduce((sum, wallet) => sum + wallet.totalTokens, 0);
+    }
     
     logStep(`END: Sending response with ${paginatedWallets.length} wallets, totalCount=${wallets.length}, totalTime=${Date.now() - startTime}ms`);
     res.json({
