@@ -347,7 +347,7 @@ const proxyOptions = {
     if (proxyRes.headers['set-cookie']) {
       res.setHeader('Set-Cookie', proxyRes.headers['set-cookie']);
     }
-    console.log(`[Proxy] ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
+    console.error(`[Proxy] ${req.method} ${req.path} -> ${proxyRes.statusCode}`);
   },
   onError: (err: Error, req: express.Request, res: express.Response) => {
     console.error(`[Proxy Error] ${req.method} ${req.path}:`, err.message);
@@ -496,27 +496,41 @@ app.use('/api', (req, res, next) => {
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
       onProxyReq: (proxyReq: any, req: express.Request) => {
+        console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
+        console.error(`[Frontend Proxy] Request headers:`, JSON.stringify(req.headers, null, 2));
         if (originalOnProxyReq) {
           originalOnProxyReq(proxyReq, req);
         }
       },
       onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
+        console.error(`[Frontend Proxy] ===== PROXY RESPONSE RECEIVED =====`);
         console.error(`[Frontend Proxy] Response from ${target}${req.path}: ${proxyRes.statusCode}`);
         if (originalOnProxyRes) {
           originalOnProxyRes(proxyRes, req, res);
         }
       },
       onError: (err: Error, req: express.Request, res: express.Response) => {
+        console.error(`[Frontend Proxy] ===== PROXY ERROR =====`);
         console.error(`[Frontend Proxy] Proxy error for ${req.path} to ${target}:`, err.message);
+        console.error(`[Frontend Proxy] Error stack:`, err.stack);
         if (originalOnError) {
           originalOnError(err, req, res);
         }
       }
     };
     
-    const proxy = createProxyMiddleware(enhancedProxyOptions);
-    proxy(req, res, next);
+    try {
+      console.error(`[Frontend Proxy] About to create proxy middleware for ${target}`);
+      const proxy = createProxyMiddleware(enhancedProxyOptions);
+      console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
+      proxy(req, res, next);
+      console.error(`[Frontend Proxy] proxy() called successfully`);
+    } catch (err: any) {
+      console.error(`[Frontend Proxy] ERROR creating/calling proxy:`, err.message);
+      console.error(`[Frontend Proxy] Error stack:`, err.stack);
+      res.status(500).json({ error: 'Proxy error', message: err.message });
+    }
   });
 });
 
