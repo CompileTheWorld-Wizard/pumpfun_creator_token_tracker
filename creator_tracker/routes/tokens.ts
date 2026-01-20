@@ -1479,6 +1479,12 @@ function calculateBuySellStats(
 
 // Get creator wallets analytics with pagination
 router.post('/creators/analytics', requireAuth, async (req: Request, res: Response): Promise<void> => {
+  // Log immediately when route handler is called
+  console.error(`[Analytics API] ===== ROUTE HANDLER CALLED =====`);
+  console.error(`[Analytics API] Method: ${req.method}, Path: ${req.path}, OriginalUrl: ${req.originalUrl}`);
+  console.error(`[Analytics API] Query:`, req.query);
+  console.error(`[Analytics API] Body keys:`, req.body ? Object.keys(req.body) : 'none');
+  
   const startTime = Date.now();
   const logStep = (step: string) => {
     const elapsed = Date.now() - startTime;

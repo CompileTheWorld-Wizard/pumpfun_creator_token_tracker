@@ -39,6 +39,15 @@ app.use(session({
   store: sessionStore,
 }));
 
+// Request logging middleware - log all API calls
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.error(`[API Request] [${timestamp}] ${req.method} ${req.originalUrl || req.url}`);
+  console.error(`[API Request] Query params:`, req.query);
+  console.error(`[API Request] Body keys:`, req.body ? Object.keys(req.body) : 'none');
+  next();
+});
+
 // Routes (authentication is handled by frontend proxy)
 app.use('/wallets', walletRoutes);
 app.use('/stream', streamRoutes);
