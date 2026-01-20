@@ -495,10 +495,11 @@ app.use('/api', (req, res, next) => {
       ...proxyOptions,
       target,
       // No pathRewrite - pass path as-is (already stripped of /api by Express)
-      onProxyReq: (proxyReq: any, req: express.Request) => {
+      onProxyReq: (proxyReq: any, req: express.Request, res: express.Response) => {
         console.error(`[Frontend Proxy] ===== PROXY REQUEST SENT =====`);
         console.error(`[Frontend Proxy] Proxying ${req.method} ${req.path} to ${target}${req.path}`);
         console.error(`[Frontend Proxy] Request method: ${req.method}, Has body: ${!!req.body}`);
+        // Call original onProxyReq if it exists
         if (originalOnProxyReq) {
           originalOnProxyReq(proxyReq, req);
         }
@@ -506,6 +507,7 @@ app.use('/api', (req, res, next) => {
       onProxyRes: (proxyRes: any, req: express.Request, res: express.Response) => {
         console.error(`[Frontend Proxy] ===== PROXY RESPONSE RECEIVED =====`);
         console.error(`[Frontend Proxy] Response from ${target}${req.path}: ${proxyRes.statusCode}`);
+        // Call original onProxyRes if it exists
         if (originalOnProxyRes) {
           originalOnProxyRes(proxyRes, req, res);
         }
@@ -514,6 +516,7 @@ app.use('/api', (req, res, next) => {
         console.error(`[Frontend Proxy] ===== PROXY ERROR =====`);
         console.error(`[Frontend Proxy] Proxy error for ${req.path} to ${target}:`, err.message);
         console.error(`[Frontend Proxy] Error stack:`, err.stack);
+        // Call original onError if it exists
         if (originalOnError) {
           originalOnError(err, req, res);
         }
@@ -523,44 +526,13 @@ app.use('/api', (req, res, next) => {
     try {
       console.error(`[Frontend Proxy] About to create proxy middleware for ${target}`);
       console.error(`[Frontend Proxy] Request body parsed:`, req.body ? 'YES' : 'NO', 'Body keys:', req.body ? Object.keys(req.body) : 'none');
+      
       const proxy = createProxyMiddleware(enhancedProxyOptions);
       console.error(`[Frontend Proxy] Proxy middleware created, calling proxy()...`);
       
-      // Set a timeout to detect if proxy never executes
-      const proxyTimeout = setTimeout(() => {
-        if (!res.headersSent) {
-          console.error(`[Frontend Proxy] TIMEOUT: Proxy never executed after 1 second!`);
-        }
-      }, 1000);
-      
-      // Override res.end to detect when response is sent
-      const originalEnd = res.end;
-      res.end = function(...args: any[]) {
-        clearTimeout(proxyTimeout);
-        console.error(`[Frontend Proxy] Response ended with status: ${res.statusCode}`);
-        return originalEnd.apply(this, args as any);
-      };
-      
-      // Wrap proxy call to catch any immediate errors
-      try {
-        proxy(req, res, (err?: any) => {
-          clearTimeout(proxyTimeout);
-          if (err) {
-            console.error(`[Frontend Proxy] Proxy next() called with error:`, err);
-            return next(err);
-          }
-          console.error(`[Frontend Proxy] Proxy next() called without error`);
-          next();
-        });
-        console.error(`[Frontend Proxy] proxy() function returned (async execution should start now)`);
-      } catch (syncErr: any) {
-        clearTimeout(proxyTimeout);
-        console.error(`[Frontend Proxy] SYNCHRONOUS ERROR in proxy():`, syncErr.message);
-        console.error(`[Frontend Proxy] Error stack:`, syncErr.stack);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Proxy synchronous error', message: syncErr.message });
-        }
-      }
+      // Call the proxy middleware - it will handle the request/response
+      proxy(req, res, next);
+      console.error(`[Frontend Proxy] proxy() function returned`);
     } catch (err: any) {
       console.error(`[Frontend Proxy] ERROR creating/calling proxy:`, err.message);
       console.error(`[Frontend Proxy] Error stack:`, err.stack);
