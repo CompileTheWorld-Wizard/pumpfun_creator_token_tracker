@@ -1828,16 +1828,16 @@
       </div>
       
       <!-- Pagination Controls -->
-      <div v-if="pagination && pagination.total > 0" class="px-4 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
+      <div v-if="(pagination && pagination.total > 0) || wallets.length > 0" class="px-4 py-3 border-t border-gray-800 flex items-center justify-between flex-shrink-0">
         <div class="text-xs text-gray-400">
           <span v-if="itemsPerPage === 'all'">
-            Showing all {{ pagination.total }} wallet{{ pagination.total !== 1 ? 's' : '' }}
+            Showing all {{ pagination?.total || wallets.length }} wallet{{ (pagination?.total || wallets.length) !== 1 ? 's' : '' }}
           </span>
           <span v-else>
-            Showing {{ (pagination.page - 1) * pagination.limit + 1 }} to {{ Math.min(pagination.page * pagination.limit, pagination.total) }} of {{ pagination.total }} wallets
+            Showing {{ pagination ? ((pagination.page - 1) * pagination.limit + 1) : 1 }} to {{ pagination ? Math.min(pagination.page * pagination.limit, pagination.total) : wallets.length }} of {{ pagination?.total || wallets.length }} wallets
           </span>
         </div>
-        <div v-if="pagination.totalPages > 1" class="flex items-center gap-2">
+        <div v-if="pagination && pagination.totalPages > 1" class="flex items-center gap-2">
           <button
             @click="goToPage(1)"
             :disabled="pagination.page === 1"
@@ -2870,6 +2870,9 @@ const toggleWhatIfColumn = () => {
 
 const visiblePages = computed(() => {
   const pages: number[] = []
+  if (!pagination.value || !pagination.value.totalPages || pagination.value.totalPages <= 0) {
+    return pages
+  }
   const maxVisible = 5
   let start = Math.max(1, pagination.value.page - Math.floor(maxVisible / 2))
   let end = Math.min(pagination.value.totalPages, start + maxVisible - 1)
@@ -3021,7 +3024,7 @@ const toggleViewMode = () => {
 }
 
 const goToPage = (page: number) => {
-  if (page >= 1 && page <= pagination.value.totalPages) {
+  if (page >= 1 && (!pagination.value.totalPages || page <= pagination.value.totalPages)) {
     pagination.value.page = page
     loadWallets()
   }
